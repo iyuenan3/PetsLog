@@ -1,0 +1,83 @@
+{
+  "bsonType": "object",
+  "required": ["family_id", "pet_id", "event_type", "date", "time", "datetime", "created_at", "updated_at"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "ID，系统自动生成"
+    },
+    "family_id": {
+      "bsonType": "string",
+      "description": "所属家庭"
+    },
+    "pet_id": {
+      "bsonType": "string",
+      "description": "关联 pet._id"
+    },
+    "event_type": {
+      "bsonType": "string",
+      "enum": ["vomit", "diarrhea", "blood_stool", "clinic", "weigh", "deworm", "neuter", "vaccine", "other"],
+      "description": "事件类型"
+    },
+    "date": {
+      "bsonType": "string",
+      "description": "记录日期，YYYY-MM-DD"
+    },
+    "time": {
+      "bsonType": "string",
+      "description": "记录时间，HH:mm"
+    },
+    "datetime": {
+      "bsonType": "int",
+      "description": "日期时间时间戳（毫秒），便于排序"
+    },
+    "event_desc": {
+      "bsonType": "string",
+      "description": "事件描述，event_type 为 other 时必填"
+    },
+    "weight": {
+      "bsonType": "double",
+      "description": "体重 kg，精度 0.01；event_type 为 weigh 时必填"
+    },
+    "medicine": {
+      "bsonType": "string",
+      "description": "用药说明"
+    },
+    "hospital": {
+      "bsonType": "string",
+      "description": "就诊医院"
+    },
+    "cost": {
+      "bsonType": "int",
+      "description": "费用，单位：分（整数）"
+    },
+    "attachments": {
+      "bsonType": "array",
+      "items": { "bsonType": "string" },
+      "maxCount": 5,
+      "description": "附件 fileID 列表，最多 5 个"
+    },
+    "tags": {
+      "bsonType": "array",
+      "items": { "bsonType": "string" },
+      "description": "预留"
+    },
+    "created_at": {
+      "bsonType": "int",
+      "description": "创建时间，时间戳（毫秒）"
+    },
+    "updated_at": {
+      "bsonType": "int",
+      "description": "更新时间，时间戳（毫秒）"
+    },
+    "created_by": {
+      "bsonType": "string",
+      "description": "创建人 user_id"
+    }
+  }
+}

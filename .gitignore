@@ -1,0 +1,28 @@
+# uni-app 编译产物（不要提交到仓库）
+unpackage/
+
+# 依赖
+node_modules/
+
+# 本地环境 / 密钥（如有）
+.env
+.env.local
+.env.*.local
+*.pem
+
+# 编辑器 / 系统
+.DS_Store
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vscode/
+
+# 日志
+*.log
+npm-debug.log*
+
+# 微信开发者工具
+project.config.json

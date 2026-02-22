@@ -1,0 +1,67 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "PetsLog · 首页",
+        "navigationBarBackgroundColor": "#FFFDF8",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/record/record",
+      "style": {
+        "navigationBarTitleText": "添加记录",
+        "navigationBarBackgroundColor": "#FFFDF8",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/history/history",
+      "style": {
+        "navigationBarTitleText": "记录列表",
+        "navigationBarBackgroundColor": "#FFFDF8",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/pet/pet",
+      "style": {
+        "navigationBarTitleText": "宠物档案",
+        "navigationBarBackgroundColor": "#FFFDF8",
+        "navigationBarTextStyle": "black"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "PetsLog",
+    "navigationBarBackgroundColor": "#FFFDF8",
+    "backgroundColor": "#FFFDF8"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#FFB800",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/record/record",
+        "text": "记录"
+      },
+      {
+        "pagePath": "pages/history/history",
+        "text": "历史"
+      },
+      {
+        "pagePath": "pages/pet/pet",
+        "text": "档案"
+      }
+    ]
+  },
+  "uniIdRouter": {}
+}

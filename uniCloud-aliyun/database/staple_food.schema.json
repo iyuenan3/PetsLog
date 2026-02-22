@@ -1,0 +1,57 @@
+{
+  "bsonType": "object",
+  "required": ["family_id", "brand", "pet_ids", "start_date", "created_at", "updated_at"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "ID，系统自动生成"
+    },
+    "family_id": {
+      "bsonType": "string",
+      "description": "所属家庭"
+    },
+    "brand": {
+      "bsonType": "string",
+      "description": "品牌"
+    },
+    "model": {
+      "bsonType": "string",
+      "description": "型号/口味"
+    },
+    "pet_ids": {
+      "bsonType": "array",
+      "items": { "bsonType": "string" },
+      "description": "食用对象，pet._id 数组"
+    },
+    "start_date": {
+      "bsonType": "string",
+      "description": "起始日期，YYYY-MM-DD"
+    },
+    "end_date": {
+      "bsonType": "string",
+      "description": "结束日期，YYYY-MM-DD；空表示至今"
+    },
+    "duration_days": {
+      "bsonType": "int",
+      "description": "持续时间（天），冗余；end_date 为空时不填"
+    },
+    "tags": {
+      "bsonType": "array",
+      "items": { "bsonType": "string" },
+      "description": "预留"
+    },
+    "created_at": {
+      "bsonType": "int",
+      "description": "创建时间，时间戳（毫秒）"
+    },
+    "updated_at": {
+      "bsonType": "int",
+      "description": "更新时间，时间戳（毫秒）"
+    }
+  }
+}

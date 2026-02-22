@@ -1,0 +1,73 @@
+{
+  "bsonType": "object",
+  "required": ["family_id", "name", "breed", "status", "created_at", "updated_at"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "ID，系统自动生成"
+    },
+    "family_id": {
+      "bsonType": "string",
+      "description": "所属家庭"
+    },
+    "avatar": {
+      "bsonType": "string",
+      "description": "头像 fileID（云存储），无头像可为空"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "姓名"
+    },
+    "breed": {
+      "bsonType": "string",
+      "description": "品种（物种+品种），如缅因猫、田园犬"
+    },
+    "birthday": {
+      "bsonType": "string",
+      "description": "生日，YYYY-MM-DD"
+    },
+    "home_date": {
+      "bsonType": "string",
+      "description": "到家日期，YYYY-MM-DD"
+    },
+    "initial_price": {
+      "bsonType": "int",
+      "description": "初始身价，单位：分（整数）"
+    },
+    "intro": {
+      "bsonType": "string",
+      "description": "简介，纯文本"
+    },
+    "medical_history": {
+      "bsonType": "string",
+      "description": "病史，纯文本"
+    },
+    "remark": {
+      "bsonType": "string",
+      "description": "备注，纯文本"
+    },
+    "status": {
+      "bsonType": "string",
+      "enum": ["normal", "passed", "left"],
+      "description": "宠物状态：normal 正常 / passed 去世 / left 离家"
+    },
+    "tags": {
+      "bsonType": "array",
+      "items": { "bsonType": "string" },
+      "description": "预留，字符串数组"
+    },
+    "created_at": {
+      "bsonType": "int",
+      "description": "创建时间，时间戳（毫秒）"
+    },
+    "updated_at": {
+      "bsonType": "int",
+      "description": "更新时间，时间戳（毫秒）"
+    }
+  }
+}
