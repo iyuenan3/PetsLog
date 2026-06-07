@@ -1,0 +1,9 @@
+{
+  "name": "saveRecord",
+  "version": "1.0.0",
+  "description": "确认后落库 records + 回写宠物体重",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

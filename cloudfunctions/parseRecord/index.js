@@ -1,0 +1,105 @@
+const cloud = require('wx-server-sdk')
+const https = require('https')
+const { buildMessages } = require('./prompt')
+
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
+const db = cloud.database()
+
+// 网关机密走云函数环境变量（云开发控制台配置，绝不入库）
+const BASE_URL = process.env.GATEWAY_BASE_URL || '' // 形如 https://<ip>:<port>/v1
+const TOKEN = process.env.GATEWAY_TOKEN || ''
+const MODEL = process.env.GATEWAY_MODEL || 'gpt-4o-mini'
+const CA = process.env.GATEWAY_CA || '' // 自签 root CA（PEM 文本）
+const DAILY_LIMIT = Number(process.env.DAILY_PARSE_LIMIT || 50)
+
+exports.main = async (event) => {
+  const { OPENID } = cloud.getWXContext()
+  const text = ((event && event.text) || '').trim()
+  if (!text) return { ok: false, code: 'EMPTY', msg: '请输入内容' }
+  if (!BASE_URL || !TOKEN) return { ok: false, code: 'NO_GATEWAY', msg: '网关未配置（云函数环境变量）' }
+
+  const today = todayStr()
+
+  // 频率限制：当天解析次数
+  const used = await db.collection('parse_log').where({ _openid: OPENID, day: today }).count()
+  if (used.total >= DAILY_LIMIT) {
+    return { ok: false, code: 'RATE_LIMIT', msg: `今日记录次数已达上限（${DAILY_LIMIT}）` }
+  }
+
+  // 取已有宠物名单做实体匹配
+  const petsRes = await db.collection('pets').where({ _openid: OPENID }).field({ name: true }).get()
+  const petNames = petsRes.data.map((p) => p.name).filter(Boolean)
+
+  let parsed
+  try {
+    parsed = await callGateway(text, petNames, today)
+  } catch (e) {
+    return { ok: false, code: 'LLM_ERROR', msg: 'AI 解析失败', detail: String((e && e.message) || e) }
+  }
+
+  // 记一条解析流水用于限流（落库在 saveRecord，二次确认后）
+  await db.collection('parse_log').add({ data: { _openid: OPENID, day: today, at: Date.now() } })
+
+  return { ok: true, parsed }
+}
+
+function callGateway(text, petNames, today) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({
+      model: MODEL,
+      temperature: 0,
+      response_format: { type: 'json_object' },
+      messages: buildMessages(text, petNames, today),
+    })
+    const u = new URL(BASE_URL.replace(/\/$/, '') + '/chat/completions')
+    const options = {
+      hostname: u.hostname,
+      port: u.port || 443,
+      path: u.pathname + u.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + TOKEN,
+        'Content-Length': Buffer.byteLength(payload),
+      },
+      timeout: 20000,
+    }
+    if (CA) options.ca = CA // 信任自签 root CA，而非 rejectUnauthorized:false
+    const req = https.request(options, (res) => {
+      let body = ''
+      res.on('data', (d) => (body += d))
+      res.on('end', () => {
+        try {
+          const j = JSON.parse(body)
+          const content = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content
+          if (!content) return reject(new Error('empty completion: ' + body.slice(0, 200)))
+          resolve(normalize(JSON.parse(content), text, today))
+        } catch (e) {
+          reject(e)
+        }
+      })
+    })
+    req.on('timeout', () => req.destroy(new Error('gateway timeout')))
+    req.on('error', reject)
+    req.write(payload)
+    req.end()
+  })
+}
+
+function normalize(o, raw, today) {
+  return {
+    valid: o.valid !== false,
+    pet: o.pet || '',
+    time: o.time || today,
+    event_type: o.event_type || '其它',
+    weight: typeof o.weight === 'number' ? o.weight : null,
+    med: o.med || null,
+    raw: o.raw || raw,
+  }
+}
+
+function todayStr() {
+  const d = new Date(Date.now() + 8 * 3600 * 1000) // 云函数为 UTC，校到东八区
+  const z = (n) => String(n).padStart(2, '0')
+  return `${d.getUTCFullYear()}-${z(d.getUTCMonth() + 1)}-${z(d.getUTCDate())}`
+}

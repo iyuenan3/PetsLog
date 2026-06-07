@@ -1,0 +1,9 @@
+{
+  "name": "meds",
+  "version": "1.0.0",
+  "description": "家庭药品库存 CRUD",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

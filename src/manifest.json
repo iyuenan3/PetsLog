@@ -1,0 +1,20 @@
+{
+    "name" : "PetsLog",
+    "appid" : "",
+    "description" : "多宠家庭 AI 健康记录工具",
+    "versionName" : "0.1.0",
+    "versionCode" : "1",
+    "transformPx" : false,
+    "mp-weixin" : {
+        "appid" : "wx0fff6b192bed48d0",
+        "cloudfunctionRoot" : "cloudfunctions/",
+        "setting" : {
+            "urlCheck" : false
+        },
+        "usingComponents" : true
+    },
+    "uniStatistics" : {
+        "enable" : false
+    },
+    "vueVersion" : "3"
+}
