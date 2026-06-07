@@ -2,12 +2,13 @@
 <!-- 踩坑/失败/事故，append-only。别重复踩坑。决策→DECISIONS。 -->
 
 ## 微信云函数首跑一串部署坑（一次踩穿）· 2026-06-07
-真机跑录入主链路时，按出现顺序踩了 4 个坑，逐一根治：
+真机跑录入主链路时，按出现顺序踩了 5 个坑，逐一根治：
 - **FUNCTION_NOT_FOUND（-501000）**：函数没部署。须在 DevTools 部署云函数。
 - **CLI 部署签名失败 `getCloudAPISignedHeader ... ret 41002 system error`**：`cli cloud functions deploy` 卡在上传签名（env / functions 等只读 CLI 操作正常，仅 upload 签名被微信后端拒），重试无效。诱因之一是 cloudfunctionRoot **未在 IDE 绑定云环境**（右键「当前环境:(无)」，需先点工具栏「云开发」初始化再绑）；但绑定后 CLI 仍签名失败 → 改用 **GUI 右键「上传并部署」**（不同签名通道，可成）。结论：云函数部署走 GUI，别指望 CLI。
 - **Cannot find module 'wx-server-sdk'**：用「所有文件」上传但本地没装依赖 / 「云端安装依赖」没生效。根治：在产物函数目录 `npm install`（wx-server-sdk 纯 JS 可跨平台），改「所有文件」把 node_modules 带上。
 - **collection not exists（-502005）**：微信云数据库集合不随写入自动创建。根治：`parseRecord` 入口 `db.createCollection` 幂等自建 `pets/records/meds/parse_log`，从此免手建。
-- 教训：微信云开发「部署 + 依赖 + 集合」三件都有坑，按上面顺序一次配齐。
+- **函数超时 3 秒（-504003 FUNCTIONS_TIME_LIMIT_EXCEEDED）**：LLM 类云函数默认 3s 超时太短（冷启动 + 调网关 ~1.7s 必超）。控制台「云函数 → parseRecord → 函数配置 → 超时时间」改 20s（CLI 无此参数；改完用 `cli cloud functions info` 看 timeout 列验证生效）。
+- 教训：微信云开发「部署 + 依赖 + 集合 + 超时」全有坑，按上面顺序一次配齐。
 
 ## 本机 git push 撞坏代理 `HTTP2 framing / Empty reply` · 2026-06-07
 - 现象：`git push` 到 GitHub 报 HTTP2 framing layer / Empty reply from server。
