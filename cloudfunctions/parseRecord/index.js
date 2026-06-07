@@ -5,12 +5,19 @@ const { buildMessages } = require('./prompt')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
-// 网关机密走云函数环境变量（云开发控制台配置，绝不入库）
-const BASE_URL = process.env.GATEWAY_BASE_URL || '' // 形如 https://<ip>:<port>/v1
-const TOKEN = process.env.GATEWAY_TOKEN || ''
-const MODEL = process.env.GATEWAY_MODEL || 'gpt-4o-mini'
-const CA = process.env.GATEWAY_CA || '' // 自签 root CA（PEM 文本）
-const DAILY_LIMIT = Number(process.env.DAILY_PARSE_LIMIT || 50)
+// 网关配置：优先云函数环境变量；本地开发可放 config.local.js
+// （gitignore 排除、不入库，但随云函数上传到你的私有云端）。
+let local = {}
+try {
+  local = require('./config.local')
+} catch (e) {
+  /* 没有本地配置就用环境变量 */
+}
+const BASE_URL = process.env.GATEWAY_BASE_URL || local.GATEWAY_BASE_URL || '' // 形如 https://<ip>:<port>/v1
+const TOKEN = process.env.GATEWAY_TOKEN || local.GATEWAY_TOKEN || ''
+const MODEL = process.env.GATEWAY_MODEL || local.GATEWAY_MODEL || 'auto-llm'
+const CA = process.env.GATEWAY_CA || local.GATEWAY_CA || '' // 自签 root CA（PEM 文本）
+const DAILY_LIMIT = Number(process.env.DAILY_PARSE_LIMIT || local.DAILY_PARSE_LIMIT || 50)
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
@@ -45,10 +52,11 @@ exports.main = async (event) => {
 
 function callGateway(text, petNames, today) {
   return new Promise((resolve, reject) => {
+    // 注：上游 doubao(auto-llm) 不支持 response_format=json_object（实测 400），
+    // 改靠强提示词 + temperature 0 + 下方 extractJson 解析容错。
     const payload = JSON.stringify({
       model: MODEL,
       temperature: 0,
-      response_format: { type: 'json_object' },
       messages: buildMessages(text, petNames, today),
     })
     const u = new URL(BASE_URL.replace(/\/$/, '') + '/chat/completions')
@@ -73,7 +81,7 @@ function callGateway(text, petNames, today) {
           const j = JSON.parse(body)
           const content = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content
           if (!content) return reject(new Error('empty completion: ' + body.slice(0, 200)))
-          resolve(normalize(JSON.parse(content), text, today))
+          resolve(normalize(extractJson(content), text, today))
         } catch (e) {
           reject(e)
         }
@@ -84,6 +92,16 @@ function callGateway(text, petNames, today) {
     req.write(payload)
     req.end()
   })
+}
+
+// 解析容错：去掉可能的 ```json 围栏，截取第一个 { 到最后一个 }
+function extractJson(s) {
+  let t = String(s).trim()
+  t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
+  const i = t.indexOf('{')
+  const j = t.lastIndexOf('}')
+  if (i >= 0 && j > i) t = t.slice(i, j + 1)
+  return JSON.parse(t)
 }
 
 function normalize(o, raw, today) {
