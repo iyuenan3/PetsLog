@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# secrets / 部署机密（绝不入库）
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*-cert.pem
+caddy-root.crt
+**/config.local.*
+*.local.md
+
+# 依赖 / 构建产物
+node_modules/
+dist/
+unpackage/
+.cloudbase/
