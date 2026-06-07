@@ -20,12 +20,32 @@ exports.main = async (event) => {
   }
   const addRes = await db.collection('records').add({ data: doc })
 
-  if (doc.weight && doc.pet) {
+  // 宠物 upsert：新名字自动建档；已有的若带体重则更新最新体重
+  let petCreated = false
+  if (doc.pet) {
     const petRes = await db.collection('pets').where({ _openid: OPENID, name: doc.pet }).get()
     if (petRes.data.length) {
-      await db.collection('pets').doc(petRes.data[0]._id).update({ data: { latest_weight: doc.weight } })
+      if (doc.weight) {
+        await db.collection('pets').doc(petRes.data[0]._id).update({ data: { latest_weight: doc.weight } })
+      }
+    } else {
+      await db.collection('pets').add({
+        data: {
+          _openid: OPENID,
+          name: doc.pet,
+          species: r.species === 'dog' ? 'dog' : 'cat',
+          breed: '',
+          birthday: '',
+          neutered: false,
+          allergy: '',
+          chronic: '',
+          latest_weight: doc.weight || null,
+          created_at: Date.now(),
+        },
+      })
+      petCreated = true
     }
   }
 
-  return { ok: true, id: addRes._id }
+  return { ok: true, id: addRes._id, petCreated }
 }

@@ -8,6 +8,7 @@ const SYSTEM = `你是宠物健康记录的结构化提取引擎，不是聊天�
 字段：
 - valid: boolean。是否是有效的宠物健康记录（症状 / 用药 / 疫苗 / 体重 / 就医 / 其它健康事件）。闲聊、问诊、与宠物健康无关的内容一律 valid=false。
 - pet: string。宠物名。优先匹配【已有宠物】列表里的名字；匹配不到时填用户原话里的名字，再匹配不到填 ""。
+- species: string。宠物种类，只取 "cat" 或 "dog"；能从描述判断就判断（「橘猫 / 布偶」→cat，「金毛 / 狗」→dog），判断不了填 "cat"。
 - time: string。事件时间，归一成 YYYY-MM-DD；用户说「今天 / 昨天」按相对今天计算；没提时间填今天。
 - event_type: string。取值之一：症状 | 用药 | 疫苗 | 体重 | 就医 | 其它。
 - weight: number | null。体重（kg），能从称重 / 就医描述里抓到就填，否则 null。
@@ -29,7 +30,7 @@ function buildMessages(text, petNames, today) {
     {
       role: 'assistant',
       content:
-        '{"valid":true,"pet":"示例猫","time":"2026-01-01","event_type":"症状","weight":4.2,"med":null,"raw":"示例猫今天吐了两次，称了下4.2kg"}',
+        '{"valid":true,"pet":"示例猫","species":"cat","time":"2026-01-01","event_type":"症状","weight":4.2,"med":null,"raw":"示例猫今天吐了两次，称了下4.2kg"}',
     },
     {
       role: 'user',
@@ -37,7 +38,7 @@ function buildMessages(text, petNames, today) {
     },
     {
       role: 'assistant',
-      content: '{"valid":false,"pet":"","time":"2026-01-01","event_type":"其它","weight":null,"med":null,"raw":"明天天气不错"}',
+      content: '{"valid":false,"pet":"","species":"cat","time":"2026-01-01","event_type":"其它","weight":null,"med":null,"raw":"明天天气不错"}',
     },
     { role: 'user', content: user },
   ]

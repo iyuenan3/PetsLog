@@ -44,6 +44,9 @@ exports.main = async (event) => {
     return { ok: false, code: 'LLM_ERROR', msg: 'AI 解析失败', detail: String((e && e.message) || e) }
   }
 
+  // 标记是否为新宠物（名字不在已有列表里），供前端确认卡片提示「将建档」
+  parsed.is_new = !!parsed.pet && !petNames.includes(parsed.pet)
+
   // 记一条解析流水用于限流（落库在 saveRecord，二次确认后）
   await db.collection('parse_log').add({ data: { _openid: OPENID, day: today, at: Date.now() } })
 
@@ -108,6 +111,7 @@ function normalize(o, raw, today) {
   return {
     valid: o.valid !== false,
     pet: o.pet || '',
+    species: o.species === 'dog' ? 'dog' : 'cat',
     time: o.time || today,
     event_type: o.event_type || '其它',
     weight: typeof o.weight === 'number' ? o.weight : null,

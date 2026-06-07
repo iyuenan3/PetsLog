@@ -31,7 +31,17 @@
     <view v-if="parsed" class="confirm-mask" @click="cancelParse">
       <view class="confirm-card" @click.stop>
         <text class="confirm-title">确认这条记录</text>
-        <view class="confirm-row"><text class="k">宠物</text><text class="v">{{ parsed.pet || '待确认' }}</text></view>
+        <view class="confirm-row">
+          <text class="k">宠物</text>
+          <text class="v">{{ parsed.pet || '待确认' }}<text v-if="parsed.is_new" class="new-badge"> 🆕 将建档</text></text>
+        </view>
+        <view class="confirm-row" v-if="parsed.is_new">
+          <text class="k">种类</text>
+          <view class="v toggle">
+            <text :class="['chip', parsed.species === 'cat' ? 'on' : '']" @click="setSpecies('cat')">🐱 猫</text>
+            <text :class="['chip', parsed.species === 'dog' ? 'on' : '']" @click="setSpecies('dog')">🐶 狗</text>
+          </view>
+        </view>
         <view class="confirm-row"><text class="k">时间</text><text class="v">{{ parsed.time || '今天' }}</text></view>
         <view class="confirm-row"><text class="k">类型</text><text class="v">{{ parsed.event_type || '其它' }}</text></view>
         <view class="confirm-row" v-if="parsed.weight"><text class="k">体重</text><text class="v">{{ parsed.weight }}kg</text></view>
@@ -128,6 +138,9 @@ export default {
       } finally {
         this.parsing = false
       }
+    },
+    setSpecies(s) {
+      if (this.parsed) this.parsed.species = s
     },
     cancelParse() {
       this.parsed = null
@@ -292,6 +305,26 @@ export default {
   flex: 1;
   color: #111827;
   font-size: 28rpx;
+}
+.new-badge {
+  font-size: 22rpx;
+  color: #f59e0b;
+  margin-left: 12rpx;
+}
+.toggle {
+  display: flex;
+  gap: 16rpx;
+}
+.chip {
+  font-size: 26rpx;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 6rpx 24rpx;
+  border-radius: 24rpx;
+}
+.chip.on {
+  background: #eef2ff;
+  color: #3a7afe;
 }
 .confirm-actions {
   display: flex;
