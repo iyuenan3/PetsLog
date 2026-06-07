@@ -40,7 +40,12 @@ export default {
       if (typeof wx === 'undefined' || !wx.cloud || !CLOUD_ENV) return
       try {
         const res = await wx.cloud.callFunction({ name: 'meds', data: { action: 'list' } })
-        if (res.result && res.result.ok) this.meds = res.result.data || []
+        if (res.result && res.result.ok) {
+          const list = res.result.data || []
+          // 按过期日期升序；未填过期的排最后，避免把近效期药品挤下去
+          list.sort((a, b) => (a.expire_date || '9999-99-99').localeCompare(b.expire_date || '9999-99-99'))
+          this.meds = list
+        }
       } catch (e) {
         console.warn('meds load failed', e)
       }

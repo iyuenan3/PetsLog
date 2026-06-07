@@ -124,7 +124,9 @@ function extractJson(s) {
 }
 
 function normalize(o, raw, today) {
+  const kind = o.kind === 'med_stock' ? 'med_stock' : 'record'
   return {
+    kind,
     valid: o.valid !== false,
     pet: o.pet || '',
     species: o.species === 'dog' ? 'dog' : 'cat',
@@ -132,6 +134,10 @@ function normalize(o, raw, today) {
     event_type: o.event_type || '其它',
     weight: typeof o.weight === 'number' ? o.weight : null,
     med: o.med || null,
+    med_name: o.med_name || '',
+    med_effect: o.med_effect || '',
+    med_quantity: typeof o.med_quantity === 'number' ? o.med_quantity : Number(o.med_quantity) || 1,
+    med_expire: o.med_expire || '',
     raw: o.raw || raw,
   }
 }

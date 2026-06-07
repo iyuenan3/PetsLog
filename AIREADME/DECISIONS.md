@@ -28,3 +28,10 @@
 - Decision: 用 MIT。任何人可自由使用 / 修改 / 再分发本仓公开的设计与 prompt，只需保留版权声明（Copyright 2026 Maxwell）。
 - Alternatives（否决）: CC BY-NC（禁商用）、All Rights Reserved（仅展示）、Apache-2.0（含专利 / 商标条款）。对纯文档 + 展示场景，限制性许可降低传播与社区友好度；而商业壁垒本就不依赖文档许可，故不采用。
 - Tradeoff: 他人可商用本仓公开的设计 / prompt；但完整商业代码、密钥、部署配置不入库，护城河不在文档侧，可接受。
+
+## ADR-005 · AI 强制 JSON 靠强提示词 + 解析容错，不用 response_format；默认模型 auto-llm · 2026-06-07
+- Problem: 怎么保证上游 LLM 稳定输出可解析的 JSON。
+- Constraint: 网关默认入口 `auto-llm`（映射 doubao）实测不支持 OpenAI 的 `response_format={type:"json_object"}`，返回 400 InvalidParameter。
+- Decision: 不发 response_format；用 system prompt 强约束「只输出一个 JSON 对象」+ temperature 0 + 云函数 `extractJson`（剥 markdown 围栏、截首尾大括号）容错解析。默认模型 `auto-llm`。
+- Alternatives（否决）: 依赖 response_format（上游不支持）；function calling / tools（doubao 支持度不稳，MVP 不引入额外复杂度）。
+- Tradeoff: 少一层协议级强约束，靠提示词 + 容错；实测 doubao 输出稳定（症状 / 疫苗 / 体重 / 药品入库 / 相对日期均正确）。未来换支持 response_format 的模型可再加一层兜底。

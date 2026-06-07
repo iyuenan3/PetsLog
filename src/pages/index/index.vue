@@ -30,26 +30,38 @@
     <!-- 解析结果确认卡片 -->
     <view v-if="parsed" class="confirm-mask" @click="cancelParse">
       <view class="confirm-card" @click.stop>
-        <text class="confirm-title">确认这条记录</text>
-        <view class="confirm-row">
-          <text class="k">宠物</text>
-          <text class="v">{{ parsed.pet || '待确认' }}<text v-if="parsed.is_new" class="new-badge"> 🆕 将建档</text></text>
-        </view>
-        <view class="confirm-row" v-if="parsed.is_new">
-          <text class="k">种类</text>
-          <view class="v toggle">
-            <text :class="['chip', parsed.species === 'cat' ? 'on' : '']" @click="setSpecies('cat')">🐱 猫</text>
-            <text :class="['chip', parsed.species === 'dog' ? 'on' : '']" @click="setSpecies('dog')">🐶 狗</text>
+        <!-- 药品入库 -->
+        <block v-if="parsed.kind === 'med_stock'">
+          <text class="confirm-title">确认入库药品</text>
+          <view class="confirm-row"><text class="k">药品</text><text class="v">{{ parsed.med_name || '待确认' }}</text></view>
+          <view class="confirm-row" v-if="parsed.med_effect"><text class="k">功效</text><text class="v">{{ parsed.med_effect }}</text></view>
+          <view class="confirm-row"><text class="k">数量</text><text class="v">{{ parsed.med_quantity }}</text></view>
+          <view class="confirm-row"><text class="k">过期</text><text class="v">{{ parsed.med_expire || '未填' }}</text></view>
+          <view class="confirm-row"><text class="k">原文</text><text class="v">{{ parsed.raw || draft }}</text></view>
+        </block>
+        <!-- 健康记录 -->
+        <block v-else>
+          <text class="confirm-title">确认这条记录</text>
+          <view class="confirm-row">
+            <text class="k">宠物</text>
+            <text class="v">{{ parsed.pet || '待确认' }}<text v-if="parsed.is_new" class="new-badge"> 🆕 将建档</text></text>
           </view>
-        </view>
-        <view class="confirm-row"><text class="k">时间</text><text class="v">{{ parsed.time || '今天' }}</text></view>
-        <view class="confirm-row"><text class="k">类型</text><text class="v">{{ parsed.event_type || '其它' }}</text></view>
-        <view class="confirm-row" v-if="parsed.weight"><text class="k">体重</text><text class="v">{{ parsed.weight }}kg</text></view>
-        <view class="confirm-row" v-if="parsed.med"><text class="k">用药</text><text class="v">{{ parsed.med }}</text></view>
-        <view class="confirm-row"><text class="k">原文</text><text class="v">{{ parsed.raw || draft }}</text></view>
+          <view class="confirm-row" v-if="parsed.is_new">
+            <text class="k">种类</text>
+            <view class="v toggle">
+              <text :class="['chip', parsed.species === 'cat' ? 'on' : '']" @click="setSpecies('cat')">🐱 猫</text>
+              <text :class="['chip', parsed.species === 'dog' ? 'on' : '']" @click="setSpecies('dog')">🐶 狗</text>
+            </view>
+          </view>
+          <view class="confirm-row"><text class="k">时间</text><text class="v">{{ parsed.time || '今天' }}</text></view>
+          <view class="confirm-row"><text class="k">类型</text><text class="v">{{ parsed.event_type || '其它' }}</text></view>
+          <view class="confirm-row" v-if="parsed.weight"><text class="k">体重</text><text class="v">{{ parsed.weight }}kg</text></view>
+          <view class="confirm-row" v-if="parsed.med"><text class="k">用药</text><text class="v">{{ parsed.med }}</text></view>
+          <view class="confirm-row"><text class="k">原文</text><text class="v">{{ parsed.raw || draft }}</text></view>
+        </block>
         <view class="confirm-actions">
           <button class="btn ghost" @click="cancelParse">取消</button>
-          <button class="btn primary" :loading="saving" @click="confirmSave">确认归档</button>
+          <button class="btn primary" :loading="saving" @click="confirmSave">{{ parsed.kind === 'med_stock' ? '确认入库' : '确认归档' }}</button>
         </view>
       </view>
     </view>
@@ -133,7 +145,11 @@ export default {
         }
         this.parsed = r.parsed
       } catch (e) {
-        uni.showToast({ title: 'AI 解析出错', icon: 'none' })
+        uni.showModal({
+          title: 'AI 解析出错',
+          content: String((e && e.errMsg) || (e && e.message) || JSON.stringify(e)),
+          showCancel: false,
+        })
         console.error(e)
       } finally {
         this.parsing = false
@@ -147,12 +163,13 @@ export default {
     },
     async confirmSave() {
       if (!this.parsed) return
+      const isMed = this.parsed.kind === 'med_stock'
       this.saving = true
       try {
         const res = await wx.cloud.callFunction({ name: 'saveRecord', data: { record: this.parsed } })
         const r = res.result || {}
         if (r.ok) {
-          uni.showToast({ title: '已归档', icon: 'success' })
+          uni.showToast({ title: isMed ? '已入库' : '已归档', icon: 'success' })
           this.draft = ''
           this.parsed = null
           this.loadPets()
