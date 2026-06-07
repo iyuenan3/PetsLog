@@ -31,4 +31,4 @@
 - **LLM 网关依赖约束**：LLM 走自建的 OpenAI 兼容网关（私有基础设施）。该网关根证书在其属主侧为「不可轮换」约束，变更会导致本项目 AI 记录中断 → 调整需联动。见 RELATIONS + DECISIONS ADR-003。
 
 ## 生命周期
-planned（v3 立项 pre-code，2026-06-07）。仅 2 份背景文档已蒸馏进本 AIREADME，MVP 实现未启动。
+planned（v3 立项 pre-code，2026-06-07）。仅 2 份背景文档已蒸馏进本 AIREADME，MVP 实现未启动。开源收口已完成：MIT 许可（见 DECISIONS ADR-004），已建 GitHub public 仓。

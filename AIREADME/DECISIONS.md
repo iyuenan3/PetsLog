@@ -21,3 +21,10 @@
 - Decision: 云函数调自建 OpenAI 兼容网关。云函数 Node 不受小程序合法域名白名单限制，可达任意公网 IP:端口；信任网关自签 root CA（`ca` 选项 / `NODE_EXTRA_CA_CERTS`）。开工前在网关建 PetsLog 专属 token。
 - Alternatives（否决）: 直连厂商 API —— 换模型要改码、用量与其它项目混、不走分层。
 - Tradeoff: ① 网关成单点，挂则录入不可用（自用可接受，远期再评估 fallback 直连厂商 API）；② 多挂一个依赖约束——网关 root CA 在属主侧不可轮换/重置，变更则 PetsLog 同步中断，调整须联动本项目（见 CORE/RELATIONS）。
+
+## ADR-004 · 开源协议选 MIT，不选非商业 / 保留所有权许可 · 2026-06-07
+- Problem: 仓库开源（GitHub public），公开的是架构 / 产品 / prompt 文档而非完整商业代码，需定许可证；同时计划远期商业化（会员订阅），须想清楚开源是否削弱壁垒。
+- Constraint: 既要社区可学习 / 引用 / 二次开发（作品集展示价值），又不希望许可证本身成为传播阻力。真正的商业壁垒在不入库的完整代码 + 私有部署坐标，不在文档许可。
+- Decision: 用 MIT。任何人可自由使用 / 修改 / 再分发本仓公开的设计与 prompt，只需保留版权声明（Copyright 2026 Maxwell）。
+- Alternatives（否决）: CC BY-NC（禁商用）、All Rights Reserved（仅展示）、Apache-2.0（含专利 / 商标条款）。对纯文档 + 展示场景，限制性许可降低传播与社区友好度；而商业壁垒本就不依赖文档许可，故不采用。
+- Tradeoff: 他人可商用本仓公开的设计 / prompt；但完整商业代码、密钥、部署配置不入库，护城河不在文档侧，可接受。

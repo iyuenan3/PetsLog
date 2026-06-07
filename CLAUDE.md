@@ -1,12 +1,12 @@
 # CLAUDE.md — PetsLog
-> 多宠家庭 AI 健康记录工具（微信小程序 · 自然语言录入 → AI 结构化归档）｜ Maxwell（李越男）
+> 多宠家庭 AI 健康记录工具（微信小程序 · 自然语言录入 → AI 结构化归档）｜ Maxwell
 > 真相源 = `AIREADME/`。本文件只做 router：状态 / 路由 / 红线指针 / 维护责任 / 命令 / 元信息。
 
 ## 当前状态（2026-06-07）
 - **v3 立项 pre-code**。技术栈已定：uni-app（微信小程序）+ 微信云开发（Serverless）+ 自建 OpenAI 兼容 LLM 网关。
 - 三阶段演进：v1 Cursor（已下线）→ v2 OpenClaw（未上生产）→ v3 本仓库。详见 `AIREADME/CORE`。
 - 下一步：MVP 内测版（录入主链路 + 5 功能）。见 `AIREADME/ROADMAP`。
-- **本仓库计划开源**：仅放架构 / 产品设计 / prompt；完整商业代码 / key / 部署配置不入库。
+- **本仓库已开源**（MIT · github.com/iyuenan3/petslog）：仅放架构 / 产品设计 / prompt；完整商业代码 / key / 部署配置不入库。
 
 ## 加载路由（任务 → AIREADME/）
 - 跨项目了解 / 红线 → `CORE` + `RELATIONS`
@@ -33,4 +33,4 @@
 ## 元信息
 - 立项 v3：2026-06-07（AIREADME 体系铺底）。
 - 历史仓库：Cursor-PetsLog（v1）/ OpenClaw-PetsLog（v2），见 AIREADME/CORE。
-- 开源仓（计划）：架构 + 产品 + prompt 公开；完整代码私有。
+- 开源仓：github.com/iyuenan3/petslog（MIT · public）；架构 + 产品 + prompt 公开，完整代码私有。
