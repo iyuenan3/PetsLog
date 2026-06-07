@@ -19,11 +19,27 @@ const MODEL = process.env.GATEWAY_MODEL || local.GATEWAY_MODEL || 'auto-llm'
 const CA = process.env.GATEWAY_CA || local.GATEWAY_CA || '' // 自签 root CA（PEM 文本）
 const DAILY_LIMIT = Number(process.env.DAILY_PARSE_LIMIT || local.DAILY_PARSE_LIMIT || 50)
 
+// 首次调用自动建齐数据库集合（省去手动在控制台新建）。warm 容器内只建一次。
+let dbReady = false
+async function ensureCollections() {
+  if (dbReady) return
+  for (const name of ['pets', 'records', 'meds', 'parse_log']) {
+    try {
+      await db.createCollection(name)
+    } catch (e) {
+      // 集合已存在等情况忽略
+    }
+  }
+  dbReady = true
+}
+
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
   const text = ((event && event.text) || '').trim()
   if (!text) return { ok: false, code: 'EMPTY', msg: '请输入内容' }
   if (!BASE_URL || !TOKEN) return { ok: false, code: 'NO_GATEWAY', msg: '网关未配置（云函数环境变量）' }
+
+  await ensureCollections()
 
   const today = todayStr()
 
