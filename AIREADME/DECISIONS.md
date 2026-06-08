@@ -35,3 +35,33 @@
 - Decision: 不发 response_format；用 system prompt 强约束「只输出一个 JSON 对象」+ temperature 0 + 云函数 `extractJson`（剥 markdown 围栏、截首尾大括号）容错解析。默认模型 `auto-llm`。
 - Alternatives（否决）: 依赖 response_format（上游不支持）；function calling / tools（doubao 支持度不稳，MVP 不引入额外复杂度）。
 - Tradeoff: 少一层协议级强约束，靠提示词 + 容错；实测 doubao 输出稳定（症状 / 疫苗 / 体重 / 药品入库 / 相对日期均正确）。未来换支持 response_format 的模型可再加一层兜底。
+
+## ADR-006 · 用药/疫苗/驱虫提醒先做站内，微信订阅消息真推送延后 · 2026-06-08
+- Problem: 提醒功能要不要一步到位做「到期微信主动推送」。
+- Constraint: 微信订阅消息需申请消息模板 + 用户逐次授权（一次性订阅）+ 定时触发器云函数轮询到期项，链路重且依赖平台审核；MVP 内测期价值密度低。
+- Decision: 先做站内提醒闭环：自然语言设提醒（含每周 / 每月 / 每年周期）→ reminders 集合 → 独立「提醒」tab（逾期红 / 今天橙高亮、完成自动顺延、延后、删除）+ 首页到期横幅。真推送留作后续。
+- Alternatives（否决）: 一步到位接订阅消息（模板审批 + 授权率低 + 定时触发器，MVP 不值当）。
+- Tradeoff: 用户需主动打开小程序才看到到期提醒（无主动 push）；换来快速闭环、零平台依赖。后续补订阅消息模板 + 定时触发器即可升级为真推送。
+
+## ADR-007 · UI 视觉走「温暖治愈」+ CSS 自定义属性令牌系统 · 2026-06-08
+- Problem: 初版 UI 是 uni-app 默认蓝（#3a7afe）+ 冷灰，朴素无品牌感；作品集展示 + 小而美商业化需要一套统一、有调性的视觉。
+- Constraint: uni-app mp-weixin 的 wxss 子集，不能引外部字体 / 切图，backdrop-filter 等不可靠；要能一处改主题、全站联动。
+- Decision: 视觉方向定「温暖治愈」（珊瑚 #F2825C + 暖米 #FAF6F0，圆润柔和、暖棕投影、纯 CSS + emoji）。落地用 CSS 自定义属性令牌：全部色 / 阴影 / 圆角 / 间距 / 字号挂 `App.vue` 的 `page`，各页 `var(--c-*)` 继承，改主题只改一处。设计规范由资深设计师 Agent 产出后逐页落地。
+- Alternatives（否决）: 清爽健康（蓝绿科技感）、活力清新（薄荷渐变），开发者选了温暖治愈；scss 变量方案（需各组件 lang="scss"，不如 page 上 CSS 变量全局继承省事）。
+- Tradeoff: 依赖微信对 CSS 自定义属性的支持（当前基础库通用无虞）；强调全靠字重 + 字号 + 颜色（无外部字体）。两处 canvas（体重曲线 / 兽医小结图）需手动按令牌色值绘制并乘 dpr 防糊。
+
+## ADR-008 · 引入「家庭 + 用户」多租户模型，隔离键 openid → family（含安全模型转变）· 2026-06-08
+- Problem: 现状每个微信用户（openid）是数据孤岛，无法支撑「多宠家庭多人协作记录」这一核心定位（家人共同维护同一批猫狗的健康档案）。
+- Constraint: 一个家庭多个用户、一个用户可加入多个家庭（多对多）；家庭创建者默认管理员、可转让；微信云函数各自独立部署，不能共享 require。
+- Decision（锁定）:
+  - **数据归属 / 计费单位 = 家庭**：pets / records / meds / reminders 归 family，新增隔离键 `family_id`；parse 限流按 `family_id + day`；未来会员订阅以家庭为单位（成员共享日配额）。
+  - **隔离键 openid → family**：原 `where({_openid})` 改为 `where({family_id})`；`_openid`（云函数 add 自动写入 = 调用者）降级为「谁记的」署名。
+  - **安全模型转变（最关键）**：family_id 由客户端传入、可伪造，隔离不再天然安全。每个云函数入口必过集中守卫 `assertMember(openid, family_id)`（管理操作再加 `assertAdmin`），先校验成员资格再碰数据。守卫 ~10 行复制进每个函数（或 common 目录拷贝）。
+  - **权限 = 全员共享读写**：任何成员可加 / 改 / 删家庭数据（破坏性操作二次确认）；管理员专属:改名 / 踢人 / 转让 / 删家庭 / 生成邀请码。
+  - **邀请 = 邀请码**：管理员生成 6 位码（可过期 / 限次），成员输码直接加入，无审批。
+  - **Onboarding 无感**：用户首次无家庭时自动建个人家庭「我的家」（他是管理员），单人体验完全保留，「家庭」概念在主动邀请前不暴露。
+  - **单管理员**可转让；管理员离开前必须先转让（不留无主家庭）。
+  - 数据模型新增：`families`{_id,name,owner,created_at} / `family_members`{family_id,openid,role,nickname,joined_at}（多对多真相源）/ `invites`{code,family_id,expires_at,max_uses,used_count}。当前家庭放客户端（每次带 active family_id，服务端必校验），暂不单建 users 表，成员昵称存 family_members。
+  - 现有内测数据清空重来，不写迁移。
+- Alternatives（否决）: 按用户计费（共享场景计费归属混乱）；按创建者归属的权限模型（每个写路径查 owner，对家庭高信任场景过重）；微信分享卡片邀请（卡片可被任意转发，先做邀请码）；写数据迁移（内测脏数据不多，清空更干净）。
+- Tradeoff: ① 安全性从「openid 天然兜底」变成「应用层成员校验兜底」，任一函数漏 assertMember = 跨家庭泄露，纪律要求陡升 → 靠集中守卫 + 轮 B 末尾单人回归把关；② 成员共享家庭日配额，恶意成员可耗尽（家庭高信任可接受）；③ 改造大，触及全部 6 个现有函数 + 新 family 函数 + 前端切换 / 管理 / 邀请，分三轮（地基 → 打通隔离 → 协作 UI）推进。

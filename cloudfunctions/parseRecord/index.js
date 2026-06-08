@@ -5,6 +5,14 @@ const { buildMessages } = require('./prompt')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+// 集中鉴权守卫：family_id 由客户端传入、可伪造，必须校验成员资格（见 ADR-008）。
+async function assertMember(openid, familyId) {
+  if (!familyId) throw { code: 'NO_FAMILY', msg: '缺少家庭上下文' }
+  const r = await db.collection('family_members').where({ family_id: familyId, openid }).limit(1).get()
+  if (!r.data.length) throw { code: 'NOT_MEMBER', msg: '你不是该家庭成员' }
+  return r.data[0]
+}
+
 // 网关配置：优先云函数环境变量；本地开发可放 config.local.js
 // （gitignore 排除、不入库，但随云函数上传到你的私有云端）。
 let local = {}
@@ -23,7 +31,7 @@ const DAILY_LIMIT = Number(process.env.DAILY_PARSE_LIMIT || local.DAILY_PARSE_LI
 let dbReady = false
 async function ensureCollections() {
   if (dbReady) return
-  for (const name of ['pets', 'records', 'meds', 'parse_log']) {
+  for (const name of ['pets', 'records', 'meds', 'parse_log', 'reminders']) {
     try {
       await db.createCollection(name)
     } catch (e) {
@@ -36,21 +44,28 @@ async function ensureCollections() {
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
   const text = ((event && event.text) || '').trim()
+  const familyId = event && event.family_id
   if (!text) return { ok: false, code: 'EMPTY', msg: '请输入内容' }
   if (!BASE_URL || !TOKEN) return { ok: false, code: 'NO_GATEWAY', msg: '网关未配置（云函数环境变量）' }
 
   await ensureCollections()
 
+  try {
+    await assertMember(OPENID, familyId)
+  } catch (e) {
+    return { ok: false, code: e.code || 'AUTH', msg: e.msg || '无权限' }
+  }
+
   const today = todayStr()
 
-  // 频率限制：当天解析次数
-  const used = await db.collection('parse_log').where({ _openid: OPENID, day: today }).count()
+  // 频率限制：当天解析次数（按家庭，见 ADR-008）
+  const used = await db.collection('parse_log').where({ family_id: familyId, day: today }).count()
   if (used.total >= DAILY_LIMIT) {
     return { ok: false, code: 'RATE_LIMIT', msg: `今日记录次数已达上限（${DAILY_LIMIT}）` }
   }
 
-  // 取已有宠物名单做实体匹配
-  const petsRes = await db.collection('pets').where({ _openid: OPENID }).field({ name: true }).get()
+  // 取家庭已有宠物名单做实体匹配
+  const petsRes = await db.collection('pets').where({ family_id: familyId }).field({ name: true }).get()
   const petNames = petsRes.data.map((p) => p.name).filter(Boolean)
 
   let parsed
@@ -64,7 +79,7 @@ exports.main = async (event) => {
   parsed.is_new = !!parsed.pet && !petNames.includes(parsed.pet)
 
   // 记一条解析流水用于限流（落库在 saveRecord，二次确认后）
-  await db.collection('parse_log').add({ data: { _openid: OPENID, day: today, at: Date.now() } })
+  await db.collection('parse_log').add({ data: { family_id: familyId, day: today, at: Date.now() } })
 
   return { ok: true, parsed }
 }
@@ -124,7 +139,7 @@ function extractJson(s) {
 }
 
 function normalize(o, raw, today) {
-  const kind = o.kind === 'med_stock' ? 'med_stock' : 'record'
+  const kind = ['med_stock', 'reminder'].includes(o.kind) ? o.kind : 'record'
   return {
     kind,
     valid: o.valid !== false,
@@ -138,6 +153,11 @@ function normalize(o, raw, today) {
     med_effect: o.med_effect || '',
     med_quantity: typeof o.med_quantity === 'number' ? o.med_quantity : Number(o.med_quantity) || 1,
     med_expire: o.med_expire || '',
+    // 提醒字段
+    rem_type: o.rem_type || '其它',
+    rem_title: o.rem_title || '',
+    rem_date: o.rem_date || '',
+    rem_repeat_days: typeof o.rem_repeat_days === 'number' ? o.rem_repeat_days : Number(o.rem_repeat_days) || 0,
     raw: o.raw || raw,
   }
 }

@@ -19,3 +19,15 @@
 > - 云函数调自签网关用 https `ca` 选项（PEM 文本）即可信任，无需 `rejectUnauthorized:false`（本会话实测 auto-llm 调通）。
 > - 上游 `auto-llm`(doubao) 不支持 `response_format=json_object`（返回 400）→ 见 DECISIONS ADR-005。
 > - v1 uniCloud 因空间没续费下线 → 关注微信云开发额度：内测期免费环境，正式上线后第 15 天到期需买 ¥19.9/月 套餐。
+
+## vite emptyOutDir 每次构建清空 dist → 云函数 node_modules 丢失 · 2026-06-08
+- 现象：改完源码 `npm run dev:mp-weixin` 重新构建后，`dist/dev/mp-weixin/cloudfunctions/*/node_modules` 全没了，云函数上传又报 `Cannot find module 'wx-server-sdk'`。
+- 根因：uni 构建先清空输出目录（emptyOutDir），再由 vite 插件 cpSync 把源码 `cloudfunctions/` 拷回；而源码侧本没有 node_modules，拷回来的自然也没有。不是 cpSync 删的，是「先清后拷」的清把上轮手装的依赖抹了，每次重构建都复发。
+- 根治：把 node_modules 装进**源码** `cloudfunctions/*/`（被 `.gitignore` 的 `node_modules` 规则忽略，不入库），cpSync 每次自动带进 dist，从此构建后零手动装依赖。新增云函数同理：建目录后从别的函数 `cp -R node_modules` 过去。
+- 教训：症状「每次重来都丢」太规整（呼应先验尺），不是偶发是构建流程必然，往构建流程根因找而非反复手装。
+
+## mp-weixin canvas 2d 出图三点注意 · 2026-06-08
+- 体重曲线 / 给兽医小结图都用 canvas 2d（`type="2d"` + SelectorQuery 取 node）：
+- ① 绘制前 `canvas.width/height` 乘 `pixelRatio` 再 `ctx.scale(dpr,dpr)`，否则线条 / 文字发虚，作品集展示露怯。
+- ② 离屏导出画布用 `position:fixed; left:-9999px` 移出可视区，不能 `display:none`（否则取不到 node、画不出 / 导不出图）。
+- ③ node 可能尚未渲染好，SelectorQuery 取不到时 `setTimeout` 重试一次兜底。

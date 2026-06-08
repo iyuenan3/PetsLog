@@ -6,7 +6,8 @@ const SYSTEM = `你是宠物健康记录的结构化提取引擎，不是聊天�
 严格只输出一个 JSON 对象，不要解释、不要寒暄、不要 markdown 代码块。
 
 先判断这句话属于哪类，填 kind：
-- kind: "record" | "med_stock"。"record" = 记录某只猫狗的健康事件（症状 / 用药 / 疫苗 / 体重 / 就医）；"med_stock" = 登记家庭药品库存（买药 / 囤药 / 记录药品数量与过期）。
+- kind: "record" | "med_stock" | "reminder"。"record" = 记录某只猫狗已发生的健康事件（症状 / 用药 / 疫苗 / 体重 / 就医）；"med_stock" = 登记家庭药品库存（买药 / 囤药 / 记录药品数量与过期）；"reminder" = 为将来要做的事设提醒（约定将来打疫苗 / 驱虫 / 复诊 / 喂药，通常含未来日期或「每月 / 每年」之类周期）。
+- 区分关键：已经发生 → record；将来要做、要提醒 → reminder。
 
 kind=record 时填：
 - valid: boolean。是否是有效的宠物健康记录。闲聊、问诊、与宠物健康无关的内容一律 valid=false。
@@ -22,6 +23,13 @@ kind=med_stock 时填：
 - med_effect: string。功效（如驱虫 / 止吐），没有填 ""。
 - med_quantity: number。数量 / 剩余量，未提填 1。
 - med_expire: string。过期日期 YYYY-MM-DD；只说「3 个月后 / 明年 3 月」就按相对今天算，算不出填 ""。
+
+kind=reminder 时填：
+- pet: string。关联的宠物名（没有特定宠物填 ""）。
+- rem_type: string。用药 | 疫苗 | 驱虫 | 其它。
+- rem_title: string。提醒事项，如「打狂犬疫苗」「体内驱虫」「复诊」。
+- rem_date: string。下次到期日 YYYY-MM-DD；相对时间（下周一 / 下个月 15 号 / 三个月后）按今天换算；算不出填 ""。
+- rem_repeat_days: number。重复周期天数：每周=7、每月≈30、每季≈90、每年≈365；一次性填 0。
 
 公共：
 - raw: string。用户原话，原样回填。
@@ -59,6 +67,14 @@ function buildMessages(text, petNames, today) {
     {
       role: 'assistant',
       content: '{"kind":"med_stock","med_name":"体内驱虫药","med_effect":"驱虫","med_quantity":2,"med_expire":"2027-03-01","raw":"买了一盒体内驱虫药，2 支，明年3月过期"}',
+    },
+    {
+      role: 'user',
+      content: '今天是 2026-01-01。\n【已有宠物】示例猫、示例狗\n【用户这句话】每个月给示例狗做一次体外驱虫，这个月15号开始\n\n只输出 JSON。',
+    },
+    {
+      role: 'assistant',
+      content: '{"kind":"reminder","pet":"示例狗","rem_type":"驱虫","rem_title":"体外驱虫","rem_date":"2026-01-15","rem_repeat_days":30,"raw":"每个月给示例狗做一次体外驱虫，这个月15号开始"}',
     },
     { role: 'user', content: user },
   ]

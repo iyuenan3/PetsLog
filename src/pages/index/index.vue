@@ -1,89 +1,143 @@
 <template>
   <view class="page">
-    <!-- 宠物卡片区 -->
     <scroll-view scroll-y class="pets-scroll">
-      <view class="header">
-        <text class="greeting">今天，家里的猫狗们还好吗</text>
+      <!-- 问候 -->
+      <view class="greeting">
+        <text class="greeting__hi">今天，毛孩子们还好吗 🐾</text>
+        <text class="greeting__sub">说一句话，我帮你记下来</text>
       </view>
 
+      <!-- 到期提醒横幅 -->
+      <view
+        v-if="dueCount"
+        class="banner banner--alert"
+        hover-class="banner--press"
+        hover-stay-time="80"
+        @click="goReminders"
+      >
+        <text class="banner__icon">🔔</text>
+        <text class="banner__text">有 <text class="banner__num">{{ dueCount }}</text> 条提醒到期</text>
+        <text class="banner__arrow">›</text>
+      </view>
+
+      <!-- 宠物网格 -->
       <view v-if="pets.length" class="pet-grid">
         <view
           v-for="p in pets"
           :key="p._id || p.name"
           class="pet-card"
+          hover-class="pet-card--press"
+          hover-stay-time="80"
           @click="openPet(p)"
         >
-          <view class="pet-avatar">{{ speciesEmoji(p.species) }}</view>
-          <view class="pet-meta">
-            <text class="pet-name">{{ p.name }}</text>
-            <text class="pet-sub">{{ p.ageText || '年龄未知' }} · {{ p.latest_weight ? p.latest_weight + 'kg' : '体重未记' }}</text>
-          </view>
+          <view class="pet-card__avatar" :class="p.species === 'dog' ? 'is-dog' : 'is-cat'">{{ speciesEmoji(p.species) }}</view>
+          <text class="pet-card__name">{{ p.name }}</text>
+          <text class="pet-card__meta">{{ ageText(p.birthday) || '年龄未知' }} · {{ p.latest_weight ? p.latest_weight + 'kg' : '体重未记' }}</text>
         </view>
       </view>
 
+      <!-- 空状态 -->
       <view v-else class="empty">
-        <text class="empty-title">还没有宠物档案</text>
-        <text class="empty-sub">直接在下面说一句，例如「新来的橘猫示例 3.2kg」</text>
+        <view class="empty__art">🐾</view>
+        <text class="empty__title">还没有毛孩子</text>
+        <text class="empty__desc">在下面说一句，比如「新来的橘猫示例 3.2kg」，我会自动建档</text>
       </view>
     </scroll-view>
 
-    <!-- 解析结果确认卡片 -->
-    <view v-if="parsed" class="confirm-mask" @click="cancelParse">
-      <view class="confirm-card" @click.stop>
+    <!-- 解析结果确认弹层 -->
+    <view v-if="parsed" class="sheet-mask" @click="cancelParse">
+      <view class="sheet" @click.stop>
+        <view class="sheet__grab"></view>
+
         <!-- 药品入库 -->
         <block v-if="parsed.kind === 'med_stock'">
-          <text class="confirm-title">确认入库药品</text>
-          <view class="confirm-row"><text class="k">药品</text><text class="v">{{ parsed.med_name || '待确认' }}</text></view>
-          <view class="confirm-row" v-if="parsed.med_effect"><text class="k">功效</text><text class="v">{{ parsed.med_effect }}</text></view>
-          <view class="confirm-row"><text class="k">数量</text><text class="v">{{ parsed.med_quantity }}</text></view>
-          <view class="confirm-row"><text class="k">过期</text><text class="v">{{ parsed.med_expire || '未填' }}</text></view>
-          <view class="confirm-row"><text class="k">原文</text><text class="v">{{ parsed.raw || draft }}</text></view>
+          <text class="sheet__title">入库一盒药 💊</text>
+          <text class="sheet__hint">确认后存进药品库存</text>
+          <view class="sheet__fields">
+            <view class="field-row"><text class="field-row__label">药品</text><text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.med_name }">{{ parsed.med_name || '待确认' }}</text></view>
+            <view class="field-row" v-if="parsed.med_effect"><text class="field-row__label">功效</text><text class="field-row__value">{{ parsed.med_effect }}</text></view>
+            <view class="field-row"><text class="field-row__label">数量</text><text class="field-row__value">{{ parsed.med_quantity }}</text></view>
+            <view class="field-row"><text class="field-row__label">过期</text><text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.med_expire }">{{ parsed.med_expire || '未填' }}</text></view>
+            <view class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
+          </view>
         </block>
+
+        <!-- 提醒 -->
+        <block v-else-if="parsed.kind === 'reminder'">
+          <text class="sheet__title">设个提醒 🔔</text>
+          <text class="sheet__hint">到期会在首页和提醒页提示你</text>
+          <view class="sheet__fields">
+            <view class="field-row" v-if="parsed.pet"><text class="field-row__label">宠物</text><text class="field-row__value">{{ parsed.pet }}</text></view>
+            <view class="field-row"><text class="field-row__label">类型</text><text class="field-row__value">{{ parsed.rem_type || '其它' }}</text></view>
+            <view class="field-row"><text class="field-row__label">事项</text><text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.rem_title }">{{ parsed.rem_title || '待确认' }}</text></view>
+            <view class="field-row"><text class="field-row__label">到期</text><text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.rem_date }">{{ parsed.rem_date || '未识别' }}</text></view>
+            <view class="field-row" v-if="parsed.rem_repeat_days"><text class="field-row__label">重复</text><text class="field-row__value">{{ repeatText(parsed.rem_repeat_days) }}</text></view>
+            <view class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
+          </view>
+        </block>
+
         <!-- 健康记录 -->
         <block v-else>
-          <text class="confirm-title">确认这条记录</text>
-          <view class="confirm-row">
-            <text class="k">宠物</text>
-            <text class="v">{{ parsed.pet || '待确认' }}<text v-if="parsed.is_new" class="new-badge"> 🆕 将建档</text></text>
-          </view>
-          <view class="confirm-row" v-if="parsed.is_new">
-            <text class="k">种类</text>
-            <view class="v toggle">
-              <text :class="['chip', parsed.species === 'cat' ? 'on' : '']" @click="setSpecies('cat')">🐱 猫</text>
-              <text :class="['chip', parsed.species === 'dog' ? 'on' : '']" @click="setSpecies('dog')">🐶 狗</text>
+          <text class="sheet__title">记一笔健康记录 🩺</text>
+          <text class="sheet__hint">确认后归档到时间线</text>
+          <view class="sheet__fields">
+            <view class="field-row">
+              <text class="field-row__label">宠物</text>
+              <text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.pet }">{{ parsed.pet || '待确认' }}<text v-if="parsed.is_new" class="new-badge"> 🆕 将建档</text></text>
             </view>
+            <view class="field-row" v-if="parsed.is_new">
+              <text class="field-row__label">种类</text>
+              <view class="chips">
+                <text :class="['chip', parsed.species === 'cat' ? 'chip--active' : '']" @click="setSpecies('cat')">🐱 猫</text>
+                <text :class="['chip', parsed.species === 'dog' ? 'chip--active' : '']" @click="setSpecies('dog')">🐶 狗</text>
+              </view>
+            </view>
+            <view class="field-row"><text class="field-row__label">时间</text><text class="field-row__value">{{ parsed.time || '今天' }}</text></view>
+            <view class="field-row"><text class="field-row__label">类型</text><text class="field-row__value">{{ parsed.event_type || '其它' }}</text></view>
+            <view class="field-row" v-if="parsed.weight"><text class="field-row__label">体重</text><text class="field-row__value">{{ parsed.weight }}kg</text></view>
+            <view class="field-row" v-if="parsed.med"><text class="field-row__label">用药</text><text class="field-row__value">{{ parsed.med }}</text></view>
+            <view class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
           </view>
-          <view class="confirm-row"><text class="k">时间</text><text class="v">{{ parsed.time || '今天' }}</text></view>
-          <view class="confirm-row"><text class="k">类型</text><text class="v">{{ parsed.event_type || '其它' }}</text></view>
-          <view class="confirm-row" v-if="parsed.weight"><text class="k">体重</text><text class="v">{{ parsed.weight }}kg</text></view>
-          <view class="confirm-row" v-if="parsed.med"><text class="k">用药</text><text class="v">{{ parsed.med }}</text></view>
-          <view class="confirm-row"><text class="k">原文</text><text class="v">{{ parsed.raw || draft }}</text></view>
         </block>
-        <view class="confirm-actions">
-          <button class="btn ghost" @click="cancelParse">取消</button>
-          <button class="btn primary" :loading="saving" @click="confirmSave">{{ parsed.kind === 'med_stock' ? '确认入库' : '确认归档' }}</button>
+
+        <view class="sheet__actions">
+          <button class="btn-ghost" hover-class="btn-ghost--press" hover-stay-time="60" @click="cancelParse">取消</button>
+          <button class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" :loading="saving" @click="confirmSave">{{ confirmBtnText() }}</button>
         </view>
       </view>
     </view>
 
-    <!-- 底部固定输入框 -->
-    <view class="input-bar">
+    <!-- 底部固定输入条 -->
+    <view class="composer">
       <input
         v-model="draft"
-        class="input"
+        class="composer__input"
+        :class="{ 'composer__input--focus': focused }"
         type="text"
         placeholder="说一句，例如「示例猫今天吐了，体重4.2kg」"
+        placeholder-class="composer__ph"
         confirm-type="send"
         :disabled="parsing"
+        @focus="focused = true"
+        @blur="focused = false"
         @confirm="onSend"
       />
-      <button class="send" :loading="parsing" @click="onSend">{{ parsing ? '' : '记录' }}</button>
+      <button
+        class="composer__btn"
+        :class="{ 'composer__btn--loading': parsing }"
+        hover-class="composer__btn--press"
+        hover-stay-time="80"
+        :loading="parsing"
+        @click="onSend"
+      >{{ parsing ? '' : '记录' }}</button>
     </view>
   </view>
 </template>
 
 <script>
 import { CLOUD_ENV } from '@/config'
+import { petAge } from '@/utils'
+import { callFn } from '@/cloud'
 
 export default {
   data() {
@@ -93,14 +147,20 @@ export default {
       parsing: false,
       saving: false,
       parsed: null, // AI 解析后的结构化结果，待用户确认
+      dueCount: 0, // 到期/逾期提醒数，用于首页横幅
+      focused: false, // 输入框聚焦态
     }
   },
   onShow() {
     this.loadPets()
+    this.loadDue()
   },
   methods: {
     speciesEmoji(s) {
       return s === 'dog' ? '🐶' : '🐱'
+    },
+    ageText(b) {
+      return petAge(b)
     },
     cloudReady() {
       // #ifdef MP-WEIXIN
@@ -112,7 +172,7 @@ export default {
     async loadPets() {
       if (!this.cloudReady()) return
       try {
-        const res = await wx.cloud.callFunction({ name: 'pets', data: { action: 'list' } })
+        const res = await callFn('pets', { action: 'list' })
         if (res.result && res.result.ok) this.pets = res.result.data || []
       } catch (e) {
         console.warn('loadPets failed', e)
@@ -120,6 +180,32 @@ export default {
     },
     openPet(p) {
       uni.navigateTo({ url: '/pages/pet/pet?id=' + (p._id || '') })
+    },
+    async loadDue() {
+      if (!this.cloudReady()) return
+      try {
+        const res = await callFn('reminders', { action: 'list' })
+        if (res.result && res.result.ok) {
+          const today = res.result.today || ''
+          this.dueCount = (res.result.data || []).filter((r) => r.next_date && r.next_date <= today).length
+        }
+      } catch (e) {
+        console.warn('loadDue failed', e)
+      }
+    },
+    goReminders() {
+      uni.switchTab({ url: '/pages/reminders/reminders' })
+    },
+    repeatText(x) {
+      if (!x) return '不重复'
+      if (x % 365 === 0) return `每${x / 365}年`
+      if (x % 30 === 0) return `每${x / 30}个月`
+      if (x % 7 === 0) return `每${x / 7}周`
+      return `每${x}天`
+    },
+    confirmBtnText() {
+      const k = this.parsed && this.parsed.kind
+      return k === 'med_stock' ? '确认入库' : k === 'reminder' ? '确认提醒' : '确认归档'
     },
     onSend() {
       const text = (this.draft || '').trim()
@@ -133,7 +219,7 @@ export default {
     async parse(text) {
       this.parsing = true
       try {
-        const res = await wx.cloud.callFunction({ name: 'parseRecord', data: { text } })
+        const res = await callFn('parseRecord', { text })
         const r = res.result || {}
         if (!r.ok) {
           uni.showToast({ title: r.msg || '解析失败', icon: 'none' })
@@ -163,16 +249,18 @@ export default {
     },
     async confirmSave() {
       if (!this.parsed) return
-      const isMed = this.parsed.kind === 'med_stock'
+      const kind = this.parsed.kind
+      const okMsg = kind === 'med_stock' ? '已入库' : kind === 'reminder' ? '已设提醒' : '已归档'
       this.saving = true
       try {
-        const res = await wx.cloud.callFunction({ name: 'saveRecord', data: { record: this.parsed } })
+        const res = await callFn('saveRecord', { record: this.parsed })
         const r = res.result || {}
         if (r.ok) {
-          uni.showToast({ title: isMed ? '已入库' : '已归档', icon: 'success' })
+          uni.showToast({ title: okMsg, icon: 'success' })
           this.draft = ''
           this.parsed = null
           this.loadPets()
+          if (kind === 'reminder') this.loadDue()
         } else {
           uni.showToast({ title: r.msg || '保存失败', icon: 'none' })
         }
@@ -194,173 +282,332 @@ export default {
 }
 .pets-scroll {
   flex: 1;
-  padding: 24rpx 24rpx 180rpx;
+  padding: 0 0 200rpx;
   box-sizing: border-box;
 }
-.header {
-  padding: 16rpx 8rpx 24rpx;
-}
+
+/* 问候 */
 .greeting {
-  font-size: 30rpx;
-  color: #6b7280;
+  padding: 40rpx var(--pad-page) 16rpx;
+  display: flex;
+  flex-direction: column;
 }
+.greeting__hi {
+  font-size: var(--fs-display);
+  line-height: 1.25;
+  font-weight: 700;
+  color: var(--c-text);
+}
+.greeting__sub {
+  margin-top: 8rpx;
+  font-size: var(--fs-sub);
+  color: var(--c-text-2);
+}
+
+/* 到期提醒横幅 */
+.banner {
+  margin: 8rpx var(--pad-page) 24rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 24rpx 28rpx;
+  background: var(--c-primary-wash);
+  border: 2rpx solid var(--c-primary-tint);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-1);
+}
+.banner--alert {
+  animation: breathe 2.8s ease-in-out infinite;
+}
+.banner--press {
+  background: var(--c-primary-tint);
+}
+.banner__icon {
+  font-size: 36rpx;
+}
+.banner__text {
+  flex: 1;
+  font-size: var(--fs-sub);
+  color: var(--c-primary-deep);
+  font-weight: 500;
+}
+.banner__num {
+  font-weight: 700;
+}
+.banner__arrow {
+  font-size: 32rpx;
+  color: var(--c-primary);
+}
+
+/* 宠物网格 */
 .pet-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 20rpx;
+  gap: 24rpx;
+  padding: 0 var(--pad-page);
 }
 .pet-card {
-  width: calc(50% - 10rpx);
+  width: calc(50% - 12rpx);
   box-sizing: border-box;
-  background: #ffffff;
-  border-radius: 24rpx;
-  padding: 28rpx;
+  background: var(--c-card);
+  border-radius: var(--r-lg);
+  padding: 36rpx 24rpx 32rpx;
+  box-shadow: var(--sh-2);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
-.pet-avatar {
-  width: 84rpx;
-  height: 84rpx;
-  border-radius: 50%;
-  background: #eef2ff;
-  font-size: 44rpx;
+.pet-card--press {
+  transform: scale(0.97);
+  box-shadow: var(--sh-press);
+}
+.pet-card__avatar {
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: var(--r-pill);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 20rpx;
+  font-size: 72rpx;
+  background: radial-gradient(circle at 50% 38%, #fff3ec 0%, var(--c-primary-tint) 100%);
+  box-shadow: inset 0 0 0 2rpx rgba(242, 130, 92, 0.12), 0 6rpx 16rpx rgba(242, 130, 92, 0.18);
 }
-.pet-meta {
-  display: flex;
-  flex-direction: column;
+.pet-card__avatar.is-dog {
+  background: radial-gradient(circle at 50% 38%, #fff0e6 0%, #fad9c2 100%);
 }
-.pet-name {
-  font-size: 32rpx;
+.pet-card__name {
+  margin-top: 20rpx;
+  font-size: var(--fs-h2);
   font-weight: 600;
-  color: #111827;
+  color: var(--c-text);
 }
-.pet-sub {
-  font-size: 24rpx;
-  color: #9ca3af;
+.pet-card__meta {
   margin-top: 6rpx;
+  font-size: var(--fs-cap);
+  color: var(--c-text-2);
 }
+
+/* 空状态 */
 .empty {
-  margin-top: 160rpx;
+  padding: 120rpx var(--pad-page);
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-.empty-title {
-  font-size: 32rpx;
-  color: #374151;
+.empty__art {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: var(--r-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 110rpx;
+  background: radial-gradient(circle at 50% 40%, #fff3ec 0%, var(--c-primary-wash) 70%, var(--c-bg) 100%);
 }
-.empty-sub {
-  font-size: 26rpx;
-  color: #9ca3af;
-  margin-top: 16rpx;
+.empty__title {
+  margin-top: 32rpx;
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  color: var(--c-text);
+}
+.empty__desc {
+  margin-top: 12rpx;
+  font-size: var(--fs-sub);
+  color: var(--c-text-2);
   text-align: center;
+  line-height: 1.6;
 }
-.input-bar {
+
+/* 输入条 */
+.composer {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  background: #ffffff;
-  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
+  padding: 20rpx var(--pad-page) calc(20rpx + env(safe-area-inset-bottom));
+  background: var(--c-card-cream);
+  border-top: 2rpx solid var(--c-border);
+  box-shadow: 0 -6rpx 20rpx rgba(196, 124, 86, 0.06);
   display: flex;
   align-items: center;
-  border-top: 1rpx solid #f0f0f0;
+  gap: 16rpx;
 }
-.input {
+.composer__input {
   flex: 1;
-  height: 76rpx;
-  background: #f3f4f6;
-  border-radius: 38rpx;
+  height: 84rpx;
   padding: 0 28rpx;
-  font-size: 28rpx;
+  background: var(--c-bg-sink);
+  border: 2rpx solid transparent;
+  border-radius: var(--r-xl);
+  font-size: var(--fs-body);
+  color: var(--c-text);
 }
-.send {
+.composer__input--focus {
+  background: var(--c-primary-wash);
+  border-color: var(--c-primary-tint);
+}
+.composer__ph {
+  color: var(--c-text-3);
+}
+.composer__btn {
   width: 132rpx;
-  height: 76rpx;
-  line-height: 76rpx;
-  margin-left: 16rpx;
-  background: #3a7afe;
-  color: #fff;
-  border-radius: 38rpx;
-  font-size: 28rpx;
+  height: 84rpx;
+  line-height: 84rpx;
+  flex: none;
   padding: 0;
+  border-radius: var(--r-xl);
+  background: var(--c-primary-grad);
+  box-shadow: var(--sh-primary);
+  color: var(--c-text-inv);
+  font-size: var(--fs-body);
+  font-weight: 600;
 }
-.confirm-mask {
+.composer__btn--press {
+  transform: scale(0.94);
+  box-shadow: var(--sh-press);
+}
+.composer__btn--loading {
+  background: var(--c-primary-soft);
+  box-shadow: none;
+}
+
+/* 确认弹层 */
+.sheet-mask {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(58, 51, 48, 0.38);
   display: flex;
   align-items: flex-end;
   z-index: 50;
 }
-.confirm-card {
+.sheet {
   width: 100%;
-  background: #fff;
-  border-radius: 28rpx 28rpx 0 0;
-  padding: 32rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  background: var(--c-card);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  box-shadow: var(--sh-3);
+  padding: 16rpx var(--pad-page) calc(32rpx + env(safe-area-inset-bottom));
+  animation: sheet-up 0.26s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
-.confirm-title {
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #111827;
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
-.confirm-row {
+.sheet__grab {
+  width: 64rpx;
+  height: 8rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-divider);
+  margin: 8rpx auto 24rpx;
+}
+.sheet__title {
+  display: block;
+  font-size: var(--fs-h2);
+  font-weight: 700;
+  color: var(--c-text);
+}
+.sheet__hint {
+  display: block;
+  font-size: var(--fs-cap);
+  color: var(--c-text-2);
+  margin-top: 6rpx;
+  margin-bottom: 24rpx;
+}
+.sheet__fields {
+  background: var(--c-card-cream);
+  border-radius: var(--r-md);
+  padding: 4rpx 28rpx;
+  margin-bottom: 28rpx;
+}
+.field-row {
   display: flex;
-  margin-top: 20rpx;
+  align-items: center;
+  min-height: 88rpx;
+  padding: 18rpx 0;
+  border-bottom: 2rpx solid var(--c-divider);
 }
-.confirm-row .k {
-  width: 100rpx;
-  color: #9ca3af;
-  font-size: 28rpx;
+.field-row:last-child {
+  border-bottom: none;
 }
-.confirm-row .v {
+.field-row__label {
+  width: 120rpx;
+  flex: none;
+  font-size: var(--fs-sub);
+  color: var(--c-text-2);
+}
+.field-row__value {
   flex: 1;
-  color: #111827;
-  font-size: 28rpx;
+  font-size: var(--fs-body);
+  color: var(--c-text);
+  font-weight: 500;
+  text-align: right;
+}
+.field-row__value--empty {
+  color: var(--c-text-3);
+  font-weight: 400;
 }
 .new-badge {
-  font-size: 22rpx;
-  color: #f59e0b;
-  margin-left: 12rpx;
+  font-size: var(--fs-tiny);
+  color: var(--c-warning);
+  font-weight: 500;
 }
-.toggle {
+.chips {
+  flex: 1;
   display: flex;
   gap: 16rpx;
+  justify-content: flex-end;
 }
 .chip {
-  font-size: 26rpx;
-  color: #6b7280;
-  background: #f3f4f6;
-  padding: 6rpx 24rpx;
-  border-radius: 24rpx;
+  height: 64rpx;
+  padding: 0 28rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-bg-sink);
+  color: var(--c-text-2);
+  font-size: var(--fs-sub);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
 }
-.chip.on {
-  background: #eef2ff;
-  color: #3a7afe;
+.chip--active {
+  background: var(--c-primary-tint);
+  color: var(--c-primary-deep);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 2rpx var(--c-primary);
 }
-.confirm-actions {
+.sheet__actions {
   display: flex;
   gap: 20rpx;
-  margin-top: 36rpx;
 }
-.btn {
+.btn-ghost {
   flex: 1;
-  height: 84rpx;
-  line-height: 84rpx;
-  border-radius: 42rpx;
-  font-size: 30rpx;
+  height: 92rpx;
+  line-height: 92rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-bg-sink);
+  color: var(--c-text-2);
+  font-size: var(--fs-body);
+  font-weight: 500;
 }
-.btn.ghost {
-  background: #f3f4f6;
-  color: #374151;
+.btn-ghost--press {
+  background: var(--c-divider);
 }
-.btn.primary {
-  background: #3a7afe;
-  color: #fff;
+.btn-primary {
+  flex: 1;
+  height: 92rpx;
+  line-height: 92rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-primary-grad);
+  color: var(--c-text-inv);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  box-shadow: var(--sh-primary);
+}
+.btn-primary--press {
+  transform: scale(0.97);
+  box-shadow: var(--sh-press);
 }
 </style>
