@@ -47,7 +47,7 @@ import { ensureFamily, getProfile, refreshFamilies, getActiveFamily } from '@/cl
 
 export default {
   data() {
-    return { profile: { nickname: '', avatar: '' }, fam: null, version: '0.2.0' }
+    return { profile: { nickname: '', avatar: '' }, fam: null, version: '0.3.0' }
   },
   onShow() {
     this.load()
@@ -96,7 +96,8 @@ export default {
 <style>
 .page {
   min-height: 100vh;
-  padding: 24rpx var(--pad-page) 48rpx;
+  padding: 24rpx var(--pad-page) calc(140rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 .hero {
   display: flex;

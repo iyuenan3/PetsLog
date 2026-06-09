@@ -5,7 +5,7 @@
 - 前端 uni-app **CLI 工程**（Vue3 + Vite，JS 非 TS）；目标端先 mp-weixin。
 - 开发循环：`npm run dev:mp-weixin` 编译 + 监听 → 产物 `dist/dev/mp-weixin/` → 微信开发者工具导入该产物目录运行。
 - 云函数源码放仓库根 `cloudfunctions/`；vite 插件构建时把它拷进 mp-weixin 产物，`manifest.json` 声明 `cloudfunctionRoot`，DevTools 即识别小程序 + 云函数。
-- 云函数依赖（node_modules）装在**源码** `cloudfunctions/*/`（`.gitignore` 的 `node_modules` 规则忽略，不入库），构建时随 cpSync 自动进产物，避开 vite emptyOutDir 每次清 dist 导致依赖丢失（详见 MEMORY）。新增云函数：建目录 + package.json 后从别处 `cp -R node_modules` 过去。
+- 云函数依赖**不拷进产物**：vite 插件 cpSync 拷 `cloudfunctions/` 时用 filter 跳过 node_modules（否则 8 函数依赖共数百 MB / 数万文件灌进 DevTools 监视的产物目录，引发不停刷新 + 拖慢构建，详见 MEMORY）。部署走 DevTools「上传并部署:**云端安装依赖**」，微信读各函数 package.json 在云端装 wx-server-sdk。新增云函数只需建目录 + package.json（列好 dependencies），无需本地装依赖。
 
 ## 命名
 - 云数据库集合：`pets` / `records` / `meds` / `reminders` / `parse_log` / `families` / `family_members` / `invites` / `users`（前五按 family 隔离，users 按 openid，family_* 是多租户骨架）。

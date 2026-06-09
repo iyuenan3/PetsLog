@@ -34,7 +34,10 @@
       </view>
       <view class="card">
         <view v-for="m in members" :key="m.openid" class="mem-row" hover-class="row--press" hover-stay-time="60" @click="memberTap(m)">
-          <view class="mem-row__avatar">{{ monogram(m) }}</view>
+          <view class="mem-row__avatar">
+            <image v-if="m.avatar" :src="m.avatar" class="mem-row__avatar-img" mode="aspectFill"></image>
+            <text v-else>{{ monogram(m) }}</text>
+          </view>
           <view class="mem-row__main">
             <text class="mem-row__name">{{ m.nickname || ('成员 ' + m.openid.slice(-4)) }}<text v-if="m.is_me" class="mem-row__me"> (我)</text></text>
             <text v-if="isAdmin && !m.is_me" class="mem-row__hint">点击可转让 / 移除</text>
@@ -359,6 +362,7 @@ export default {
   height: 72rpx;
   flex: none;
   border-radius: var(--r-pill);
+  overflow: hidden;
   background: radial-gradient(circle at 50% 38%, #fff3ec 0%, var(--c-primary-tint) 100%);
   display: flex;
   align-items: center;
@@ -366,6 +370,10 @@ export default {
   font-size: 30rpx;
   color: var(--c-primary-deep);
   font-weight: 600;
+}
+.mem-row__avatar-img {
+  width: 100%;
+  height: 100%;
 }
 .mem-row__main {
   flex: 1;

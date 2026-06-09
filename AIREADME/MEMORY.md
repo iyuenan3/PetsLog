@@ -37,3 +37,12 @@
 - 根因：微信云数据库 `_openid` 自动注入【只在小程序端 SDK 写入时发生】；【云函数】用 wx-server-sdk 服务端写入【不会】自动绑定调用者 openid（核对过 wx-server-sdk 源码无此逻辑）。于是服务端 add 出的文档没有 _openid，按 _openid 永远查不到，还会不断 add 出孤儿/串档。
 - 根治：云函数里凡按身份/家庭隔离的写入，隔离键必须**显式写**。本仓两种成立写法：① 显式写保留字 `_openid: OPENID`（旧 pets/records 即如此，实测可行）；② 用普通字段如 `openid`（family_members 即如此）。绝不能只查不写。
 - 教训：别想当然以为云函数 add 会自动带 _openid（小程序端才会）。这次还印证了对抗式评审能挖出我假设错的根因（我先前误判成前端昵称绑定问题）。
+
+## 云函数产物拷 node_modules 撑爆 DevTools 致「不停自动刷新」+ 部署的是 dist 拷贝（改源码须先重构建）· 2026-06-09
+- 现象一（不停自动刷新）：导航重构真机验时，DevTools 打开产物目录后不停自动刷新 / 重编译，无法稳定测试。
+- 根因一：vite 插件 `copyCloudfunctions` 把源码 cloudfunctions（含 8 函数的 node_modules）整体 cpSync 进产物，`dist/dev/mp-weixin/cloudfunctions` 达 586MB / 48,880 文件。DevTools 监视项目目录，这种巨型 node_modules 树触发其文件监视反复重编译 + 刷新（先验尺：起 watcher 空转 18s 无自循环 → 排除构建死循环 → 定位到 DevTools 侧监视大目录）。
+- 根治一：cpSync 加 `filter` 跳过 node_modules（产物 586MB → 92K），云函数依赖改由 DevTools「上传并部署:云端安装依赖」按 package.json 在云端装。这取代「node_modules 随源码 cpSync 进产物」旧做法（见上「emptyOutDir」条；旧法本为『所有文件』部署带依赖，现已不需要）。
+- 现象二（云函数改了却不生效）：改了 `cloudfunctions/family/index.js` 源码、让用户部署，仍是旧行为。
+- 根因二：`cloudfunctionRoot` 指向的是**产物里的拷贝** `dist/.../cloudfunctions/family`，DevTools 部署的是它，而它只在 vite `closeBundle`（每次构建）时才从源码刷新。改完源码若没重新构建，部署的是 dist 里的旧拷贝。
+- 根治二：改云函数源码后**先 `npm run dev:mp-weixin` 重新构建**，确认 dist 拷贝已更新（`grep` 改动标记 / `diff` 源码与 dist 拷贝）再让用户部署。
+- 教训：① DevTools「不停刷新」先怀疑产物里有无被监视的巨型目录（node_modules）；② 云函数部署链路是『源码 → 构建拷进 dist → DevTools 从 dist 部署』，漏了构建那步就在部署旧码。

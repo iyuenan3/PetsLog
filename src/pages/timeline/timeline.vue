@@ -18,7 +18,7 @@
     <view v-else class="empty">
       <view class="empty__art">📖</view>
       <text class="empty__title">还没有健康记录</text>
-      <text class="empty__desc">回首页对它说句话，AI 会自动把记录归档到这里</text>
+      <text class="empty__desc">点底部 ＋ 说句话，AI 会自动把记录归档到这里</text>
     </view>
   </view>
 </template>
@@ -59,6 +59,8 @@ export default {
 <style>
 .page {
   min-height: 100vh;
+  padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 .tl-list {
   padding: 24rpx var(--pad-page) 40rpx;

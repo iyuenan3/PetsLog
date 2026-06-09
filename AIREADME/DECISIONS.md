@@ -75,3 +75,15 @@
   - 协议由我起草中文模板（覆盖工具属性 / 不做医疗诊断 / PIPL 合规 / 家庭数据共享 / 数据存微信云），文末标注「模板，上架及正式运营前需法务 / 属主终审」，放 `src/agreements.js`。
 - Alternatives（否决）: 仅昵称不做头像（用户要完整档案）；占位协议骨架 / 用户自备文本（用户选我起草）；家庭管理散落各页（聚到个人中心更内聚）。
 - Tradeoff: 协议为模板非法务定稿（已显式标注，上架前需终审）；多一个 users 集合 + user 函数 + 第 5 tab；头像上传依赖云存储（占额度，量小可接受）。
+
+## ADR-010 · 底部导航重构：4 tab + 中央凸起「＋」全局录入键，自定义 tabBar，提醒/药品合并「健康」· 2026-06-09
+- Problem: 底部 5 个纯文字 tab（首页/时间线/提醒/药品/我的）过多且无图标，不够清爽也无品牌感；录入入口（首页常驻输入条）与功能页组织待优化。
+- Constraint: mp-weixin wxss 子集，原生 tabBar 不支持中央凸起按钮、需 PNG 切图；要保留 switchTab 语义与各 tab 的 onShow 刷新；录入是核心动作，须任意页可达；本次改动纯前端，不动云函数 / 集合。
+- Decision（锁定）:
+  - **4 个真 tab：宠物 / 时间线 / 健康 / 我的**（原「首页」更名「宠物」，定位为宠物档案页）。
+  - **中央凸起「＋」= 全局录入键（非第 5 tab）**：珊瑚渐变圆形凸起，点击 navigateTo 独立录入页 `pages/record`，从任意 tab 可录。
+  - **录入入口迁移（改签名交互）**：原「首页底部常驻自然语言输入框」下线，AI 解析 + 二次确认流程整体抽到 `pages/record`；宠物页去掉常驻输入条，变纯档案（问候 + 到期横幅 + 宠物网格），更透气、无与＋重叠。本 ADR 就此点超越早期「首页底部常驻输入框」表述，CORE / ARCHITECTURE 落地后同步 as-built。
+  - **提醒 + 药品 合并为「健康」tab**：新页 `pages/health`，顶部分段控件 [提醒 | 药品]（默认提醒），两列表逻辑从原 reminders / meds 页内联迁入；原两 tab 页下线，首页到期横幅 switchTab 重指「健康」。
+  - **tabBar 改自定义（as-built）**：`pages.json` 设 `tabBar.custom=true` + 4 项 list，新增 `src/custom-tab-bar/index.{js,json,wxml,wxss}`（微信原生组件四件套，非 .vue：uni-app 把 custom-tab-bar 当拷贝目标原样复制到产物根，不编译 vue，已查编译器源码确认），吃暖色令牌（`var()` 带字面量兜底，防原生组件不继承 page 令牌；选中珊瑚高亮、emoji 图标、中央凸起＋），无需 PNG 切图。选中态同步：每个 tab 页持有独立组件实例，`attached` 时按 getCurrentPages 末页路由算 selected 即恒定正确（`pageLifetimes.show` 兜底），无需事件总线 / getTabBar 代理。
+- Alternatives（否决）: 3 tab（时间线下沉为分段，单页信息密度高，而时间线是就医溯源核心价值，保独立 tab）；保留原生 tabBar 仅加 PNG 线性图标（做不了凸起中键、需切图、样式受限）；＋仅作「跳回宠物页聚焦输入条」的快捷键（与输入条视觉重叠、其它 tab 录入要先跳页）；提醒 / 药品保持独立两 tab（5→4 收不动，二者同属「事务管理」可归一）。
+- Tradeoff: ① 自定义 tabBar 引入选中态同步 + 真机兼容验证成本（靠每页独立实例 + getCurrentPages 路由匹配使 selected 恒定正确降风险）；② 录入多一次页面跳转（换来任意页可录 + 宠物页更干净）；③ 触及 pages.json + 新增 2 页（record / health）+ 1 组件，重指 switchTab，迁移并下线 reminders / meds 两页；④ 纯前端改动，无需重新部署云函数（仅重编译 + DevTools 预览）。

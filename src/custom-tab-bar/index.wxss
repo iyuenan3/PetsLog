@@ -1,0 +1,74 @@
+/* 自定义 tabBar 样式。颜色用 var(--token, #字面量)：组件理应继承 page 上设计令牌，字面量兜底防不继承时破样式。 */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+}
+.tabbar__inner {
+  position: relative;
+  display: flex;
+  height: 108rpx;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--c-card-cream, #fffcf8);
+  border-top: 2rpx solid var(--c-border, #efe7dc);
+  box-shadow: 0 -6rpx 20rpx rgba(196, 124, 86, 0.06);
+}
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.tab__ico {
+  font-size: 40rpx;
+  line-height: 1;
+  opacity: 0.5;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.tab__txt {
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: var(--c-text-3, #b5aba2);
+}
+.tab--on .tab__ico {
+  opacity: 1;
+  transform: translateY(-2rpx) scale(1.1);
+}
+.tab--on .tab__txt {
+  color: var(--c-primary, #f2825c);
+  font-weight: 600;
+}
+.tab--press {
+  opacity: 0.6;
+}
+
+/* 中央凸起录入键 */
+.tab--center {
+  position: relative;
+}
+.fab {
+  position: absolute;
+  top: -34rpx;
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 999rpx;
+  background: var(--c-primary-grad, linear-gradient(135deg, #f8a887 0%, #f2825c 55%, #e26b43 100%));
+  box-shadow: 0 10rpx 24rpx rgba(242, 130, 92, 0.36);
+  border: 6rpx solid var(--c-card-cream, #fffcf8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fab__plus {
+  color: #fff;
+  font-size: 58rpx;
+  line-height: 1;
+  font-weight: 300;
+  margin-top: -4rpx;
+}
+.fab--press {
+  transform: scale(0.92);
+}

@@ -138,15 +138,29 @@ async function listMembers(openid, event) {
   const fid = event && event.family_id
   await assertMember(openid, fid)
   const r = await db.collection('family_members').where({ family_id: fid }).get()
+  // 成员昵称 + 头像以全局个人档案（users 集合，按 _openid，见 ADR-009）为准，读时关联即永远反映最新档案；
+  // family_members.nickname 仅作兜底（建家庭/加入时基本恒空，这是成员显示「成员+尾码」的根因）。
+  const openids = r.data.map((m) => m.openid)
+  const profByOpenid = {}
+  if (openids.length) {
+    const us = await db.collection('users').where({ _openid: _.in(openids) }).get().catch(() => ({ data: [] }))
+    us.data.forEach((u) => {
+      profByOpenid[u._openid] = { nickname: (u && u.nickname) || '', avatar: (u && u.avatar) || '' }
+    })
+  }
   return {
     ok: true,
-    data: r.data.map((m) => ({
-      openid: m.openid,
-      role: m.role,
-      nickname: m.nickname || '',
-      joined_at: m.joined_at,
-      is_me: m.openid === openid,
-    })),
+    data: r.data.map((m) => {
+      const p = profByOpenid[m.openid] || {}
+      return {
+        openid: m.openid,
+        role: m.role,
+        nickname: p.nickname || m.nickname || '',
+        avatar: p.avatar || '', // 云存储 fileID，前端 <image> 直接渲染
+        joined_at: m.joined_at,
+        is_me: m.openid === openid,
+      }
+    }),
   }
 }
 

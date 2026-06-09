@@ -5,7 +5,7 @@
 
 ## 当前部署
 - **环境**：微信云开发免费环境（内测期免费；正式上线后第 15 天到期需买 ¥19.9/月 基础套餐）。
-- **云函数部署走 DevTools GUI「上传并部署:所有文件」**（CLI 部署签名失败，详见 MEMORY）；依赖 `wx-server-sdk` 随包上传。node_modules 装在**源码** `cloudfunctions/*/`（gitignore 忽略），构建时 vite 插件自动拷进产物，免每次重装（详见 MEMORY「emptyOutDir 清 dist」坑）。
+- **云函数部署走 DevTools GUI「上传并部署:云端安装依赖」**（CLI 部署签名失败，详见 MEMORY）；微信读各函数 package.json 在云端装 `wx-server-sdk`。产物**不再带 node_modules**（vite 插件 cpSync filter 掉，否则数百 MB / 数万文件拖垮 DevTools 监视致不停刷新，详见 MEMORY）。
 - **集合自动创建**：parseRecord 幂等 `db.createCollection`（pets / records / meds / parse_log / reminders），无需手建。
 - **网关机密**：`cloudfunctions/parseRecord/config.local.js`（gitignore 排除，随云函数上传到私有云端），不入库。
 

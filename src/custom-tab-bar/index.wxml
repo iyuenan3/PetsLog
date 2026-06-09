@@ -1,0 +1,41 @@
+<!-- 自定义 tabBar（ADR-010）：4 个真 tab + 中央凸起「＋」全局录入键。微信原生组件，由 uni-app 原样拷贝到产物根。 -->
+<view class="tabbar">
+  <view class="tabbar__inner">
+    <!-- 左两个 -->
+    <view
+      wx:for="{{left}}"
+      wx:key="idx"
+      class="tab {{selected === item.idx ? 'tab--on' : ''}}"
+      hover-class="tab--press"
+      hover-stay-time="60"
+      data-idx="{{item.idx}}"
+      data-page="{{item.page}}"
+      bindtap="switchTo"
+    >
+      <view class="tab__ico">{{item.ico}}</view>
+      <view class="tab__txt">{{item.text}}</view>
+    </view>
+
+    <!-- 中央凸起录入键 -->
+    <view class="tab tab--center" bindtap="goRecord">
+      <view class="fab" hover-class="fab--press" hover-stay-time="60">
+        <view class="fab__plus">+</view>
+      </view>
+    </view>
+
+    <!-- 右两个 -->
+    <view
+      wx:for="{{right}}"
+      wx:key="idx"
+      class="tab {{selected === item.idx ? 'tab--on' : ''}}"
+      hover-class="tab--press"
+      hover-stay-time="60"
+      data-idx="{{item.idx}}"
+      data-page="{{item.page}}"
+      bindtap="switchTo"
+    >
+      <view class="tab__ico">{{item.ico}}</view>
+      <view class="tab__txt">{{item.text}}</view>
+    </view>
+  </view>
+</view>
