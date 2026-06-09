@@ -6,6 +6,7 @@
 此前已落地（MVP + 增强 + UI）：自然语言录入 → 解析（record / med_stock / reminder 三分流）→ 时间线 / 卡片 / 药品 / 提醒；宠物档案编辑、体重曲线、截图给兽医；「温暖治愈」UI 设计系统（ADR-007）。开源收口完成（MIT public）。
 
 ## Next（MVP 内测完善 · 1-2 个月）
+- **附件 + records 扩展 + 历史数据导入**（已定型，见 ADR-011/012/013 + SPEC 数据字典）：分 3 轮：轮 1 字段（records 加 hospital/cost/tag、pets 加 home_date/note/avatar、event_type 增驱虫第7桶、parseRecord 同步抽取、病程 tag 简版筛选）→ 轮2 附件（云存储上传 / 压缩缩略图 / 记录详情页 / 家庭存储 1GB + 200MB·天限额 / 级联清理）→ 轮3 Notion 历史数据结构化导入。主粮 foods 模块模型已记、建设排此之后。
 - 邀请身边多宠家庭朋友内测，收集真实语料。
 - AI 解析准确率调优（目标 ≥ 90%）：扩充 prompt few-shot、跑实测集。
 - 提醒真推送：申请微信订阅消息模板 + 定时触发器，到期主动 push（见 ADR-006）。

@@ -87,3 +87,42 @@
   - **tabBar 改自定义（as-built）**：`pages.json` 设 `tabBar.custom=true` + 4 项 list，新增 `src/custom-tab-bar/index.{js,json,wxml,wxss}`（微信原生组件四件套，非 .vue：uni-app 把 custom-tab-bar 当拷贝目标原样复制到产物根，不编译 vue，已查编译器源码确认），吃暖色令牌（`var()` 带字面量兜底，防原生组件不继承 page 令牌；选中珊瑚高亮、emoji 图标、中央凸起＋），无需 PNG 切图。选中态同步：每个 tab 页持有独立组件实例，`attached` 时按 getCurrentPages 末页路由算 selected 即恒定正确（`pageLifetimes.show` 兜底），无需事件总线 / getTabBar 代理。
 - Alternatives（否决）: 3 tab（时间线下沉为分段，单页信息密度高，而时间线是就医溯源核心价值，保独立 tab）；保留原生 tabBar 仅加 PNG 线性图标（做不了凸起中键、需切图、样式受限）；＋仅作「跳回宠物页聚焦输入条」的快捷键（与输入条视觉重叠、其它 tab 录入要先跳页）；提醒 / 药品保持独立两 tab（5→4 收不动，二者同属「事务管理」可归一）。
 - Tradeoff: ① 自定义 tabBar 引入选中态同步 + 真机兼容验证成本（靠每页独立实例 + getCurrentPages 路由匹配使 selected 恒定正确降风险）；② 录入多一次页面跳转（换来任意页可录 + 宠物页更干净）；③ 触及 pages.json + 新增 2 页（record / health）+ 1 组件，重指 switchTab，迁移并下线 reminders / meds 两页；④ 纯前端改动，无需重新部署云函数（仅重编译 + DevTools 预览）。
+
+## ADR-011 · 健康记录附件功能（云存储 + 共享配额限额 + CDN 优化）· 2026-06-09
+- Problem: 用户（含开发者本人 7 猫 2 狗）有大量病历 PDF / 检测报告 / 症状照片 / 发病视频需挂到健康记录；PetsLog 当前记录无附件能力，导入历史数据与日常记录都缺这块。
+- Constraint: ① 微信小程序不能自由读本地文件，图片 / 视频走 `wx.chooseMedia`，PDF / 文档只能 `wx.chooseMessageFile`（从微信聊天选）；② 云开发配额按环境共享（全体用户共用），免费版云存储 5GB + CDN 下行 1GB/月，放开多用户后是全站总量；③ 病历属敏感医疗信息，须按 family 隔离。
+- Decision（锁定）:
+  - 附件挂「健康记录」：records 加 `attachments:[{fileID,type,name,size,uploaded_at}]` + `att_count`；支持图片 / 视频 / PDF。
+  - 上传入口两处：录入二次确认卡片（A）+ 新建「记录详情页」（B，事后补 + 看导入的历史附件）。
+  - 压缩 / 省流量：图片 `wx.compressImage`（长边 ≤2000 + quality 80）+ 生成缩略图，列表只下缩略图、原图点开才下；视频 chooseMedia compressed + ≤30s / ≤30MB；PDF 端侧无法压缩，仅限 ≤10MB；看过的附件本地缓存，避免重复走 CDN。
+  - 限额（内测按最高会员档，从宽）：单条 ≤9 个；**家庭总存储 ≤1GB**（family 文档加 `storage_bytes` 计数器，上传 +size、删除 −size）；**速度护栏 ≤200MB/天/家庭**（复用 parseRecord 的 family_id+day 限流模式）；enforcement = 客户端上传前预检 + 云函数按云存储真实体积复核（客户端报的 size 不可信），超限删文件回滚。
+  - 查看：图片 previewImage、PDF downloadFile + openDocument、视频 video 组件。
+  - 清理：删记录 / 解散家庭须级联删云存储文件并回收 `storage_bytes`，扩 cascadeDeleteFamily 与记录删除路径。
+  - 隔离：fileID 只在 family 内下发（同头像模型），云存储文件访问控制靠不泄露 fileID。
+- Alternatives（否决）: 只在导入时塞附件不做正式功能（用户日常也要、会员化也要）；不限额（共享池下一个用户即可撑满 5GB）；按「文件数」限速（限不住存储，体积才是约束）；端侧压 PDF（无 API；云函数 rasterize 需 ghostscript，不在运行时）。
+- Tradeoff: ① 引入用量计数 + 预检复核 + 级联清理的复杂度，但共享配额下必需；② PDF 压不了只能限体积、且上传要先转发到微信，体验多一步；③ 缩略图略增存储换大幅省 CDN（1GB/月 是真瓶颈），划算；④ `storage_bytes` 计数器与真实用量可能漂移（并发 / 异常），以服务端真实体积复核 + 定期校准兜底。
+
+## ADR-012 · records 扩展字段（就诊医院 / 费用 + 病程 tag 双轴）+ parseRecord 同步抽取 + Notion 历史数据结构化导入 · 2026-06-09
+- Problem: ① 开发者真实记录里有「就诊医院 / 费用」两项 PetsLog 没设计；② Notion 的「名称」是病程线（示例猫嗜酸性肉芽肿跨 2 年 50+ 条），而 PetsLog event_type 是事件类型，两个不同轴，直接归并会丢病程结构；③ 89M / 200+ 条历史档案要无损导入。
+- Constraint: PetsLog event_type 固定 6 桶（症状 / 用药 / 疫苗 / 体重 / 就医 / 其它）；AI 解析走 parseRecord 强制 JSON；导入数据已结构化（CSV），无需再过 LLM。
+- Decision（锁定）:
+  - records 加可选字段：`hospital`（就诊医院，文本）、`cost`（费用，数字 / 元）、`tag`（病程标签，如嗜酸性肉芽肿 / 尿闭 / 软骨病）。
+  - **双轴并存**：event_type（受控枚举桶，管颜色 / 分类；桶数见 ADR-013 / SPEC）+ tag（病程线，可空），既看扁平时间线又能按病程筛。病程视图先做简版（时间线按 tag 筛选），完整视图后续。
+  - parseRecord 的 prompt + 输出 JSON 同步抽取 hospital / cost / tag（record 分支）；saveRecord 落这三字段；record.vue 确认卡片展示。
+  - cost 解锁后续「花费统计」（本月 / 单宠累计），tag 解锁慢病管理，均为差异化。
+  - **Notion 历史导入 = 直接结构化导入**（非走 AI 重解析）：一次性转换，CSV（档案 / 猫猫健康记录 / 驱虫记录）→ 清洗（日期含区间取起始、双重 URL 解码、品种→猫 / 狗、event_type 按内容映射、名称→tag、医院 / 费用 / 描述 / 体重 / 用药）→ pets / records JSON → 灌入用户家庭（family_id + 署名 openid）；附件复用 ADR-011 上传到云存储。
+- Alternatives（否决）: 只留 6 桶丢病程（示例猫那条线散没，丢失用户真实用法 + 慢病差异化）；走 AI 重解析导入（数据已结构化，重解析有损 + 耗 token + 引解析错）；医院 / 费用塞 raw（后续花费统计 / 检索做不了，正式字段更值）。
+- Tradeoff: ① 多 3 字段 + parseRecord 抽取 + 一个病程筛选，模型 / 前端轻度变大；② tag 是自由文本（非受控枚举），病程线靠用户 / 导入一致命名，后续可补规整；③ 导入为一次性脚本，清洗（日期区间 / 编码 / 映射）有边界，需小样本先验再全量。
+
+## ADR-013 · 数据模型定型：pets 扩展（到家日期 / 备注 / 头像）+ event_type 增「驱虫」第 7 桶 + 驱虫建模 + foods 模块占位 · 2026-06-09
+- Problem: 导入 Notion 真实数据前先把数据模型定死。现状几处缺口：pets 缺到家日期 / 备注 / 真实头像；event_type 6 桶里疫苗有、驱虫无（不对称，而驱虫量极大）；驱虫的「做了」与「该做」如何落；家庭级喂粮历史（主粮）无处放。
+- Constraint: 保持 family 隔离；event_type 是受控枚举（前端配色 / 分类依赖）；pets.name 改名已有级联 records / reminders；附件 / 头像走云存储（ADR-011）。
+- Decision（锁定）:
+  - **pets 加 3 可选字段**：`home_date`（到家日期，陪伴时长）、`note`（备注）、`avatar`（头像照片 fileID，云存储）。EDITABLE 白名单同步加。身价不入库，「累计花费」由 records.`cost` 聚合得出。
+  - **event_type 增「驱虫」成 7 桶**（症状 / 用药 / 疫苗 / 驱虫 / 体重 / 就医 / 其它），与疫苗对称（都是周期性预防）；saveRecord 校验、前端配色、parseRecord 分类同步。
+  - **驱虫建模**：做了的驱虫 = 一条 record（event_type=驱虫、med=外驱 / 内驱）；该驱虫 = reminder（type=驱虫）。两者本轮**松耦合**，「做了 → 自动顺延下次提醒」留作后续。
+  - **批量录入**：给全家做同一件事（驱虫 / 疫苗）支持录入时**多选宠物 → 生成 N 条 record**（UX 便利，records 仍按宠物一条，不改 schema）。
+  - **foods 模块（占位，排后建）**：主粮台账是家庭级喂粮历史 `foods{family_id,name,start_date,end_date,current,note}`，不分宠；模型先定，建设排在附件 / 字段 / 导入之后。
+  - meds / reminders 本轮不动。
+- Alternatives（否决）: 存身价（与健康无关，累计花费可由 cost 算）；驱虫塞「其它 / 用药」（与疫苗不对称，量大值得独立桶）；批量做成 batch 实体（records 仍 per-pet 更简单，多选只是 UX 层）；主粮塞 records（它是家庭级、非 per-pet，概念不符）。
+- Tradeoff: ① event_type 加桶要同步前端配色 + parse 分类 + 老数据（历史无驱虫桶，旧驱虫散在其它，导入时归位）；② pets / records 字段渐增，保持可选 + 默认空兜底；③ foods 先记不建，SPEC 标 deferred，避免范围蔓延。完整字段见 SPEC 数据字典。
