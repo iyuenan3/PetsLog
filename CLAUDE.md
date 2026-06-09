@@ -2,8 +2,8 @@
 > 多宠家庭 AI 健康记录工具（微信小程序 · 自然语言录入 → AI 结构化归档）｜ Maxwell
 > 真相源 = `AIREADME/`。本文件只做 router：状态 / 路由 / 红线指针 / 维护责任 / 命令 / 元信息。
 
-## 当前状态（2026-06-08）
-- **MVP 主链路 + 增强功能 + UI 重设计均已落地（真机内测）**。栈：uni-app（mp-weixin）+ 微信云开发（6 云函数 + 5 集合，env cloud1-…）+ 自建 OpenAI 兼容 LLM 网关（默认 auto-llm）。
+## 当前状态（2026-06-09）
+- **MVP 主链路 + 增强 + UI + 家庭多租户 + 个人中心均已落地（真机内测）**。栈：uni-app（mp-weixin）+ 微信云开发（8 云函数 + 9 集合，env cloud1-…）+ 自建 OpenAI 兼容 LLM 网关（默认 auto-llm）。
 - 增强：宠物档案编辑、体重曲线、用药·疫苗·驱虫提醒（站内）、一键截图给兽医；UI 走「温暖治愈」设计系统（CSS 令牌挂 page），见 `AIREADME/DECISIONS` ADR-006/007。
 - 三阶段演进：v1 Cursor（已下线）→ v2 OpenClaw（未上生产）→ v3 本仓库。详见 `AIREADME/CORE`。
 - 下一步：邀友内测 + 解析准确率调优 + 提醒真推送（订阅消息）+ token 轮换。见 `AIREADME/ROADMAP`。

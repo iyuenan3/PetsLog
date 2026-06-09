@@ -12,9 +12,9 @@
           <text v-if="r.repeat_days" class="rm-card__repeat">· {{ repeatText(r.repeat_days) }}</text>
         </view>
         <view class="rm-card__ops">
-          <text class="rm-op rm-op--done" @click="markDone(r)">✓ 完成</text>
-          <text class="rm-op rm-op--snooze" @click="snooze(r)">延后7天</text>
-          <text class="rm-op rm-op--del" @click="remove(r)">删除</text>
+          <text class="rm-op rm-op--done" hover-class="rm-op--press" hover-stay-time="60" @click="markDone(r)">✓ 完成</text>
+          <text class="rm-op rm-op--snooze" hover-class="rm-op--press" hover-stay-time="60" @click="snooze(r)">延后7天</text>
+          <text class="rm-op rm-op--del" hover-class="rm-op--press" hover-stay-time="60" @click="remove(r)">删除</text>
         </view>
       </view>
     </view>
@@ -223,6 +223,7 @@ export default {
 .rm-op--done { background: var(--c-success-tint); color: var(--c-success); }
 .rm-op--snooze { background: var(--c-bg-sink); color: var(--c-text-2); }
 .rm-op--del { background: var(--c-danger-tint); color: var(--c-danger); }
+.rm-op--press { opacity: 0.6; }
 
 /* 空状态 */
 .empty {

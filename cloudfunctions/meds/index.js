@@ -33,7 +33,7 @@ exports.main = async (event) => {
         family_id: familyId,
         name: m.name,
         effect: m.effect || '',
-        quantity: typeof m.quantity === 'number' ? m.quantity : 0,
+        quantity: typeof m.quantity === 'number' ? m.quantity : 1,
         expire_date: m.expire_date || '',
         created_at: Date.now(),
       },

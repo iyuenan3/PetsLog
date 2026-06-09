@@ -8,8 +8,9 @@
 - 云函数依赖（node_modules）装在**源码** `cloudfunctions/*/`（`.gitignore` 的 `node_modules` 规则忽略，不入库），构建时随 cpSync 自动进产物，避开 vite emptyOutDir 每次清 dist 导致依赖丢失（详见 MEMORY）。新增云函数：建目录 + package.json 后从别处 `cp -R node_modules` 过去。
 
 ## 命名
-- 云数据库集合：`pets` / `records` / `meds` / `reminders` / `parse_log`（均按 openid 隔离）。
-- 云函数：`parseRecord`（解析）/ `saveRecord`（落库）/ `pets`·`timeline`·`meds`·`reminders`（CRUD）。
+- 云数据库集合：`pets` / `records` / `meds` / `reminders` / `parse_log` / `families` / `family_members` / `invites` / `users`（前五按 family 隔离，users 按 openid，family_* 是多租户骨架）。
+- 云函数：`parseRecord`（解析）/ `saveRecord`（落库）/ `pets`·`timeline`·`meds`·`reminders`（CRUD）/ `family`（家庭 CRUD + 集中 assertMember/assertAdmin 守卫）/ `user`（个人档案）。
+- **隔离键须显式写**：云函数服务端 add【不会】自动注入 `_openid`（仅小程序端 SDK 会），凡按身份/家庭隔离的写入，隔离键（`family_id` 或显式 `_openid`/`openid`）必须显式落库，否则按它永远查不回。见 MEMORY。
 
 ## 偏好模式
 - LLM 调用收敛到单个云函数 `parseRecord`，便于换模型、限流、改 prompt。

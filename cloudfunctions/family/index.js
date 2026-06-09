@@ -162,7 +162,8 @@ async function createInvite(openid, event) {
       created_by: openid,
       created_at: Date.now(),
       expires_at,
-      max_uses: typeof event.max_uses === 'number' ? event.max_uses : 0, // 0 = 不限次
+      // 只接受正整数，负数 / 小数一律归 0（= 不限次），杜绝自伤型失效码
+      max_uses: Number.isInteger(event.max_uses) && event.max_uses > 0 ? event.max_uses : 0,
       used_count: 0,
     },
   })
@@ -176,13 +177,22 @@ async function joinByCode(openid, event) {
   const inv = r.data[0]
   if (!inv) return { ok: false, code: 'BAD_CODE', msg: '邀请码无效' }
   if (inv.expires_at && inv.expires_at < Date.now()) return { ok: false, code: 'EXPIRED', msg: '邀请码已过期' }
-  if (inv.max_uses && inv.used_count >= inv.max_uses) return { ok: false, code: 'USED_UP', msg: '邀请码已用完' }
+  // 校验家庭仍存在（避免向已解散家庭写孤儿成员关系）
+  const fam = await db.collection('families').doc(inv.family_id).get().catch(() => null)
+  if (!fam || !fam.data) return { ok: false, code: 'BAD_CODE', msg: '邀请码无效' }
   const exist = await getMembership(openid, inv.family_id)
   if (exist) return { ok: true, family_id: inv.family_id, already: true }
+  // 限次码：原子占名额（条件自增），抢不到 = 已用完，避免 check-then-inc 并发超限
+  if (inv.max_uses) {
+    const claim = await db
+      .collection('invites')
+      .where({ _id: inv._id, used_count: _.lt(inv.max_uses) })
+      .update({ data: { used_count: _.inc(1) } })
+    if (!claim.stats || claim.stats.updated < 1) return { ok: false, code: 'USED_UP', msg: '邀请码已用完' }
+  }
   await db.collection('family_members').add({
     data: { family_id: inv.family_id, openid, role: 'member', nickname: (event && event.nickname) || '', joined_at: Date.now() },
   })
-  await db.collection('invites').doc(inv._id).update({ data: { used_count: _.inc(1) } })
   return { ok: true, family_id: inv.family_id }
 }
 
@@ -204,6 +214,8 @@ async function removeMember(openid, event) {
   const m = await getMembership(target, fid)
   if (!m) return { ok: false, msg: '对方不是成员' }
   await db.collection('family_members').where({ family_id: fid, openid: target }).remove()
+  // 作废该家庭现有邀请码，避免被踢成员凭旧码秒回（管理员可再生成新码）
+  await db.collection('invites').where({ family_id: fid }).remove().catch(() => {})
   return { ok: true }
 }
 
@@ -221,6 +233,16 @@ async function transferAdmin(openid, event) {
   return { ok: true }
 }
 
+// 解散家庭：级联清掉该家庭全部数据 + 成员关系 + 邀请码 + 家庭文档。
+async function cascadeDeleteFamily(fid) {
+  for (const c of ['records', 'meds', 'reminders', 'pets', 'parse_log']) {
+    await db.collection(c).where({ family_id: fid }).remove().catch(() => {})
+  }
+  await db.collection('invites').where({ family_id: fid }).remove().catch(() => {})
+  await db.collection('family_members').where({ family_id: fid }).remove().catch(() => {})
+  await db.collection('families').doc(fid).remove().catch(() => {})
+}
+
 async function leave(openid, event) {
   const fid = event && event.family_id
   const me = await assertMember(openid, fid)
@@ -228,23 +250,18 @@ async function leave(openid, event) {
   if (me.role === 'admin' && cnt.total > 1) {
     return { ok: false, code: 'MUST_TRANSFER', msg: '你是管理员，请先转让管理员再退出' }
   }
-  await db.collection('family_members').where({ family_id: fid, openid }).remove()
-  // 最后一人退出 = 解散家庭（此时无数据；数据级联见 deleteFamily / 轮 B）
   if (cnt.total <= 1) {
-    await db.collection('families').doc(fid).remove().catch(() => {})
+    // 最后一人退出 = 解散并彻底清理（退出即删，对齐 deleteFamily / PIPL）
+    await cascadeDeleteFamily(fid)
+    return { ok: true, dissolved: true }
   }
-  return { ok: true, dissolved: cnt.total <= 1 }
+  await db.collection('family_members').where({ family_id: fid, openid }).remove()
+  return { ok: true, dissolved: false }
 }
 
 async function deleteFamily(openid, event) {
   const fid = event && event.family_id
   await assertAdmin(openid, fid)
-  // 级联删该家庭全部数据（轮 B 起这些集合才有 family_id；现在删空也无妨）
-  for (const c of ['records', 'meds', 'reminders', 'pets', 'parse_log']) {
-    await db.collection(c).where({ family_id: fid }).remove().catch(() => {})
-  }
-  await db.collection('invites').where({ family_id: fid }).remove().catch(() => {})
-  await db.collection('family_members').where({ family_id: fid }).remove().catch(() => {})
-  await db.collection('families').doc(fid).remove().catch(() => {})
+  await cascadeDeleteFamily(fid)
   return { ok: true }
 }

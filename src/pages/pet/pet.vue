@@ -28,7 +28,7 @@
     <view class="card-block" v-if="!editing">
       <view class="card-block__head">
         <text class="card-block__title">基础档案</text>
-        <text class="edit-btn" @click="startEdit">编辑</text>
+        <text class="edit-btn" hover-class="edit-btn--press" hover-stay-time="60" @click="startEdit">编辑</text>
       </view>
       <view class="rows">
         <view class="row"><text class="row__k">品种</text><text class="row__v">{{ pet.breed || '未填' }}</text></view>
@@ -67,7 +67,7 @@
         <button class="btn-ghost" hover-class="btn-ghost--press" hover-stay-time="60" @click="cancelEdit">取消</button>
         <button class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" :loading="saving" @click="save">保存</button>
       </view>
-      <view class="del-link" @click="confirmDelete">删除这只宠物的<text class="del-link__hot">档案</text></view>
+      <view class="del-link" hover-class="del-link--press" hover-stay-time="60" @click="confirmDelete">删除这只宠物的<text class="del-link__hot">档案</text></view>
     </view>
 
     <!-- 给兽医的小结：生成结果浮层 -->
@@ -489,7 +489,7 @@ export default {
       const recs = this.exportRecs || []
       ctx.font = '13px sans-serif'
       if (!recs.length) {
-        y += 28
+        y += 30
         ctx.fillStyle = '#B5ABA2'
         ctx.fillText('暂无记录', padX, y)
       } else {
@@ -618,7 +618,7 @@ export default {
 .btn-vet {
   margin: 0 var(--pad-page) 24rpx;
   height: 88rpx;
-  line-height: 84rpx;
+  line-height: 88rpx;
   border-radius: var(--r-pill);
   background: var(--c-card);
   border: 2rpx solid var(--c-primary);
@@ -658,6 +658,9 @@ export default {
   font-size: var(--fs-sub);
   color: var(--c-primary-deep);
   font-weight: 500;
+}
+.edit-btn--press {
+  opacity: 0.55;
 }
 
 .weight-chart {
@@ -815,6 +818,9 @@ export default {
   margin-top: 28rpx;
   font-size: var(--fs-cap);
   color: var(--c-text-3);
+}
+.del-link--press {
+  opacity: 0.55;
 }
 .del-link__hot {
   color: var(--c-danger);

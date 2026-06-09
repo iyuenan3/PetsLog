@@ -31,3 +31,9 @@
 - ① 绘制前 `canvas.width/height` 乘 `pixelRatio` 再 `ctx.scale(dpr,dpr)`，否则线条 / 文字发虚，作品集展示露怯。
 - ② 离屏导出画布用 `position:fixed; left:-9999px` 移出可视区，不能 `display:none`（否则取不到 node、画不出 / 导不出图）。
 - ③ node 可能尚未渲染好，SelectorQuery 取不到时 `setTimeout` 重试一次兜底。
+
+## 微信云函数服务端写入【不会】自动注入 _openid（按身份隔离须显式写）· 2026-06-09
+- 现象：`user` 云函数 me/update 按 `where({_openid: OPENID})` 查个人档案，保存昵称/头像后再进「我的」永远读不回，每次走「首次建档」分支（个人中心头像昵称不显示的真根因）。
+- 根因：微信云数据库 `_openid` 自动注入【只在小程序端 SDK 写入时发生】；【云函数】用 wx-server-sdk 服务端写入【不会】自动绑定调用者 openid（核对过 wx-server-sdk 源码无此逻辑）。于是服务端 add 出的文档没有 _openid，按 _openid 永远查不到，还会不断 add 出孤儿/串档。
+- 根治：云函数里凡按身份/家庭隔离的写入，隔离键必须**显式写**。本仓两种成立写法：① 显式写保留字 `_openid: OPENID`（旧 pets/records 即如此，实测可行）；② 用普通字段如 `openid`（family_members 即如此）。绝不能只查不写。
+- 教训：别想当然以为云函数 add 会自动带 _openid（小程序端才会）。这次还印证了对抗式评审能挖出我假设错的根因（我先前误判成前端昵称绑定问题）。

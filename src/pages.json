@@ -19,6 +19,22 @@
     {
       "path": "pages/pet/pet",
       "style": { "navigationBarTitleText": "宠物档案" }
+    },
+    {
+      "path": "pages/me/me",
+      "style": { "navigationBarTitleText": "我的" }
+    },
+    {
+      "path": "pages/family/family",
+      "style": { "navigationBarTitleText": "家庭管理" }
+    },
+    {
+      "path": "pages/profile/profile",
+      "style": { "navigationBarTitleText": "个人档案" }
+    },
+    {
+      "path": "pages/agreement/agreement",
+      "style": { "navigationBarTitleText": "协议" }
     }
   ],
   "tabBar": {
@@ -30,7 +46,8 @@
       { "pagePath": "pages/index/index", "text": "首页" },
       { "pagePath": "pages/timeline/timeline", "text": "时间线" },
       { "pagePath": "pages/reminders/reminders", "text": "提醒" },
-      { "pagePath": "pages/meds/meds", "text": "药品" }
+      { "pagePath": "pages/meds/meds", "text": "药品" },
+      { "pagePath": "pages/me/me", "text": "我的" }
     ]
   },
   "globalStyle": {

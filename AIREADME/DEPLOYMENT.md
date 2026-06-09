@@ -1,7 +1,7 @@
 # DEPLOYMENT — PetsLog
 <!-- 跑哪/怎么跑/共享什么。key→哪都不写。共享底座属本项目就写这；消费别人的只在 RELATIONS 指属主。 -->
 
-内测部署中（2026-06-08）。后端已上微信云开发环境 `cloud1-…`（envId 非机密，存 `src/config.js`）；6 个云函数（parseRecord / saveRecord / pets / timeline / meds / reminders）+ 5 个集合（pets / records / meds / reminders / parse_log）已部署，录入主链路 + 提醒真机跑通。前端走体验版，未正式上架。
+内测部署中（2026-06-09）。后端已上微信云开发环境 `cloud1-…`（envId 非机密，存 `src/config.js`）；8 个云函数（parseRecord / saveRecord / pets / timeline / meds / reminders / family / user）+ 9 个集合（pets / records / meds / reminders / parse_log / families / family_members / invites / users）已部署，录入主链路 + 提醒 + 家庭多租户 + 个人中心真机跑通。前端走体验版，未正式上架。
 
 ## 当前部署
 - **环境**：微信云开发免费环境（内测期免费；正式上线后第 15 天到期需买 ¥19.9/月 基础套餐）。

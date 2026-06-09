@@ -74,10 +74,15 @@ exports.main = async (event) => {
     if ('name' in patch && !patch.name) return { ok: false, msg: '名字必填' }
     patch.updated_at = Date.now()
 
-    // 改名级联（按家庭）：历史记录的 pet 字段一并改掉，否则时间线 / 体重曲线按名字查会对不上
+    // 改名级联（按家庭）：records + reminders 的 pet 字段一并改掉，否则按名字查会对不上
     if (patch.name && patch.name !== cur.data.name) {
       await db
         .collection('records')
+        .where({ family_id: familyId, pet: cur.data.name })
+        .update({ data: { pet: patch.name } })
+        .catch(() => {})
+      await db
+        .collection('reminders')
         .where({ family_id: familyId, pet: cur.data.name })
         .update({ data: { pet: patch.name } })
         .catch(() => {})

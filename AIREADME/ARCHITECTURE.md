@@ -8,12 +8,13 @@
   ├─ 单宠 / 全宠健康时间线（症状/用药/疫苗/体重/就医）
   ├─ 用药·疫苗·驱虫提醒（站内：到期高亮 + 首页横幅；真推送待订阅消息）
   ├─ 宠物档案（编辑 / 删除 / 体重曲线 / 一键截图给兽医）
-  └─ 家庭药品库存（药名/功效/数量/过期，不绑单宠）
-        │ wx.cloud.callFunction（自动带 openid，免自建登录态）
+  ├─ 家庭药品库存（药名/功效/数量/过期，不绑单宠）
+  └─ 我的 / 个人中心（个人档案昵称头像 / 家庭管理·切换·邀请码 / 用户·隐私协议）
+        │ wx.cloud.callFunction（自动带 openid + 客户端注入 active family_id，免自建登录态）
         ▼
 微信云开发 (Serverless)
-  ├─ 云函数（6）：parseRecord 解析 / saveRecord 落库 / pets·timeline·meds·reminders CRUD / 频率限制
-  ├─ 云数据库（文档型，5 集合）：pets / records / meds / reminders / parse_log，按 openid 隔离
+  ├─ 云函数（8）：parseRecord 解析 / saveRecord 落库 / pets·timeline·meds·reminders CRUD / family 家庭+鉴权守卫 / user 个人档案 / 频率限制
+  ├─ 云数据库（文档型，9 集合）：pets / records / meds / reminders / parse_log / families / family_members / invites / users，按 family 隔离（users 按 openid）
   └─ 云存储：宠物头像等
         │ 云函数 outbound（Node，不受小程序合法域名白名单约束）
         │ POST <自建 LLM 网关>/v1/chat/completions
@@ -34,6 +35,6 @@
 
 ## 禁改项 / Forbidden Refactors
 - **LLM key 不得移到前端**：必须留在云函数环境变量（红线，见 CORE）。
-- **云函数调 LLM 网关必须信任其 root CA**（`ca` 选项 / `NODE_EXTRA_CA_CERTS`），不得为图省事长期用 `rejectUnauthorized:false`（仅 MVP 临时可），更不得把该自签 CA 当可随意替换项——属主侧为 pinned 约束。
+- **云函数调 LLM 网关必须信任其 root CA**（`ca` 选项 / `NODE_EXTRA_CA_CERTS`），不得为图省事长期用 `rejectUnauthorized:false`（仅 MVP 临时可），更不得把该自签 CA 当可随意替换项，属主侧为 pinned 约束。
 - **数据隔离不得绕过**：正从 openid 隔离过渡到 family 隔离（见 DECISIONS ADR-008）。家庭模型落地后，每个云函数必须入口先 `assertMember(openid, family_id)` 再读写，客户端传入的 family_id 一律不可信；不得跨家庭读写。
 - **AI 严格定位为「结构化提取机器」**：system prompt + 强制 JSON 不得放开成自由对话（防滥用 + 控成本 + 合规）。

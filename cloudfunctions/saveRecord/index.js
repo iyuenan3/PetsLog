@@ -27,6 +27,7 @@ exports.main = async (event) => {
 
   // 提醒
   if (r.kind === 'reminder') {
+    if (!r.rem_title && !r.pet) return { ok: false, code: 'EMPTY_REMINDER', msg: '提醒内容缺失' }
     await db.createCollection('reminders').catch(() => {}) // 幂等兜底
     const TYPES = ['用药', '疫苗', '驱虫', '其它']
     const remRes = await db.collection('reminders').add({
@@ -80,8 +81,10 @@ exports.main = async (event) => {
   if (doc.pet) {
     const petRes = await db.collection('pets').where({ family_id: familyId, name: doc.pet }).get()
     if (petRes.data.length) {
-      if (doc.weight) {
-        await db.collection('pets').doc(petRes.data[0]._id).update({ data: { latest_weight: doc.weight } })
+      const p = petRes.data[0]
+      // 仅当新记录日期 >= 已存最新体重日期时才回写，避免补录旧体重把「最新」覆盖回退
+      if (doc.weight && (!p.latest_weight_date || (doc.time || '') >= p.latest_weight_date)) {
+        await db.collection('pets').doc(p._id).update({ data: { latest_weight: doc.weight, latest_weight_date: doc.time || '' } })
       }
     } else {
       await db.collection('pets').add({
@@ -95,6 +98,7 @@ exports.main = async (event) => {
           allergy: '',
           chronic: '',
           latest_weight: doc.weight || null,
+          latest_weight_date: doc.weight ? doc.time || '' : '',
           created_at: Date.now(),
         },
       })
