@@ -30,7 +30,10 @@
           hover-stay-time="80"
           @click="openPet(p)"
         >
-          <view class="pet-card__avatar" :class="p.species === 'dog' ? 'is-dog' : 'is-cat'">{{ speciesEmoji(p.species) }}</view>
+          <view class="pet-card__avatar" :class="p.species === 'dog' ? 'is-dog' : 'is-cat'">
+            <image v-if="p.avatar" :src="p.avatar" class="pet-card__avatar-img" mode="aspectFill"></image>
+            <text v-else>{{ speciesEmoji(p.species) }}</text>
+          </view>
           <text class="pet-card__name">{{ p.name }}</text>
           <text class="pet-card__meta">{{ ageText(p.birthday) || '年龄未知' }} · {{ p.latest_weight ? p.latest_weight + 'kg' : '体重未记' }}</text>
         </view>
@@ -214,6 +217,11 @@ export default {
 }
 .pet-card__avatar.is-dog {
   background: radial-gradient(circle at 50% 38%, #fff0e6 0%, #fad9c2 100%);
+}
+.pet-card__avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-pill);
 }
 .pet-card__name {
   margin-top: 20rpx;

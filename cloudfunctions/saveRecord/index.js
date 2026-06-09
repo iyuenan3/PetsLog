@@ -2,6 +2,33 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+// 事件类型受控枚举（7 桶，见 ADR-013）。前端配色 / 分类依赖，非法值落「其它」。
+const EVENT_TYPES = ['症状', '用药', '疫苗', '驱虫', '体重', '就医', '其它']
+
+// 日期归一：保证落库日期恒为定长零填充 'YYYY-MM-DD'，否则字典序排序（兽医小结按 time、提醒按 next_date）会失真。
+// 已是 'YYYY-MM-DD' 原样；'2026-6-9' / '2026/6/9' 补零归一；解析不出回退 fallback。防 LLM 偶发非零填充。
+function normalizeDate(v, fallback) {
+  const t = String(v == null ? '' : v).trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t
+  const m = t.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})$/)
+  if (m) {
+    const z = (n) => String(n).padStart(2, '0')
+    return `${m[1]}-${z(m[2])}-${z(m[3])}`
+  }
+  return fallback
+}
+
+// 费用容错：number 原样；"480" / "480元" 取数；空 / 无数字串（如「免费」「未知」）/ 非数 → null
+// 注意：必须在 Number() 前判空串，否则 Number('')===0 会把无数字串错判成 0，污染「免费就诊(0)」语义
+function numOrNull(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  if (v == null || v === '') return null
+  const s = String(v).replace(/[^\d.]/g, '')
+  if (s === '') return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
+
 async function assertMember(openid, familyId) {
   if (!familyId) throw { code: 'NO_FAMILY', msg: '缺少家庭上下文' }
   const r = await db.collection('family_members').where({ family_id: familyId, openid }).limit(1).get()
@@ -36,7 +63,7 @@ exports.main = async (event) => {
         pet: r.pet || '',
         type: TYPES.includes(r.rem_type) ? r.rem_type : '其它',
         title: r.rem_title || '',
-        next_date: r.rem_date || '',
+        next_date: normalizeDate(r.rem_date, ''),
         repeat_days: typeof r.rem_repeat_days === 'number' ? r.rem_repeat_days : Number(r.rem_repeat_days) || 0,
         note: '',
         done: false,
@@ -57,7 +84,7 @@ exports.main = async (event) => {
         name,
         effect: r.med_effect || '',
         quantity: typeof r.med_quantity === 'number' ? r.med_quantity : Number(r.med_quantity) || 1,
-        expire_date: r.med_expire || '',
+        expire_date: normalizeDate(r.med_expire, ''),
         created_at: Date.now(),
       },
     })
@@ -67,10 +94,14 @@ exports.main = async (event) => {
   const doc = {
     family_id: familyId,
     pet: r.pet || '',
-    time: r.time || '',
-    event_type: r.event_type || '其它',
+    time: normalizeDate(r.time, ''),
+    event_type: EVENT_TYPES.includes(r.event_type) ? r.event_type : '其它',
     weight: typeof r.weight === 'number' ? r.weight : null,
     med: r.med || null,
+    hospital: (r.hospital || '').trim(), // 就诊医院（见 ADR-012）
+    cost: numOrNull(r.cost), // 费用（元）
+    tag: (r.tag || '').trim(), // 病程标签（与 event_type 双轴）；trim 防同名病程线因首尾空格散裂
+    desc: (r.desc || '').trim(), // 干净事件描述（不含费用 / 医院），给兽医小结拼接用，不暴露 raw 原话
     raw: r.raw || '',
     created_at: Date.now(),
   }

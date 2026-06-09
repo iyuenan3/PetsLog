@@ -2,7 +2,10 @@
   <view class="page" v-if="pet">
     <!-- 头部 -->
     <view class="profile-head">
-      <view class="profile-head__avatar" :class="pet.species === 'dog' ? 'is-dog' : 'is-cat'">{{ pet.species === 'dog' ? '🐶' : '🐱' }}</view>
+      <view class="profile-head__avatar" :class="pet.species === 'dog' ? 'is-dog' : 'is-cat'">
+        <image v-if="pet.avatar" :src="pet.avatar" class="profile-head__avatar-img" mode="aspectFill"></image>
+        <text v-else>{{ pet.species === 'dog' ? '🐶' : '🐱' }}</text>
+      </view>
       <text class="profile-head__name">{{ pet.name }}</text>
       <text class="profile-head__meta">{{ ageText(pet.birthday) || '年龄未知' }} · {{ pet.species === 'dog' ? '狗' : '猫' }}</text>
     </view>
@@ -37,6 +40,8 @@
         <view class="row"><text class="row__k">过敏史</text><text class="row__v">{{ pet.allergy || '无' }}</text></view>
         <view class="row"><text class="row__k">慢病</text><text class="row__v">{{ pet.chronic || '无' }}</text></view>
         <view class="row"><text class="row__k">最新体重</text><text class="row__v">{{ pet.latest_weight ? pet.latest_weight + 'kg' : '未记' }}</text></view>
+        <view class="row"><text class="row__k">到家日期</text><text class="row__v">{{ pet.home_date || '未填' }}</text></view>
+        <view class="row"><text class="row__k">备注</text><text class="row__v">{{ pet.note || '无' }}</text></view>
       </view>
     </view>
 
@@ -44,6 +49,13 @@
     <view class="card-block" v-else>
       <view class="card-block__head"><text class="card-block__title">编辑档案</text></view>
       <view class="form">
+        <view class="form-row">
+          <text class="form-row__label">头像</text>
+          <view class="avatar-edit" hover-class="avatar-edit--press" hover-stay-time="60" @click="pickAvatar">
+            <image v-if="form.avatar" :src="form.avatar" class="avatar-edit__img" mode="aspectFill"></image>
+            <text v-else class="avatar-edit__ph">＋</text>
+          </view>
+        </view>
         <view class="form-row"><text class="form-row__label">名字</text><input class="form-input" v-model="form.name" placeholder="必填" placeholder-class="form-ph" /></view>
         <view class="form-row">
           <text class="form-row__label">种类</text>
@@ -59,9 +71,16 @@
             <view class="form-input picker-val" :class="{ 'picker-val--ph': !form.birthday }">{{ form.birthday || '点击选择' }}</view>
           </picker>
         </view>
+        <view class="form-row">
+          <text class="form-row__label">到家日期</text>
+          <picker class="form-picker" mode="date" :value="form.home_date || ''" @change="onHomeDate">
+            <view class="form-input picker-val" :class="{ 'picker-val--ph': !form.home_date }">{{ form.home_date || '点击选择' }}</view>
+          </picker>
+        </view>
         <view class="form-row"><text class="form-row__label">绝育</text><switch :checked="form.neutered" color="#f2825c" @change="onNeutered" /></view>
         <view class="form-row"><text class="form-row__label">过敏史</text><input class="form-input" v-model="form.allergy" placeholder="无则留空" placeholder-class="form-ph" /></view>
         <view class="form-row"><text class="form-row__label">慢病</text><input class="form-input" v-model="form.chronic" placeholder="无则留空" placeholder-class="form-ph" /></view>
+        <view class="form-row"><text class="form-row__label">备注</text><input class="form-input" v-model="form.note" placeholder="来历 / 习性等，可留空" placeholder-class="form-ph" /></view>
       </view>
       <view class="form-actions">
         <button class="btn-ghost" hover-class="btn-ghost--press" hover-stay-time="60" @click="cancelEdit">取消</button>
@@ -92,7 +111,7 @@
 <script>
 import { CLOUD_ENV } from '@/config'
 import { petAge } from '@/utils'
-import { callFn } from '@/cloud'
+import { callFn, uploadAvatar } from '@/cloud'
 
 export default {
   data() {
@@ -106,6 +125,7 @@ export default {
       // 给兽医的小结
       exporting: false,
       exportRecs: [],
+      vetHasMore: false, // 记录超过展示上限时给提示
       vetImg: '',
       cw: 340,
       ch: 480,
@@ -303,6 +323,9 @@ export default {
         neutered: !!p.neutered,
         allergy: p.allergy || '',
         chronic: p.chronic || '',
+        home_date: p.home_date || '',
+        note: p.note || '',
+        avatar: p.avatar || '',
       }
       this.editing = true
     },
@@ -317,6 +340,35 @@ export default {
     },
     onNeutered(e) {
       this.form.neutered = e.detail.value
+    },
+    onHomeDate(e) {
+      this.form.home_date = e.detail.value
+    },
+    pickAvatar() {
+      // #ifdef MP-WEIXIN
+      wx.chooseMedia({
+        count: 1,
+        mediaType: ['image'],
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
+        success: async (res) => {
+          const tmp = res.tempFiles && res.tempFiles[0] && res.tempFiles[0].tempFilePath
+          if (!tmp) return
+          uni.showLoading({ title: '上传中…' })
+          try {
+            this.form.avatar = await uploadAvatar(tmp)
+          } catch (e) {
+            uni.showToast({ title: '头像上传失败', icon: 'none' })
+          } finally {
+            uni.hideLoading()
+          }
+        },
+        fail: (err) => {
+          // 用户取消(cancel)属正常静默；其它失败（权限 / 系统）给反馈，对齐 saveVetImg 的失败处理
+          if (!String((err && err.errMsg) || '').includes('cancel')) uni.showToast({ title: '选择图片失败', icon: 'none' })
+        },
+      })
+      // #endif
     },
     async save() {
       if (!String(this.form.name || '').trim()) {
@@ -367,17 +419,25 @@ export default {
       this.exporting = true
       uni.showLoading({ title: '生成中…' })
       try {
+        const MAX = 10 // 兽医小结最多展示最近 N 条，避免图过长；超出给提示
         let recs = []
         // #ifdef MP-WEIXIN
-        const res = await callFn('timeline', { action: 'list', pet: this.pet.name, limit: 8 })
+        const res = await callFn('timeline', { action: 'list', pet: this.pet.name, limit: MAX + 1, orderField: 'time' })
         if (res.result && res.result.ok) recs = res.result.data || []
         // #endif
-        this.exportRecs = recs
-        const rows = Math.max(Math.min(recs.length, 8), 1)
+        const hasMore = recs.length > MAX
+        const shown = recs.slice(0, MAX)
+        this.exportRecs = shown
+        this.vetHasMore = hasMore
         this.cw = 340
-        // 高度按内容确定，须与 paintVet 的 y 递增严格对应：
-        // 头部92 + 30到基础标题 + 10下划线 + 6行*26 + 22到分隔 + 26到近期标题 + 10下划线 + rows*30 + 56页脚
-        this.ch = 92 + 30 + 10 + 6 * 26 + 22 + 26 + 10 + rows * 30 + 56
+        // 近期记录区高度：每条原文按列宽换行、不截断，保守按 14 字 / 行估行数（宁可留白不裁切）。
+        // 与 paintVet 绘制几何对应：每条首行 22px + 续行各 20px + 条后 8px 间距（单行恰为 30px，兼容旧版）。
+        let recsH = 0
+        if (!shown.length) recsH = 30
+        else for (const r of shown) recsH += Math.max(1, Math.ceil(String(this.composeVetBody(r)).length / 14)) * 22 + 8
+        const moreH = hasMore ? 24 : 0
+        // 头部92 + 30到基础标题 + 10下划线 + 6行*26 + 22到分隔 + 26到近期标题 + 10下划线 + 近期记录 + 超出提示 + 56页脚
+        this.ch = 92 + 30 + 10 + 6 * 26 + 22 + 26 + 10 + recsH + moreH + 56
         await this.$nextTick()
         setTimeout(() => this.renderVet(), 30)
       } catch (e) {
@@ -493,20 +553,36 @@ export default {
         ctx.fillStyle = '#B5ABA2'
         ctx.fillText('暂无记录', padX, y)
       } else {
-        recs.slice(0, 8).forEach((r) => {
-          y += 30
+        // 兽医小结正文【只用结构化字段拼接(composeVetBody: desc / tag / med / weight)，绝不用 raw】：
+        // raw 是录入原话、含费用 / 医院 / 寒暄，对不同医院 / 医生敏感（费用只留时间线）；用户明确要求，勿「好心」回退 raw。
+        // 按列宽换行、不截断，兽医要看全。
+        recs.forEach((r) => {
           const date = (r.time || '').slice(5)
+          const tag = '[' + (r.event_type || '其它') + ']'
+          // 首行：日期 + 类型 + 正文第一行
+          y += 22
           ctx.font = '13px sans-serif'
           ctx.fillStyle = '#B5ABA2'
           ctx.fillText(date, padX, y)
-          const tag = '[' + (r.event_type || '其它') + ']'
           ctx.fillStyle = '#8A7F77'
           ctx.fillText(tag, padX + 42, y)
           const tagW = ctx.measureText(tag).width
           const rawX = padX + 42 + tagW + 8
+          const lines = this.wrapByWidth(ctx, this.composeVetBody(r), W - rawX - padX)
           ctx.fillStyle = '#3A3330'
-          ctx.fillText(this.truncate(ctx, r.raw || '', W - rawX - padX), rawX, y)
+          ctx.fillText(lines[0] || '', rawX, y)
+          for (let i = 1; i < lines.length; i++) {
+            y += 20
+            ctx.fillText(lines[i], rawX, y)
+          }
+          y += 8 // 记录间距
         })
+        if (this.vetHasMore) {
+          y += 22
+          ctx.font = '11px sans-serif'
+          ctx.fillStyle = '#B5ABA2'
+          ctx.fillText(`仅展示最近 ${recs.length} 条记录，完整病史见小程序`, padX, y)
+        }
       }
 
       // 页脚（含生成日期 + 医疗免责）
@@ -545,6 +621,33 @@ export default {
       if (ctx.measureText(t).width <= maxW) return t
       while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1)
       return t + '…'
+    },
+    composeVetBody(r) {
+      // 兽医小结正文【只用结构化字段拼接，绝不用 raw】：raw 含费用 / 医院 / 寒暄，敏感。
+      // desc=干净事件描述（parseRecord 抽，不含费用 / 医院）；tag=病程（临床相关、不敏感）；med / weight 兽医关心。
+      const parts = []
+      if (r.desc) parts.push(r.desc)
+      if (r.tag && (!r.desc || r.desc.indexOf(r.tag) < 0)) parts.push(r.tag)
+      if (r.med) parts.push('用药:' + r.med)
+      if (typeof r.weight === 'number' && r.weight > 0) parts.push(r.weight + 'kg')
+      // 老数据无 desc / 结构化信息时返回 ''（只显示 日期 + 类型），绝不回退 raw 泄露费用 / 医院
+      return parts.join(' · ')
+    },
+    wrapByWidth(ctx, text, maxW) {
+      // 按容器宽度逐字换行（中文无空格，逐字断行；英文同样按字符断，兽医小结够用）
+      const chars = String(text || '').split('')
+      const lines = []
+      let cur = ''
+      for (const ch of chars) {
+        if (ctx.measureText(cur + ch).width > maxW && cur) {
+          lines.push(cur)
+          cur = ch
+        } else {
+          cur += ch
+        }
+      }
+      if (cur) lines.push(cur)
+      return lines.length ? lines : ['']
     },
     saveVetImg() {
       // #ifdef MP-WEIXIN
@@ -601,6 +704,11 @@ export default {
 }
 .profile-head__avatar.is-dog {
   background: radial-gradient(circle at 50% 38%, #fff0e6 0%, #fad9c2 100%);
+}
+.profile-head__avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-pill);
 }
 .profile-head__name {
   margin-top: 24rpx;
@@ -755,6 +863,30 @@ export default {
 }
 .picker-val--ph {
   color: var(--c-text-3);
+}
+/* 编辑态头像选择 */
+.avatar-edit {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-bg-sink);
+  border: 2rpx dashed var(--c-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.avatar-edit--press {
+  opacity: 0.7;
+}
+.avatar-edit__img {
+  width: 100%;
+  height: 100%;
+}
+.avatar-edit__ph {
+  font-size: 56rpx;
+  color: var(--c-text-3);
+  font-weight: 300;
 }
 .chips {
   flex: 1;

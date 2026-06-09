@@ -104,7 +104,9 @@ function callGateway(text, petNames, today) {
         Authorization: 'Bearer ' + TOKEN,
         'Content-Length': Buffer.byteLength(payload),
       },
-      timeout: 20000,
+      // 复杂输入 + 冷启动 + 网关延迟下，LLM 生成可达 20s+，HTTP 超时给到 45s（须 < 云函数超时 60s，
+      // 让 HTTP 先抛 gateway timeout 而非被云函数硬杀）。云函数超时在控制台调（见 MEMORY）。
+      timeout: 45000,
     }
     if (CA) options.ca = CA // 信任自签 root CA，而非 rejectUnauthorized:false
     const req = https.request(options, (res) => {
@@ -145,21 +147,51 @@ function normalize(o, raw, today) {
     valid: o.valid !== false,
     pet: o.pet || '',
     species: o.species === 'dog' ? 'dog' : 'cat',
-    time: o.time || today,
+    time: normalizeDate(o.time, today),
     event_type: o.event_type || '其它',
     weight: typeof o.weight === 'number' ? o.weight : null,
     med: o.med || null,
+    // 就诊医院 / 费用 / 病程标签（record 分支，见 ADR-012）；自由文本源头 trim，防同名病程线散裂
+    hospital: (o.hospital || '').trim(),
+    cost: numOrNull(o.cost),
+    tag: (o.tag || '').trim(),
+    // 干净的事件描述（不含费用 / 医院），给兽医小结拼接用，不暴露 raw 原话（见用户决策）
+    desc: (o.desc || '').trim(),
     med_name: o.med_name || '',
     med_effect: o.med_effect || '',
     med_quantity: typeof o.med_quantity === 'number' ? o.med_quantity : Number(o.med_quantity) || 1,
-    med_expire: o.med_expire || '',
+    med_expire: normalizeDate(o.med_expire, ''),
     // 提醒字段
     rem_type: o.rem_type || '其它',
     rem_title: o.rem_title || '',
-    rem_date: o.rem_date || '',
+    rem_date: normalizeDate(o.rem_date, ''),
     rem_repeat_days: typeof o.rem_repeat_days === 'number' ? o.rem_repeat_days : Number(o.rem_repeat_days) || 0,
     raw: o.raw || raw,
   }
+}
+
+// 日期归一：保证落库的日期恒为定长零填充 'YYYY-MM-DD'，否则字典序排序（兽医小结按 time 排、提醒按 next_date 比）会失真。
+// 已是 'YYYY-MM-DD' 原样返回；'2026-6-9' / '2026/6/9' 等补零归一；解析不出回退 fallback。
+function normalizeDate(v, fallback) {
+  const t = String(v == null ? '' : v).trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t
+  const m = t.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})$/)
+  if (m) {
+    const z = (n) => String(n).padStart(2, '0')
+    return `${m[1]}-${z(m[2])}-${z(m[3])}`
+  }
+  return fallback
+}
+
+// 数字容错：number 原样；"480" / "480元" 取数；空 / null / 无数字串（如「免费」「未知」）/ 非数 → null
+// 注意：必须在 Number() 前判空串，否则 Number('')===0 会把无数字串错判成 0，污染「免费就诊(0)」语义
+function numOrNull(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  if (v == null || v === '') return null
+  const s = String(v).replace(/[^\d.]/g, '')
+  if (s === '') return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
 }
 
 function todayStr() {

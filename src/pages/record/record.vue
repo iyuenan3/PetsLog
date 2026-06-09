@@ -91,6 +91,9 @@
             <view class="field-row"><text class="field-row__label">类型</text><text class="field-row__value">{{ parsed.event_type || '其它' }}</text></view>
             <view class="field-row" v-if="parsed.weight"><text class="field-row__label">体重</text><text class="field-row__value">{{ parsed.weight }}kg</text></view>
             <view class="field-row" v-if="parsed.med"><text class="field-row__label">用药</text><text class="field-row__value">{{ parsed.med }}</text></view>
+            <view class="field-row" v-if="parsed.hospital"><text class="field-row__label">医院</text><text class="field-row__value">{{ parsed.hospital }}</text></view>
+            <view class="field-row" v-if="parsed.cost != null"><text class="field-row__label">费用</text><text class="field-row__value">¥{{ parsed.cost }}</text></view>
+            <view class="field-row" v-if="parsed.tag"><text class="field-row__label">病程</text><text class="field-row__value">{{ parsed.tag }}</text></view>
             <view class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
           </view>
         </block>

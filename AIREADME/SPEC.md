@@ -2,7 +2,7 @@
 <!-- 数据契约 / 数据字典：collection 字段定义是内部真相源。对外 API 见文末（当前 N/A）。实现→ARCHITECTURE，为何→DECISIONS。 -->
 
 > 数据库 = 微信云开发文档型。隔离键：业务数据按 `family_id`（见 ADR-008），`users` 按 `_openid`。
-> 标记：**[新]** = 本批次（ADR-011/012/013）新增，尚未全部落地；**[占位]** = 模型已定、建设排后（foods）。
+> 标记：**[新]** = 本批次（ADR-011/012/013）尚未落地项（轮2 附件 attachments / att_count / storage_bytes）；轮1 字段（records hospital / cost / tag、pets home_date / note / avatar、event_type 驱虫桶）已落地 v0.3.1；**[占位]** = 模型已定、建设排后（foods）。
 > 字段值约定：日期一律 `'YYYY-MM-DD'` 字符串；金额 / 体重为 number；时间戳 `created_at/updated_at` 为毫秒 number。
 
 ## pets（宠物档案 · family 隔离）
@@ -18,9 +18,9 @@
 | chronic | string | 慢病 / 病史 |
 | latest_weight | number \| null | 最新体重 kg |
 | latest_weight_date | string | 最新体重日期（防补录旧体重覆盖「最新」） |
-| **home_date** | string | **[新]** 到家日期 'YYYY-MM-DD'（陪伴时长） |
-| **note** | string | **[新]** 备注（自由文本，如来历故事） |
-| **avatar** | string(fileID) | **[新]** 头像照片，云存储 fileID（无则前端 emoji 兜底） |
+| home_date | string | 到家日期 'YYYY-MM-DD'（陪伴时长） |
+| note | string | 备注（自由文本，如来历故事） |
+| avatar | string(fileID) | 头像照片，云存储 fileID（无则前端 emoji 兜底；换头像旧文件暂不清理，见 ROADMAP 待办） |
 | created_at / updated_at | number | updated_at 仅 update 时写入，新建文档暂无（reminders 则 add 即写） |
 
 > EDITABLE 白名单（pets update）需同步加 home_date / note / avatar。
@@ -32,13 +32,14 @@
 | family_id | string | 隔离键 |
 | pet | string | 宠物名（按名匹配，故改名要级联） |
 | time | string | 记录日期 'YYYY-MM-DD' |
-| event_type | enum | 症状 / 用药 / 疫苗 / **驱虫[新]** / 体重 / 就医 / 其它（**7 桶**） |
+| event_type | enum | 症状 / 用药 / 疫苗 / 驱虫 / 体重 / 就医 / 其它（7 桶） |
 | weight | number \| null | 体重 kg |
 | med | string \| null | 用药（可多行：外用 / 口服 / 注射） |
 | raw | string | 原文 / 事件描述 |
-| **hospital** | string | **[新]** 就诊医院 |
-| **cost** | number \| null | **[新]** 费用（元） |
-| **tag** | string | **[新]** 病程标签（嗜酸性肉芽肿 / 尿闭 / 软骨病…，可空；与 event_type 双轴） |
+| hospital | string | 就诊医院（落库 trim） |
+| cost | number \| null | 费用（元）；三态可区分：null=未解析 / 0=免费 / 正数 |
+| tag | string | 病程标签（嗜酸性肉芽肿 / 尿闭 / 软骨病…，可空；与 event_type 双轴；落库 trim 防同名病程线散裂） |
+| desc | string | 干净事件描述（症状 / 处置，不含费用 / 医院 / 寒暄），parseRecord 抽取；给兽医小结拼接用，不暴露 raw 原话 |
 | **attachments** | array | **[新]** `[{ fileID, type:'image'\|'pdf'\|'video', name, size, uploaded_at }]`，单条 ≤9 |
 | **att_count** | number | **[新]** 附件数（列表角标） |
 | created_at | number | |

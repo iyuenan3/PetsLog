@@ -39,9 +39,14 @@ Component({
       }
     },
     switchTo(e) {
-      const idx = Number(e.currentTarget.dataset.idx)
       const page = e.currentTarget.dataset.page
-      if (this.data.selected === idx) return
+      // 早退判据用「真实当前路由」而非 this.data.selected：后者是每实例组件状态，
+      // attached 时序下可能残留默认值 0，会把回「宠物」(idx 0)的点击错误吞掉。见真机 bug 复盘。
+      // 目标 tab 的高亮由目标页自己的 syncFromRoute(pageLifetimes.show) 点亮，此处不 setData
+      // （this 是即将被隐藏的源页实例，改它的 selected 用户看不见，且 switchTab 失败时反而误点亮）。
+      const pages = getCurrentPages()
+      const curRoute = pages && pages.length ? '/' + (pages[pages.length - 1].route || '') : ''
+      if (curRoute === page) return
       wx.switchTab({ url: page })
     },
     goRecord() {

@@ -21,11 +21,14 @@ exports.main = async (event) => {
 
   const where = { family_id: familyId }
   if (event && event.pet) where.pet = event.pet
-  const res = await db
-    .collection('records')
-    .where(where)
-    .orderBy('created_at', 'desc')
-    .limit(event && event.limit ? event.limit : 50)
-    .get()
+  // 默认按录入时间 created_at 倒序（主时间线 / 体重图沿用）；
+  // 需按事件日期排序时传 orderField:'time'（兽医小结按事件日期由近到远，同日再按 created_at 兜底，保证确定性）。
+  let q = db.collection('records').where(where)
+  if (event && event.orderField === 'time') {
+    q = q.orderBy('time', 'desc').orderBy('created_at', 'desc')
+  } else {
+    q = q.orderBy('created_at', 'desc')
+  }
+  const res = await q.limit(event && event.limit ? event.limit : 50).get()
   return { ok: true, data: res.data }
 }

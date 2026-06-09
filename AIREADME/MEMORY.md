@@ -46,3 +46,15 @@
 - 根因二：`cloudfunctionRoot` 指向的是**产物里的拷贝** `dist/.../cloudfunctions/family`，DevTools 部署的是它，而它只在 vite `closeBundle`（每次构建）时才从源码刷新。改完源码若没重新构建，部署的是 dist 里的旧拷贝。
 - 根治二：改云函数源码后**先 `npm run dev:mp-weixin` 重新构建**，确认 dist 拷贝已更新（`grep` 改动标记 / `diff` 源码与 dist 拷贝）再让用户部署。
 - 教训：① DevTools「不停刷新」先怀疑产物里有无被监视的巨型目录（node_modules）；② 云函数部署链路是『源码 → 构建拷进 dist → DevTools 从 dist 部署』，漏了构建那步就在部署旧码。
+
+## 自定义 tabBar 拿组件实例 selected 当导航判据 → 回「宠物」被吞（其它 tab 正常）· 2026-06-09
+- 现象：4 tab 自定义 tabBar，从 时间线 / 健康 / 我的 点底部「宠物」回不到宠物档案页，点其它三个 tab 都正常。
+- 根因：`switchTo` 早退守卫 `if (this.data.selected === idx) return` 把组件自身 `selected` 当导航闸门。`selected` 初值 0（宠物），而每个 tab 页各持一个独立 tabBar 实例，`attached` 触发 `syncFromRoute` 时 `getCurrentPages()` 可能尚未把新页压栈（时序问题），个别实例的 selected 残留默认 0 没被纠正。于是该页点「宠物」(idx 0) 撞 `0===0` 被吞，点 1/2/3 因不等于 0 正常 → 「偏偏宠物回不去」正是 idx 0 撞了默认值（先验尺：症状只在 idx 0 这一规整点出现，指向默认值而非随机 bug）。
+- 根治：早退判据改用「真实当前路由」而非组件状态：`const cur = '/' + (getCurrentPages().slice(-1)[0].route||''); if (cur === page) return; wx.switchTab({url:page})`。即便 selected 残留，不在目标页就必跳，导航不再被吞。顺手删了 switchTab 前的 `setData({selected})`（this 是即将被隐藏的源页实例，改它看不见；且 switchTab 失败时反而误点亮一个没去成的 tab）。
+- 教训：组件「每实例、带默认值」的状态别当跨页导航判据，要以真实路由 / 全局态为准。ADR-010 原话「attached 按 getCurrentPages 算 selected 即恒定正确」偏乐观，attached 时序下会残留默认值；高亮兜底交给目标页自己的 `pageLifetimes.show` 即可，但导航判据必须独立于它。
+
+## parseRecord 复杂输入 20s 又超时（抽取字段变多后）→ 函数超时提到 60s + HTTP 45s · 2026-06-10
+- 现象：录入「前天脚烂了去爱康医院查出嗜酸性肉芽肿，配迈微舒早晚各一颗吃一周，一共 1480」这类长复杂句，parseRecord 报 `-504003 FUNCTION_TIME_LIMIT_EXCEEDED`（20s 被杀，trace 跑到 18s+）。
+- 根因：20s 是早期为简单录入定的上限；轮1 起抽取字段变多（加 hospital / cost / tag / desc，system prompt + few-shot 更长、输出 JSON 更大），叠加复杂多子句输入 + 冷启动 + 网关延迟，realistic 输入下 LLM 生成就 >20s。先验尺：超时值＝所配上限，属「真超时（工作量超限）」非假故障，往「给够时间」修而非反复重试。
+- 根治：① 云函数超时控制台调到 **60s**（云函数 → parseRecord → 函数配置 → 超时时间；CLI 无此参数，改完 `cli cloud functions info` 看 timeout 验证）；② 代码 HTTP 请求 `timeout` 20000 → **45000**，须 < 云函数 60s，让 HTTP 先抛 gateway timeout 而非被云函数硬杀。
+- 教训：LLM 类云函数超时要随 prompt / 输出复杂度留足头寸；以后再加抽取字段或扩 few-shot，记得回看超时是否够。

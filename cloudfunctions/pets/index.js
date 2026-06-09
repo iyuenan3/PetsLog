@@ -10,7 +10,7 @@ async function assertMember(openid, familyId) {
 }
 
 // 宠物档案 CRUD（按家庭隔离）。action: list | get | add | update | delete
-const EDITABLE = ['name', 'species', 'breed', 'birthday', 'neutered', 'allergy', 'chronic', 'latest_weight']
+const EDITABLE = ['name', 'species', 'breed', 'birthday', 'neutered', 'allergy', 'chronic', 'latest_weight', 'home_date', 'note', 'avatar']
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
@@ -49,6 +49,9 @@ exports.main = async (event) => {
         allergy: p.allergy || '',
         chronic: p.chronic || '',
         latest_weight: typeof p.latest_weight === 'number' ? p.latest_weight : null,
+        home_date: p.home_date || '', // 到家日期（见 ADR-013）
+        note: p.note || '', // 备注
+        avatar: p.avatar || '', // 头像云存储 fileID
         created_at: Date.now(),
       },
     })

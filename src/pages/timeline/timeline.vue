@@ -1,7 +1,20 @@
 <template>
   <view class="page">
+    <!-- 病程筛选条（简版）：有病程标签的记录才出现，见 ADR-012 双轴 -->
+    <scroll-view v-if="records.length && tags.length" scroll-x class="tl-filter" :show-scrollbar="false">
+      <view class="tl-filter__inner">
+        <text :class="['tl-filter__chip', activeTag === '' ? 'is-on' : '']" @click="setTag('')">全部</text>
+        <text
+          v-for="t in tags"
+          :key="t"
+          :class="['tl-filter__chip', activeTag === t ? 'is-on' : '']"
+          @click="setTag(t)"
+        >🏷️ {{ t }}</text>
+      </view>
+    </scroll-view>
+
     <view v-if="records.length" class="tl-list">
-      <view v-for="r in records" :key="r._id" class="tl-item">
+      <view v-for="r in shown" :key="r._id" class="tl-item">
         <view class="tl-item__head">
           <view class="tl-dot" :class="eventClass(r.event_type)"></view>
           <text class="tl-item__pet">{{ r.pet || '未指定' }}</text>
@@ -9,9 +22,12 @@
           <text class="tl-item__time">{{ shortDate(r.time) }}</text>
         </view>
         <text class="tl-item__quote">{{ r.raw }}</text>
-        <view v-if="r.weight || r.med" class="tl-item__notes">
+        <view v-if="r.weight || r.med || r.hospital || r.cost != null || r.tag" class="tl-item__notes">
           <text v-if="r.weight" class="tl-note">⚖️ {{ r.weight }}kg</text>
           <text v-if="r.med" class="tl-note">💊 {{ r.med }}</text>
+          <text v-if="r.hospital" class="tl-note">🏥 {{ r.hospital }}</text>
+          <text v-if="r.cost != null" class="tl-note">💰 ¥{{ r.cost }}</text>
+          <text v-if="r.tag" class="tl-note tl-note--tag" @click="setTag(r.tag)">🏷️ {{ r.tag }}</text>
         </view>
       </view>
     </view>
@@ -29,14 +45,31 @@ import { callFn } from '@/cloud'
 
 export default {
   data() {
-    return { records: [] }
+    return { records: [], activeTag: '' }
+  },
+  computed: {
+    // 去重病程标签（保留首次出现顺序，即时间倒序里最近的在前）
+    tags() {
+      const seen = []
+      for (const r of this.records) {
+        if (r.tag && !seen.includes(r.tag)) seen.push(r.tag)
+      }
+      return seen
+    },
+    // 按当前选中病程过滤；未选则全部
+    shown() {
+      return this.activeTag ? this.records.filter((r) => r.tag === this.activeTag) : this.records
+    },
   },
   onShow() {
     this.load()
   },
   methods: {
+    setTag(t) {
+      this.activeTag = t
+    },
     eventClass(t) {
-      return { 症状: 'ev-symptom', 用药: 'ev-med', 疫苗: 'ev-vaccine', 体重: 'ev-weight', 就医: 'ev-clinic' }[t] || 'ev-other'
+      return { 症状: 'ev-symptom', 用药: 'ev-med', 疫苗: 'ev-vaccine', 驱虫: 'ev-deworm', 体重: 'ev-weight', 就医: 'ev-clinic' }[t] || 'ev-other'
     },
     shortDate(d) {
       return d ? String(d).slice(5) : ''
@@ -46,7 +79,11 @@ export default {
       if (typeof wx === 'undefined' || !wx.cloud || !CLOUD_ENV) return
       try {
         const res = await callFn('timeline', { action: 'list' })
-        if (res.result && res.result.ok) this.records = res.result.data || []
+        if (res.result && res.result.ok) {
+          this.records = res.result.data || []
+          // 选中的病程若已不存在（记录被删 / 改名），重置回「全部」，避免空列表
+          if (this.activeTag && !this.records.some((r) => r.tag === this.activeTag)) this.activeTag = ''
+        }
       } catch (e) {
         console.warn('timeline load failed', e)
       }
@@ -62,6 +99,35 @@ export default {
   padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
+/* 病程筛选条 */
+.tl-filter {
+  white-space: nowrap;
+  padding: 20rpx 0 4rpx;
+}
+.tl-filter__inner {
+  display: inline-flex;
+  gap: 14rpx;
+  padding: 0 var(--pad-page);
+}
+.tl-filter__chip {
+  flex: none;
+  height: 56rpx;
+  padding: 0 26rpx;
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-pill);
+  background: var(--c-card);
+  border: 2rpx solid var(--c-border);
+  font-size: var(--fs-cap);
+  color: var(--c-text-2);
+}
+.tl-filter__chip.is-on {
+  background: var(--c-primary-tint);
+  border-color: var(--c-primary);
+  color: var(--c-primary-deep);
+  font-weight: 600;
+}
+
 .tl-list {
   padding: 24rpx var(--pad-page) 40rpx;
 }
@@ -122,11 +188,17 @@ export default {
   font-size: var(--fs-cap);
   color: var(--c-text-2);
 }
+/* 病程标签：可点击跳筛选，主色调区分 */
+.tl-note--tag {
+  background: var(--c-primary-wash);
+  color: var(--c-primary-deep);
+}
 
 /* 事件类型配色：点（带柔晕环）+ 标签 */
 .tl-dot.ev-symptom { background: var(--c-danger); box-shadow: 0 0 0 6rpx var(--c-danger-tint); }
 .tl-dot.ev-med { background: var(--c-rt-med); box-shadow: 0 0 0 6rpx var(--c-rt-med-bg); }
 .tl-dot.ev-vaccine { background: var(--c-rt-vaccine); box-shadow: 0 0 0 6rpx var(--c-rt-vaccine-bg); }
+.tl-dot.ev-deworm { background: var(--c-rt-deworm); box-shadow: 0 0 0 6rpx var(--c-rt-deworm-bg); }
 .tl-dot.ev-weight { background: var(--c-success); box-shadow: 0 0 0 6rpx var(--c-success-tint); }
 .tl-dot.ev-clinic { background: var(--c-rt-other); box-shadow: 0 0 0 6rpx var(--c-rt-other-bg); }
 .tl-dot.ev-other { background: var(--c-text-3); box-shadow: 0 0 0 6rpx var(--c-bg-sink); }
@@ -134,6 +206,7 @@ export default {
 .tl-chip.ev-symptom { color: var(--c-danger); background: var(--c-danger-tint); }
 .tl-chip.ev-med { color: var(--c-rt-med); background: var(--c-rt-med-bg); }
 .tl-chip.ev-vaccine { color: var(--c-rt-vaccine); background: var(--c-rt-vaccine-bg); }
+.tl-chip.ev-deworm { color: var(--c-rt-deworm); background: var(--c-rt-deworm-bg); }
 .tl-chip.ev-weight { color: var(--c-success); background: var(--c-success-tint); }
 .tl-chip.ev-clinic { color: var(--c-rt-other); background: var(--c-rt-other-bg); }
 .tl-chip.ev-other { color: var(--c-text-2); background: var(--c-bg-sink); }
