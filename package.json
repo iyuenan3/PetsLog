@@ -1,13 +1,13 @@
 {
   "name": "petslog",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "多宠家庭 AI 健康记录工具（微信小程序 · 自然语言录入 → AI 结构化归档）",
   "scripts": {
     "dev:mp-weixin": "uni -p mp-weixin",
     "build:mp-weixin": "uni build -p mp-weixin",
     "dev:h5": "uni",
     "build:h5": "uni build",
-    "test": "node tests/attachment.cloudfn.test.js"
+    "test": "node tests/attachment.cloudfn.test.js && node tests/importNotion.cloudfn.test.js && node tests/foods.cloudfn.test.js"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-5000720260410001",

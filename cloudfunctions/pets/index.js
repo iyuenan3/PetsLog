@@ -10,7 +10,17 @@ async function assertMember(openid, familyId) {
 }
 
 // 宠物档案 CRUD（按家庭隔离）。action: list | get | add | update | delete
-const EDITABLE = ['name', 'species', 'breed', 'birthday', 'neutered', 'allergy', 'chronic', 'latest_weight', 'home_date', 'note', 'avatar']
+const EDITABLE = ['name', 'species', 'breed', 'birthday', 'neutered', 'allergy', 'chronic', 'latest_weight', 'home_date', 'note', 'intro', 'price_base', 'avatar']
+
+// 数字容错：number 原样；'2000'/'¥2,000' 取数；空 / 无数字 → null
+function numOrNull(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null
+  if (v == null || v === '') return null
+  const s = String(v).replace(/[^\d.]/g, '')
+  if (s === '' || s === '.') return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
 
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
@@ -51,6 +61,8 @@ exports.main = async (event) => {
         latest_weight: typeof p.latest_weight === 'number' ? p.latest_weight : null,
         home_date: p.home_date || '', // 到家日期（见 ADR-013）
         note: p.note || '', // 备注
+        intro: p.intro || '', // 简介（自由文本，见 ADR-014）
+        price_base: numOrNull(p.price_base), // 初始身价（当前身价前端派生 = base + cost 累计）
         avatar: p.avatar || '', // 头像云存储 fileID
         created_at: Date.now(),
       },
@@ -72,7 +84,8 @@ exports.main = async (event) => {
       else if (k === 'neutered') patch.neutered = !!p.neutered
       else if (k === 'latest_weight') {
         if (typeof p.latest_weight === 'number') patch.latest_weight = p.latest_weight
-      } else patch[k] = p[k] || ''
+      } else if (k === 'price_base') patch.price_base = numOrNull(p.price_base) // 三态 null/0/正数
+      else patch[k] = p[k] || ''
     }
     if ('name' in patch && !patch.name) return { ok: false, msg: '名字必填' }
     patch.updated_at = Date.now()

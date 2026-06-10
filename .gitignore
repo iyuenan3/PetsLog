@@ -18,3 +18,6 @@ node_modules/
 dist/
 unpackage/
 .cloudbase/
+
+# 历史导入数据（真实宠物名，随函数部署到私有云端，不入公开仓）
+cloudfunctions/importNotion/data.json

@@ -1,9 +1,10 @@
 <template>
   <view class="page">
-    <!-- 顶部分段：提醒 | 药品 -->
+    <!-- 顶部分段：提醒 | 药品 | 主粮 -->
     <view class="seg">
       <view class="seg__item" :class="{ 'seg__item--on': tab === 'rem' }" hover-class="seg__item--press" hover-stay-time="60" @click="switchTab('rem')">提醒</view>
       <view class="seg__item" :class="{ 'seg__item--on': tab === 'med' }" hover-class="seg__item--press" hover-stay-time="60" @click="switchTab('med')">药品</view>
+      <view class="seg__item" :class="{ 'seg__item--on': tab === 'food' }" hover-class="seg__item--press" hover-stay-time="60" @click="switchTab('food')">主粮</view>
     </view>
 
     <!-- ===== 提醒 ===== -->
@@ -32,6 +33,63 @@
         <text class="empty__desc">点底部 ＋ 说一句「下月15号给示例狗打疫苗」「每月给猫驱虫」，AI 会自动设上</text>
       </view>
     </block>
+
+    <!-- ===== 主粮台账 ===== -->
+    <block v-else-if="tab === 'food'">
+      <view class="food-head">
+        <text class="food-head__title">主粮台账</text>
+        <text class="food-head__add" hover-class="food-head__add--press" hover-stay-time="60" @click="openFoodAdd">＋ 添加</text>
+      </view>
+      <view v-if="foods.length" class="food-list">
+        <view v-for="f in foods" :key="f._id" class="food-card" :class="{ 'food-card--current': f.current }">
+          <view class="food-card__top">
+            <text class="food-card__name">{{ f.name }}</text>
+            <text v-if="f.current" class="food-card__badge">在喂</text>
+          </view>
+          <text class="food-card__period">{{ foodPeriod(f) }}</text>
+          <text v-if="f.note" class="food-card__note">{{ f.note }}</text>
+          <view class="food-card__ops">
+            <text v-if="!f.current" class="food-op food-op--set" hover-class="food-op--press" hover-stay-time="60" @click="setCurrent(f)">设为在喂</text>
+            <text class="food-op food-op--edit" hover-class="food-op--press" hover-stay-time="60" @click="openFoodEdit(f)">编辑</text>
+            <text class="food-op food-op--del" hover-class="food-op--press" hover-stay-time="60" @click="removeFood(f)">删除</text>
+          </view>
+        </view>
+      </view>
+      <view v-else class="empty">
+        <view class="empty__art">🍚</view>
+        <text class="empty__title">还没有主粮记录</text>
+        <text class="empty__desc">点右上「＋ 添加」记下喂过的主粮和时段，给换粮决策留个账</text>
+      </view>
+    </block>
+
+    <!-- 主粮 编辑弹层 -->
+    <view v-if="foodSheet" class="sheet-mask" @click="closeFood">
+      <view class="sheet" @click.stop>
+        <view class="sheet__grab"></view>
+        <text class="sheet__title">{{ foodSheet._id ? '编辑主粮' : '添加主粮' }}</text>
+        <view class="f-form">
+          <view class="f-row"><text class="f-row__label">名称</text><input class="f-input" v-model="foodSheet.name" placeholder="如 渴望六种鱼" placeholder-class="f-ph" /></view>
+          <view class="f-row">
+            <text class="f-row__label">开始</text>
+            <picker class="f-picker" mode="date" :value="foodSheet.start_date || ''" @change="onFoodStart">
+              <view class="f-input f-pick" :class="{ 'f-pick--ph': !foodSheet.start_date }">{{ foodSheet.start_date || '点击选择' }}</view>
+            </picker>
+          </view>
+          <view class="f-row">
+            <text class="f-row__label">结束</text>
+            <picker class="f-picker" mode="date" :value="foodSheet.end_date || ''" @change="onFoodEnd">
+              <view class="f-input f-pick" :class="{ 'f-pick--ph': !foodSheet.end_date }">{{ foodSheet.end_date || '在喂留空' }}</view>
+            </picker>
+          </view>
+          <view class="f-row"><text class="f-row__label">当前在喂</text><switch :checked="foodSheet.current" color="#f2825c" @change="onFoodCurrent" /></view>
+          <view class="f-row"><text class="f-row__label">备注</text><input class="f-input" v-model="foodSheet.note" placeholder="可留空" placeholder-class="f-ph" /></view>
+        </view>
+        <view class="sheet__actions">
+          <button class="btn-ghost" hover-class="btn-ghost--press" hover-stay-time="60" @click="closeFood">取消</button>
+          <button class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" :loading="foodSaving" @click="saveFood">保存</button>
+        </view>
+      </view>
+    </view>
 
     <!-- ===== 药品 ===== -->
     <block v-else>
@@ -65,24 +123,29 @@ import { callFn } from '@/cloud'
 export default {
   data() {
     return {
-      tab: 'rem', // rem | med
+      tab: 'rem', // rem | med | food
       reminders: [],
       today: '',
       remLoaded: false,
       meds: [],
       medLoaded: false,
+      foods: [],
+      foodLoaded: false,
+      foodSheet: null, // 编辑中的主粮（null = 弹层关闭）
+      foodSaving: false,
     }
   },
   onShow() {
     // 进入「健康」tab 时允许从首页横幅指定分段
     const want = uni.getStorageSync('health_seg')
-    if (want === 'rem' || want === 'med') {
+    if (want === 'rem' || want === 'med' || want === 'food') {
       this.tab = want
       uni.removeStorageSync('health_seg')
     }
-    // 两个分段都刷新：避免切回非当前分段看到陈旧数据；并保证 this.today（服务端基准日）始终新鲜，供药品临期判定
+    // 各分段都刷新：避免切回非当前分段看到陈旧数据；并保证 this.today（服务端基准日）始终新鲜，供药品临期判定
     this.loadRem()
     this.loadMed()
+    this.loadFood()
   },
   methods: {
     cloudReady() {
@@ -95,9 +158,10 @@ export default {
     switchTab(t) {
       if (this.tab === t) return
       this.tab = t
-      // onShow 已加载两段；此处仅兜底首次（onShow 未完成前）未加载的情况
+      // onShow 已加载各段；此处仅兜底首次（onShow 未完成前）未加载的情况
       if (t === 'rem' && !this.remLoaded) this.loadRem()
       if (t === 'med' && !this.medLoaded) this.loadMed()
+      if (t === 'food' && !this.foodLoaded) this.loadFood()
     },
 
     /* ===== 提醒 ===== */
@@ -209,6 +273,97 @@ export default {
       } catch (e) {
         console.warn('meds load failed', e)
       }
+    },
+
+    /* ===== 主粮 ===== */
+    async loadFood() {
+      if (!this.cloudReady()) return
+      try {
+        const res = await callFn('foods', { action: 'list' })
+        if (res.result && res.result.ok) {
+          this.foods = res.result.data || []
+          this.foodLoaded = true
+        }
+      } catch (e) {
+        console.warn('foods load failed', e)
+      }
+    },
+    foodPeriod(f) {
+      const s = f.start_date || '?'
+      return f.current ? `${s} 起 · 在喂` : `${s} ~ ${f.end_date || '?'}`
+    },
+    openFoodAdd() {
+      this.foodSheet = { name: '', start_date: '', end_date: '', current: false, note: '' }
+    },
+    openFoodEdit(f) {
+      this.foodSheet = { _id: f._id, name: f.name || '', start_date: f.start_date || '', end_date: f.end_date || '', current: !!f.current, note: f.note || '' }
+    },
+    closeFood() {
+      this.foodSheet = null
+    },
+    onFoodStart(e) {
+      this.foodSheet.start_date = e.detail.value
+    },
+    onFoodEnd(e) {
+      this.foodSheet.end_date = e.detail.value
+    },
+    onFoodCurrent(e) {
+      this.foodSheet.current = e.detail.value
+    },
+    async saveFood() {
+      const f = this.foodSheet
+      if (!f || !String(f.name || '').trim()) {
+        uni.showToast({ title: '主粮名必填', icon: 'none' })
+        return
+      }
+      this.foodSaving = true
+      try {
+        const food = { name: f.name.trim(), start_date: f.start_date, end_date: f.end_date, current: f.current, note: f.note }
+        const res = f._id
+          ? await callFn('foods', { action: 'update', id: f._id, food })
+          : await callFn('foods', { action: 'add', food })
+        if (res.result && res.result.ok) {
+          uni.showToast({ title: '已保存', icon: 'success' })
+          this.foodSheet = null
+          this.loadFood()
+        } else {
+          uni.showToast({ title: (res.result && res.result.msg) || '保存失败', icon: 'none' })
+        }
+      } catch (e) {
+        uni.showToast({ title: '保存出错', icon: 'none' })
+      } finally {
+        this.foodSaving = false
+      }
+    },
+    async setCurrent(f) {
+      try {
+        const res = await callFn('foods', { action: 'update', id: f._id, food: { current: true } })
+        if (res.result && res.result.ok) {
+          uni.showToast({ title: '已设为在喂', icon: 'success' })
+          this.loadFood()
+        }
+      } catch (e) {
+        uni.showToast({ title: '操作失败', icon: 'none' })
+      }
+    },
+    removeFood(f) {
+      uni.showModal({
+        title: '删除主粮记录',
+        content: `删除「${f.name}」？`,
+        confirmColor: '#e05d4e',
+        success: async (m) => {
+          if (!m.confirm) return
+          try {
+            const res = await callFn('foods', { action: 'delete', id: f._id })
+            if (res.result && res.result.ok) {
+              uni.showToast({ title: '已删除', icon: 'success' })
+              this.loadFood()
+            }
+          } catch (e) {
+            uni.showToast({ title: '删除失败', icon: 'none' })
+          }
+        },
+      })
     },
   },
 }
@@ -414,6 +569,204 @@ export default {
 .med-card__exp--soon {
   color: var(--c-danger);
   font-weight: 600;
+}
+
+/* ===== 主粮台账 ===== */
+.food-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx var(--pad-page) 4rpx;
+}
+.food-head__title {
+  font-size: var(--fs-sub);
+  font-weight: 600;
+  color: var(--c-text);
+}
+.food-head__add {
+  height: 56rpx;
+  padding: 0 26rpx;
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-pill);
+  background: var(--c-primary-tint);
+  color: var(--c-primary-deep);
+  font-size: var(--fs-cap);
+  font-weight: 600;
+}
+.food-head__add--press {
+  opacity: 0.7;
+}
+.food-list {
+  padding: 12rpx var(--pad-page) 8rpx;
+}
+.food-card {
+  position: relative;
+  background: var(--c-card);
+  border-radius: var(--r-md);
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+  box-shadow: var(--sh-2);
+}
+.food-card--current::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8rpx;
+  background: var(--c-success);
+  border-radius: var(--r-pill) 0 0 var(--r-pill);
+}
+.food-card__top {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+.food-card__name {
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  color: var(--c-text);
+}
+.food-card__badge {
+  height: 36rpx;
+  padding: 0 14rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-success-tint);
+  color: var(--c-success);
+  font-size: var(--fs-tiny);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+.food-card__period {
+  display: block;
+  font-size: var(--fs-cap);
+  color: var(--c-text-2);
+  margin-top: 10rpx;
+}
+.food-card__note {
+  display: block;
+  font-size: var(--fs-cap);
+  color: var(--c-text-3);
+  margin-top: 8rpx;
+}
+.food-card__ops {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 22rpx;
+}
+.food-op {
+  flex: 1;
+  height: 68rpx;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-cap);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.food-op--set { background: var(--c-success-tint); color: var(--c-success); }
+.food-op--edit { background: var(--c-bg-sink); color: var(--c-text-2); }
+.food-op--del { background: var(--c-danger-tint); color: var(--c-danger); }
+.food-op--press { opacity: 0.6; }
+
+/* 主粮编辑弹层 */
+.sheet-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(58, 51, 48, 0.38);
+  display: flex;
+  align-items: flex-end;
+  z-index: 50;
+}
+.sheet {
+  width: 100%;
+  background: var(--c-card);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  box-shadow: var(--sh-3);
+  padding: 16rpx var(--pad-page) calc(32rpx + env(safe-area-inset-bottom));
+}
+.sheet__grab {
+  width: 64rpx;
+  height: 8rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-divider);
+  margin: 8rpx auto 24rpx;
+}
+.sheet__title {
+  display: block;
+  font-size: var(--fs-h2);
+  font-weight: 700;
+  color: var(--c-text);
+  margin-bottom: 20rpx;
+}
+.f-form {
+  background: var(--c-card-cream);
+  border-radius: var(--r-md);
+  padding: 4rpx 28rpx;
+  margin-bottom: 28rpx;
+}
+.f-row {
+  display: flex;
+  align-items: center;
+  min-height: 92rpx;
+  border-bottom: 2rpx solid var(--c-divider);
+}
+.f-row:last-child {
+  border-bottom: none;
+}
+.f-row__label {
+  width: 150rpx;
+  flex: none;
+  font-size: var(--fs-sub);
+  color: var(--c-text-2);
+}
+.f-input {
+  flex: 1;
+  font-size: var(--fs-body);
+  color: var(--c-text);
+  text-align: right;
+}
+.f-ph {
+  color: var(--c-text-3);
+}
+.f-pick {
+  text-align: right;
+}
+.f-pick--ph {
+  color: var(--c-text-3);
+}
+.sheet__actions {
+  display: flex;
+  gap: 20rpx;
+}
+.btn-ghost {
+  flex: 1;
+  height: 92rpx;
+  line-height: 92rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-bg-sink);
+  color: var(--c-text-2);
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+.btn-ghost--press {
+  background: var(--c-divider);
+}
+.btn-primary {
+  flex: 1;
+  height: 92rpx;
+  line-height: 92rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-primary-grad);
+  color: var(--c-text-inv);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  box-shadow: var(--sh-primary);
+}
+.btn-primary--press {
+  transform: scale(0.97);
 }
 
 /* 空状态 */

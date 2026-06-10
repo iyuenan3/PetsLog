@@ -7,15 +7,15 @@
   底部 4 tab（自定义 tabBar）+ 中央凸起「＋」全局录入键（任意 tab 可录，ADR-010）
   ├─ 宠物（首页 tab）：宠物卡片（头像/名字/年龄/最新体重）+ 到期提醒横幅（去常驻输入条，录入走中央＋）
   ├─ 时间线：单宠 / 全宠健康流水（症状/用药/疫苗/驱虫/体重/就医，含医院/费用/病程，可按病程筛），可截图给兽医
-  ├─ 健康：顶部分段 [提醒 | 药品]，提醒（到期高亮 + 横幅，真推送待订阅消息）+ 家庭药品库存（药名/功效/数量/过期，不绑单宠）
+  ├─ 健康：顶部分段 [提醒 | 药品 | 主粮]，提醒（到期高亮）+ 家庭药品库存 + 主粮台账（家庭级喂粮史，增删改查 + 当前在喂高亮，ADR-014）
   ├─ 我的 / 个人中心：个人档案昵称头像 / 家庭管理·切换·邀请码·成员名头像（读时关联 users）/ 用户·隐私协议
   ├─ ＋ 录入页（pages/record）：自然语言 → AI 解析 → 二次确认 → 落库（独立全屏页）
   └─ 宠物档案（卡片点入）：编辑 / 删除 / 体重曲线 / 一键截图给兽医
         │ wx.cloud.callFunction（自动带 openid + 客户端注入 active family_id，免自建登录态）
         ▼
 微信云开发 (Serverless)
-  ├─ 云函数（9）：parseRecord 解析 / saveRecord 落库 / pets·timeline·meds·reminders CRUD / family 家庭+鉴权守卫 / user 个人档案 / attachment 附件配额+级联 / 频率限制
-  ├─ 云数据库（文档型，10 集合）：pets / records / meds / reminders / parse_log / att_log / families / family_members / invites / users，按 family 隔离（users 按 openid）
+  ├─ 云函数（11）：parseRecord 解析 / saveRecord 落库 / pets·timeline·meds·reminders·foods CRUD / family 家庭+鉴权守卫 / user 个人档案 / attachment 附件配额+级联 / importNotion 一次性历史导入 / 频率限制
+  ├─ 云数据库（文档型，11 集合）：pets / records / meds / reminders / foods / parse_log / att_log / families / family_members / invites / users，按 family 隔离（users 按 openid）
   └─ 云存储：记录附件（图片 / 视频 / PDF，家庭 ≤1GB，ADR-011）+ 宠物 / 用户头像
         │ 云函数 outbound（Node，不受小程序合法域名白名单约束）
         │ POST <自建 LLM 网关>/v1/chat/completions

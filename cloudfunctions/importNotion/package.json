@@ -1,0 +1,9 @@
+{
+  "name": "importNotion",
+  "version": "1.0.0",
+  "description": "一次性历史数据导入（清空家庭 + 灌入 pets/records/foods，见 ADR-014）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

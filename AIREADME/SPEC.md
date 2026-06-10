@@ -20,11 +20,13 @@
 | latest_weight_date | string | 最新体重日期（防补录旧体重覆盖「最新」） |
 | home_date | string | 到家日期 'YYYY-MM-DD'（陪伴时长） |
 | note | string | 备注（自由文本，如来历故事） |
+| intro | string | 简介（自由文本，用户自填；与 note 区分：note 偏备忘、intro 偏介绍，见 ADR-014） |
+| price_base | number \| null | 初始身价（元，ADR-014 反转 ADR-013「身价不入库」）；当前身价不落库 = price_base + 该宠 records.cost 累计，前端实时派生 |
 | avatar | string(fileID) | 头像照片，云存储 fileID（无则前端 emoji 兜底；换头像 / 删宠物会删旧文件防孤儿，v0.3.2） |
 | created_at / updated_at | number | updated_at 仅 update 时写入，新建文档暂无（reminders 则 add 即写） |
 
-> EDITABLE 白名单（pets update）需同步加 home_date / note / avatar。
-> 不存「身价」；「累计花费」= 该宠 records.cost 之和（前端聚合展示）。
+> EDITABLE 白名单（pets update）需同步加 home_date / note / intro / avatar / price_base。
+> 「当前身价」与「累计花费」均派生：累计花费 = 该宠 records.cost 之和；当前身价 = price_base + 累计花费（前端聚合，不落库）。
 
 ## records（健康时间线 · family 隔离）
 | 字段 | 类型 | 说明 |
@@ -125,14 +127,18 @@
 
 > 日上传限速（≤200MB/天/家庭）= 当日流水 bytes 求和 + 本次 > 上限即拒（attachment 云函数 register）。
 
-## foods（主粮台账 · family 级 · **[占位]** 排后建）
+## foods（主粮台账 · family 级 · v0.4.0 建设，ADR-014）
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| family_id | string | 家庭级，不分宠 |
-| name | string | 主粮品牌 |
-| start_date / end_date | string | 起止（end_date 空 = 当前在喂） |
-| current | boolean | 是否当前主粮 |
+| family_id | string | 家庭级隔离键，不分宠 |
+| name | string | 主粮品牌 / 名称 |
+| start_date | string | 起始 'YYYY-MM-DD' |
+| end_date | string | 结束 'YYYY-MM-DD'（空 = 当前在喂） |
+| current | boolean | 是否当前主粮；设某条 current=true 时云函数自动把同家庭其它条置 false（家庭通常只一个在喂） |
 | note | string | 备注 |
+| created_at / updated_at | number | |
+
+> foods 云函数：list / add / update / delete，family 隔离 + assertMember。导入历史 12 条（Notion 主粮记录，日期区间 → start/end，最近一条 current）。
 
 ---
 

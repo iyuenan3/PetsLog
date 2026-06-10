@@ -126,3 +126,14 @@
   - meds / reminders 本轮不动。
 - Alternatives（否决）: 存身价（与健康无关，累计花费可由 cost 算）；驱虫塞「其它 / 用药」（与疫苗不对称，量大值得独立桶）；批量做成 batch 实体（records 仍 per-pet 更简单，多选只是 UX 层）；主粮塞 records（它是家庭级、非 per-pet，概念不符）。
 - Tradeoff: ① event_type 加桶要同步前端配色 + parse 分类 + 老数据（历史无驱虫桶，旧驱虫散在其它，导入时归位）；② pets / records 字段渐增，保持可选 + 默认空兜底；③ foods 先记不建，SPEC 标 deferred，避免范围蔓延。完整字段见 SPEC 数据字典。
+
+## ADR-014 · pets 加初始身价 + 简介 + 当前身价派生 + foods 主粮模块建设 + 历史导入扩展 · 2026-06-10
+- Problem: 轮3 导入开发者 Notion 真实数据时，用户要求把此前 ADR-013 决定不做的几项补上：① 初始身价（导出有「初始身价 / 当前身价」，是养宠成本叙事的一部分）；② 每宠自由文本简介；③ 主粮台账（家庭级喂粮历史，导出 12 条）；④ 绝育状态（导出无独立字段，散在病史 / 备注文本里）。
+- Constraint: 保持 family 隔离；pets 字段可选 + 默认空兜底；导出「当前身价」= 初始身价 + 累计花费，是 Notion 自动算的派生值；foods 是家庭级、不分宠（ADR-013 模型已定）。
+- Decision（锁定，部分反转 ADR-013）:
+  - **pets 加 `price_base`（初始身价，number\|null）**：反转 ADR-013「身价不入库」。**仅存初始身价**；「当前身价」不落库，前端实时派生 = `price_base + 该宠 records.cost 累计`（与 ADR-013「累计花费由 cost 算」一脉，避免静态快照随记录变动而过时）。
+  - **pets 加 `intro`（简介，自由文本）**：导出的「简介」列实为指向 Notion 页的链接（无文本），故 intro 为**新建自由文本字段、导入留空**，供用户后续填写。导出的「品种常见病」（品种科普长文）非本宠真实数据，不入库。
+  - **foods 模块建设**（从 ADR-013 deferred 占位转正）：新增 foods 集合 + foods 云函数（list / add / update / delete，family 隔离，assertMember）+ UI 台账（增删改查、当前主粮高亮、设新「当前」自动取消旧「当前」）。字段沿用 ADR-013：`{family_id, name, start_date, end_date, current, note}`。导入 12 条历史（日期区间 → start/end，最近一条 current=true）。
+  - **绝育导入文本识别**：导出无绝育字段 → 从病史 + 备注识别「已绝育 / 绝育」关键词预填 `neutered=true`，其余 false，用户档案页可改（模型字段 neutered 已存在，不改 schema）。
+- Alternatives（否决）: 初始 + 当前都静态存（当前身价是派生值，存了会随后续记录过时，违背单一真相源）；简介导入「品种常见病」（品种通用科普非本宠数据，且长）；foods 塞 records（家庭级非 per-pet，概念不符，ADR-013 已否）；绝育留全 false 手填（多多等病史已明示，识别预填省手工且可改）。
+- Tradeoff: ① 身价 / 简介使 pets 字段继续渐增，但都可选默认空；② 当前身价派生需前端聚合该宠 records.cost（档案页已加载记录算体重曲线，顺带求和，成本低）；③ foods 是本项目第 4 个业务集合 + 第 10 个云函数，UI 加一处台账，范围可控；④ 绝育文本识别有边界（关键词漏判 / 误判），用户可手改兜底。完整字段见 SPEC 数据字典。

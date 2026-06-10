@@ -10,7 +10,7 @@ const EVENT_TYPES = ['症状', '用药', '疫苗', '驱虫', '体重', '就医',
 function normalizeDate(v, fallback) {
   const t = String(v == null ? '' : v).trim()
   if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t
-  const m = t.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})$/)
+  const m = t.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})\D*$/) // 末尾 \D* 容「2026年6月9日」的「日」，否则锚死结尾匹配不上回退兜底
   if (m) {
     const z = (n) => String(n).padStart(2, '0')
     return `${m[1]}-${z(m[2])}-${z(m[3])}`

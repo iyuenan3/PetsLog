@@ -41,6 +41,9 @@
         <view class="row"><text class="row__k">慢病</text><text class="row__v">{{ pet.chronic || '无' }}</text></view>
         <view class="row"><text class="row__k">最新体重</text><text class="row__v">{{ pet.latest_weight ? pet.latest_weight + 'kg' : '未记' }}</text></view>
         <view class="row"><text class="row__k">到家日期</text><text class="row__v">{{ pet.home_date || '未填' }}</text></view>
+        <view class="row"><text class="row__k">初始身价</text><text class="row__v">{{ pet.price_base != null ? '¥' + pet.price_base : '未填' }}</text></view>
+        <view class="row" v-if="hasPrice"><text class="row__k">当前身价</text><text class="row__v">¥{{ priceNow }}<text class="row__sub"> (含累计花费 ¥{{ costSum }})</text></text></view>
+        <view class="row"><text class="row__k">简介</text><text class="row__v">{{ pet.intro || '无' }}</text></view>
         <view class="row"><text class="row__k">备注</text><text class="row__v">{{ pet.note || '无' }}</text></view>
       </view>
     </view>
@@ -80,6 +83,8 @@
         <view class="form-row"><text class="form-row__label">绝育</text><switch :checked="form.neutered" color="#f2825c" @change="onNeutered" /></view>
         <view class="form-row"><text class="form-row__label">过敏史</text><input class="form-input" v-model="form.allergy" placeholder="无则留空" placeholder-class="form-ph" /></view>
         <view class="form-row"><text class="form-row__label">慢病</text><input class="form-input" v-model="form.chronic" placeholder="无则留空" placeholder-class="form-ph" /></view>
+        <view class="form-row"><text class="form-row__label">初始身价</text><input class="form-input" type="digit" v-model="form.price_base" placeholder="元，可留空" placeholder-class="form-ph" /></view>
+        <view class="form-row"><text class="form-row__label">简介</text><input class="form-input" v-model="form.intro" placeholder="一句话介绍，可留空" placeholder-class="form-ph" /></view>
         <view class="form-row"><text class="form-row__label">备注</text><input class="form-input" v-model="form.note" placeholder="来历 / 习性等，可留空" placeholder-class="form-ph" /></view>
       </view>
       <view class="form-actions">
@@ -119,6 +124,7 @@ export default {
       id: '',
       pet: null,
       series: [],
+      costSum: 0, // 该宠累计花费 = records.cost 之和；当前身价 = price_base + costSum（派生不落库）
       editing: false,
       saving: false,
       form: {},
@@ -134,6 +140,16 @@ export default {
   onLoad(opts) {
     this.id = (opts && opts.id) || ''
     this.load()
+  },
+  computed: {
+    // 当前身价 = 初始身价 + 累计花费（派生，不落库，见 ADR-014）
+    priceNow() {
+      const base = this.pet && typeof this.pet.price_base === 'number' ? this.pet.price_base : 0
+      return base + this.costSum
+    },
+    hasPrice() {
+      return (this.pet && typeof this.pet.price_base === 'number') || this.costSum > 0
+    },
   },
   methods: {
     ageText(b) {
@@ -160,14 +176,18 @@ export default {
       }
     },
     async loadWeight() {
-      // 复用 timeline 云函数按宠物名取记录，前端筛出有体重的，按时间升序
+      // 复用 timeline 云函数按宠物名取记录，前端筛出有体重的算曲线 + 求累计花费。
+      // limit 1000：覆盖单宠多年历史（导入后单宠可数百条），否则当前身价(=base+累计花费)会被截断少算。
       try {
-        const res = await callFn('timeline', { action: 'list', pet: this.pet.name, limit: 200 })
+        const res = await callFn('timeline', { action: 'list', pet: this.pet.name, limit: 1000 })
         if (res.result && res.result.ok) {
-          this.series = (res.result.data || [])
+          const recs = res.result.data || []
+          this.series = recs
             .filter((r) => typeof r.weight === 'number' && r.weight > 0)
             .map((r) => ({ date: r.time || '', weight: r.weight, at: r.created_at || 0 }))
             .sort((a, b) => a.at - b.at || String(a.date).localeCompare(String(b.date)))
+          // 累计花费：该宠 records.cost 求和（cost 三态，仅累计数值；到家身价已在导入时置 None 不计）
+          this.costSum = recs.reduce((s, r) => s + (typeof r.cost === 'number' ? r.cost : 0), 0)
           this.$nextTick(() => this.drawChart())
         }
       } catch (e) {
@@ -325,6 +345,8 @@ export default {
         chronic: p.chronic || '',
         home_date: p.home_date || '',
         note: p.note || '',
+        intro: p.intro || '',
+        price_base: p.price_base != null ? String(p.price_base) : '',
         avatar: p.avatar || '',
       }
       this.editing = true
@@ -819,6 +841,11 @@ export default {
   color: var(--c-text);
   font-size: var(--fs-sub);
   font-weight: 500;
+}
+.row__sub {
+  color: var(--c-text-3);
+  font-size: var(--fs-tiny);
+  font-weight: 400;
 }
 
 /* 编辑表单 */

@@ -1,0 +1,9 @@
+{
+  "name": "foods",
+  "version": "1.0.0",
+  "description": "家庭主粮台账 CRUD",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -275,7 +275,7 @@ async function cascadeDeleteFamily(fid) {
   // 先收集 fileID（文档删掉就找不回），再删文档，文件【放最后删】：
   // 中途失败只剩存储孤儿（无 DB 引用），不会出现「家庭/记录还在但头像·附件已毁」的不可逆中间态（评审 low）。
   const fileIDs = await collectFamilyFileIDs(fid)
-  for (const c of ['records', 'meds', 'reminders', 'pets', 'parse_log', 'att_log']) {
+  for (const c of ['records', 'meds', 'reminders', 'pets', 'foods', 'parse_log', 'att_log']) {
     await db.collection(c).where({ family_id: fid }).remove().catch(() => {})
   }
   await db.collection('invites').where({ family_id: fid }).remove().catch(() => {})

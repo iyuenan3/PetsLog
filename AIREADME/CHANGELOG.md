@@ -3,6 +3,16 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## v0.4.0 · 2026-06-10 · 字段扩展轮（初始身价 / 简介 / 绝育识别）+ foods 主粮模块 + Notion 历史导入（轮3）
+- Added: pets 加 `price_base`（初始身价，反转 ADR-013「身价不入库」）+ `intro`（自由文本简介）；档案页编辑可设，只读展示「当前身价 = price_base + 该宠 records.cost 累计」（前端派生不落库），见 ADR-014。
+- Added: **foods 主粮模块**（从 ADR-013 deferred 转正）：新增 foods 集合 + foods 云函数（list / add / update / delete，family 隔离，设 current 自动取消其它 current）；健康页加「主粮」分段（台账增删改查 + 当前在喂高亮 + 底部编辑弹层）。
+- Added: **Notion 历史数据结构化导入（轮3，ADR-012/014）**：一次性 importNotion 云函数（clear 按家庭名 + assertAdmin 清空 pets/records/meds/reminders/foods + 云存储 + 归零 storage_bytes；import 灌入 9 宠物 / 220 记录 / 12 主粮 + 41 条记录的附件）。转换脚本 `tools/notion-import/transform.py`：CSV → 结构化 JSON（日期区间取起始、费用去 ¥、档案链取宠物名、名称→病程 tag、event_type 按内容映射 7 桶、品种→猫狗、初始身价、病史/备注识别绝育、驱虫多猫展开 per-pet、附件双重 URL 解码）；附件经 `wxcloud storage:upload` 预传 att/<recordId>/，import 探针拿 cloud:// 前缀拼 fileID + 逐个 getTempFileURL 验证（坏链中止不写库）。data.json gitignore（真实宠物名随函数部署到私有云端，不入公开仓）。
+- Tested: 新增 `tests/importNotion.cloudfn.test.js`（mock SDK + data.json，6 场景 / 23 断言，npm test）：家庭解析安全（只动你 admin 的对名家庭、拒非管理员）、clear 只删目标家庭不碰别家、import 拼对 fileID + 坏链中止。
+- Fixed: import 直接改 `require('./data.json')` 会污染 require 缓存（同容器二次 import 读到被删 key_name 的数据致 fileID 拼错）→ 克隆后再改（集成测试挖出）。
+- Fixed: `normalizeDate` 正则锚死结尾 `(\d{1,2})$`，「2026年6月9日」这类带「日」尾的中文日期匹配不上 → 回退兜底致日期丢失（LLM 偶发输出中文日期、foods 若收到中文日期同此）。改 `\D*$` 容尾部非数字；parseRecord / saveRecord / foods 三处同步（foods 集成测试挖出）。
+- Tested: 新增 `tests/foods.cloudfn.test.js`（13 断言）：add/list/update/delete、设 current 自动取消其它、family 隔离 + 跨家庭操作拒。三套云函数集成测试共 74 断言（`npm test`）。
+- Hardened: 多 agent 对抗式评审（60 agent，6 视角 + 三视角表决证伪）修一批真问题：① **到家记录的费用列存的是购入身价（= 初始身价），误入 records.cost 致当前身价双重计入**（transform 对「到家」记录 cost 置 None；修后当前身价与 Notion 原值精确吻合）；② import 非幂等：未先 clear 重跑会写重复 pets + records 撞 dup _id 中途崩、无回滚 → 入口强制目标家庭 pets/records 为空否则 NOT_EMPTY 拒；③ 家庭解散 cascadeDeleteFamily 漏删新增的 foods 集合 → 补 'foods'；④ foods clearOtherCurrent 吞错致失败时静默两条 current → 去 catch 让其冒泡；⑤ 导入 records 的 created_at 全用 now 致主时间线乱序 + limit 50 截断 → created_at 由事件日期派生；⑥ num_or_null 多小数点 float 崩溃 + 负号翻正 → 防御；⑦ 当前身价 costSum 复用 limit 200 查询会截断超量宠物 → 提到 1000；⑧ clear 漏删 att_log、设在喂残留 end_date、绝育「未绝育」误判等 low 一并修。
+
 ## v0.3.2 · 2026-06-10 · 附件轮2（健康记录挂图片 / 视频 / PDF + 配额限额 + 记录详情页 + 级联清理）
 - Added: 健康记录附件（ADR-011）：records 加 `attachments[]`（fileID / thumb / type / name / size / bytes）+ `att_count`；新 `attachment` 云函数（register / remove / deleteRecord），登记前服务端按云存储真实体积复核（getTempFileURL + HEAD，客户端报的 size 不可信），超限删文件回滚。
 - Added: 配额三道闸（共享环境生命线）：单条 ≤9 个；家庭总存储 ≤1GB（families.`storage_bytes` 原子计数）；日上传 ≤200MB/家庭（新 `att_log` 流水，复用 parse_log 的 family_id+day 模式）。单文件上限：图 10MB / 视频 30MB·30s / PDF 10MB。
