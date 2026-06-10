@@ -3,6 +3,14 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## v0.4.1 · 2026-06-11 · 轮3 导入执行收口 + Notion 实时全量核对清洗 + 体重曲线横滑
+- Added: importNotion 增 4 个一次性运维动作：`import_foods`（首轮 import 在 foods 集合未建处崩的续传，带 FOODS_NOT_EMPTY 护栏）、`backfill_weight`（从 records 按事件日期回填 pets.latest_weight，导入绕过 saveRecord 回写所致）、`fix_times`（删无日期记录 + 导入记录 created_at 统一「事件日期 + 12:00」）、`stats`（只读体检：计数 + noon 校验 + 脏记录扫描，count 全兜底集合不存在）。主 import 同步：写 pets 自算 latest_weight、created_at 改 12:00 派生、写 foods 前 createCollection 兜底。
+- Changed: 体重曲线重做：等间距（每点 ≥56px）+ scroll-view 横滑（固定 y 轴不随滑动跑）+ 默认滚到最新（实测滚动偏移二次校验，绕开同值赋值不生效）+ 日期标签按间距挑点画（≥70px，带日防同月重复）。**canvas 物理宽夹紧 ≤4000px**：微信 canvas 2d 有单边上限（文档 1365×1365，实测 ~4096），乔治 27 个体重点 × dpr3 = 4440 已越线，不夹真机整块白屏（评审 HIGH）。
+- Fixed: **Notion 实时全量核对**（21 agent 经 Notion MCP 拉全部 240 页逐字段 diff data.json）：档案 / 记录字段 / 费用对账 / 主粮全一致；修 3 处：CSV 尾部空行混入的全空记录、2 条 Notion 源头漏填日期的体重记录（经用户确认删除）、created_at 全在 00:00 → 12:00（约定缺时间默认中午）。库内终态 9 宠 / 217 记录 / 12 主粮 / 46 附件，stats 全绿。
+- Fixed: 导入执行三连坑：importNotion 超时默认 3s 中途被杀（控制台调 60s）；**partial import 后再 clear 会把半写入记录引用的 staged 附件当旧文件删掉**（7 个附件重传，注意 `storage:upload -r` 传目录不能传完整键，否则 key 变 `key/文件名`）；foods 集合未建 import 崩在写 foods（集合不自动创建）。
+- Fixed: transform.py 日期必填护栏补齐健康 + 驱虫双循环（无日期行跳过并打印）；首页 openPet 跳转加 fail 弹窗（真机偶发不跳转可见原因）。
+- Hardened: 对抗式评审（58 agent，4 视角 × 3 票表决）确认 16 条：修 6 条（canvas 上限 HIGH、padX 24/32 不一致末点高亮圈被裁、stats count 无 catch、scrollLeft 单次定时不可靠、y 轴 rpx/px 错位、ptTime 死代码 + 标签重复）；4 条「验证通过」结论（fix_times 的 imported:true 过滤完整、分页先收集后变更无跳行、backfill 与 saveRecord 逻辑一致、import_foods 无双计）；驳回 2 条。
+
 ## v0.4.0 · 2026-06-10 · 字段扩展轮（初始身价 / 简介 / 绝育识别）+ foods 主粮模块 + Notion 历史导入（轮3）
 - Added: pets 加 `price_base`（初始身价，反转 ADR-013「身价不入库」）+ `intro`（自由文本简介）；档案页编辑可设，只读展示「当前身价 = price_base + 该宠 records.cost 累计」（前端派生不落库），见 ADR-014。
 - Added: **foods 主粮模块**（从 ADR-013 deferred 转正）：新增 foods 集合 + foods 云函数（list / add / update / delete，family 隔离，设 current 自动取消其它 current）；健康页加「主粮」分段（台账增删改查 + 当前在喂高亮 + 底部编辑弹层）。

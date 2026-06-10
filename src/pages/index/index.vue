@@ -90,7 +90,13 @@ export default {
       }
     },
     openPet(p) {
-      uni.navigateTo({ url: '/pages/pet/pet?id=' + (p._id || '') })
+      const id = p && p._id ? p._id : ''
+      uni.navigateTo({
+        url: '/pages/pet/pet?id=' + id,
+        fail: (err) => {
+          uni.showModal({ title: '跳转失败', content: 'id=' + id + ' / ' + (err && err.errMsg || JSON.stringify(err)), showCancel: false })
+        },
+      })
     },
     async loadDue() {
       if (!this.cloudReady()) return

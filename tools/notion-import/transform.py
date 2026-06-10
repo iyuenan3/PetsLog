@@ -164,6 +164,10 @@ def main():
         hospital = (r.get('就诊医院') or '').strip()
         med = (r.get('用药') or '').strip()
         rid = f'imp_h_{idx}'
+        # 日期必填护栏：无日期记录跳过（含 CSV 尾部空行；Notion 源头漏填日期的两条体重经用户确认不要，2026-06-11）
+        if not norm_date(r.get('日期', '')):
+            print(f'skip(no date): {rid} pet={pet} name={name}')
+            continue
         # 「到家」记录的费用列存的是购入身价（= 档案初始身价），不是就诊花费。
         # 必须置 None：否则它作为 records.cost 被累计花费求和，当前身价(=price_base+累计)双重计入身价（违 ADR-014）。
         cost = None if name == '到家' else num_or_null(r.get('费用', ''))
@@ -201,6 +205,10 @@ def main():
         med = (r.get('用药') or '').strip()
         date = norm_date(r.get('日期', ''))
         name = (r.get('名称') or '').strip() or '驱虫'
+        # 日期必填护栏（与健康记录循环同规则，否则产出 time:'' 记录）
+        if not date:
+            print(f'skip(no date): imp_d_{idx} pets={names} name={name}')
+            continue
         for pi, pet in enumerate(names):
             records.append({
                 '_id': f'imp_d_{idx}_{pi}',

@@ -19,8 +19,17 @@
         <text class="card-block__title">体重曲线</text>
         <text class="card-block__sub" v-if="series.length">{{ series.length }} 次 · 最新 {{ series[series.length - 1].weight }}kg</text>
       </view>
-      <canvas v-if="series.length" type="2d" id="weightChart" class="weight-chart"></canvas>
-      <view v-else class="chart-empty">
+      <view v-if="series.length" class="weight-wrap">
+        <view class="weight-yaxis">
+          <text class="weight-yaxis__t">{{ wMax }}</text>
+          <text class="weight-yaxis__t">{{ wMin }}</text>
+        </view>
+        <scroll-view scroll-x class="weight-scroll" :scroll-left="scrollLeft">
+          <canvas type="2d" id="weightChart" class="weight-chart" :style="{ width: chartW + 'px' }"></canvas>
+        </scroll-view>
+      </view>
+      <text v-if="series.length && canScroll" class="weight-hint">← 左右滑动查看更早记录</text>
+      <view v-else-if="!series.length" class="chart-empty">
         <text class="chart-empty__icon">⚖️</text>
         <text class="chart-empty__title">还没有体重数据</text>
         <text class="chart-empty__hint">回首页说一句「{{ pet.name }} 今天 X.X kg」即可记上</text>
@@ -124,6 +133,12 @@ export default {
       id: '',
       pet: null,
       series: [],
+      // 体重曲线横滑：chartW 按时间跨度算（1 年 = 视口宽），默认滚到最右(最新)；y 轴范围全局固定
+      chartW: 0,
+      scrollLeft: 0,
+      canScroll: false,
+      yMin: 0,
+      yMax: 0,
       costSum: 0, // 该宠累计花费 = records.cost 之和；当前身价 = price_base + costSum（派生不落库）
       editing: false,
       saving: false,
@@ -149,6 +164,13 @@ export default {
     },
     hasPrice() {
       return (this.pet && typeof this.pet.price_base === 'number') || this.costSum > 0
+    },
+    // 固定 y 轴上下标签（取派生的 yMax/yMin，与画布渲染同一范围）
+    wMax() {
+      return this.series.length ? this.yMax.toFixed(1) : ''
+    },
+    wMin() {
+      return this.series.length ? this.yMin.toFixed(1) : ''
     },
   },
   methods: {
@@ -188,11 +210,76 @@ export default {
             .sort((a, b) => a.at - b.at || String(a.date).localeCompare(String(b.date)))
           // 累计花费：该宠 records.cost 求和（cost 三态，仅累计数值；到家身价已在导入时置 None 不计）
           this.costSum = recs.reduce((s, r) => s + (typeof r.cost === 'number' ? r.cost : 0), 0)
-          this.$nextTick(() => this.drawChart())
+          this.$nextTick(() => this.layoutAndDraw())
         }
       } catch (e) {
         console.warn('weight load failed', e)
       }
+    },
+    // 先量视口宽算横向布局，再画。布局：等间距（每点 ≥56px），点多画布变宽 → 横滑看更早
+    layoutAndDraw() {
+      if (!this.series.length) return
+      // #ifdef MP-WEIXIN
+      uni
+        .createSelectorQuery()
+        .in(this)
+        .select('.weight-scroll')
+        .fields({ size: true })
+        .exec((res) => {
+          const vw = (res && res[0] && res[0].width) || uni.getSystemInfoSync().windowWidth - 60
+          this.computeLayout(vw)
+          this.$nextTick(() => {
+            this.drawChart()
+            // 默认滚到最右(最新)。宽画布布局未提交时 scroll-left 会被钳到 0，故先延迟一拍，
+            // 再二次校验实际滚动位置：没到位则先赋实际值再赋目标值（绕开同值二次赋值不生效）。
+            const target = Math.max(0, this.chartW - Math.round(vw))
+            setTimeout(() => {
+              this.scrollLeft = target
+            }, 100)
+            setTimeout(() => {
+              uni
+                .createSelectorQuery()
+                .in(this)
+                .select('.weight-scroll')
+                .scrollOffset()
+                .exec((r) => {
+                  const cur = r && r[0] ? r[0].scrollLeft : 0
+                  if (Math.abs(cur - target) > 2) {
+                    this.scrollLeft = cur
+                    this.$nextTick(() => {
+                      this.scrollLeft = target
+                    })
+                  }
+                })
+            }, 500)
+          })
+        })
+      // #endif
+    },
+    computeLayout(vw) {
+      const pts = this.series
+      const ws = pts.map((p) => p.weight)
+      let min = Math.min(...ws)
+      let max = Math.max(...ws)
+      if (min === max) {
+        min -= 0.5
+        max += 0.5
+      } else {
+        const m = (max - min) * 0.18
+        min -= m
+        max += m
+      }
+      this.yMin = min
+      this.yMax = max
+      // 等间距：每点至少 56px（密集期也拉开看得清）；点稀疏时平铺填满视口。点多 → 画布变宽 → 可横滑
+      const n = pts.length
+      const padX = 32 // 画布内 padL + padR（与 renderTimeLine 的 16+16 保持一致，否则末点高亮圈贴边被裁）
+      const plotFull = Math.max(60, Math.round(vw) - padX)
+      const minStep = 56
+      const step = n > 1 ? Math.max(minStep, plotFull / (n - 1)) : 0
+      this._step = step
+      this.chartW = Math.max(Math.round(vw), Math.round(padX + step * (n - 1)))
+      this.canScroll = this.chartW > Math.round(vw) + 2
     },
     drawChart() {
       if (!this.series.length) return
@@ -211,37 +298,34 @@ export default {
           const canvas = res[0].node
           const ctx = canvas.getContext('2d')
           const dpr = uni.getSystemInfoSync().pixelRatio || 2
-          const W = res[0].width
+          const W = res[0].width // = chartW（CSS 宽已绑定）
           const H = res[0].height
-          canvas.width = W * dpr
+          // 微信 canvas 2d 物理尺寸有单边上限（官方文档 1365*1365，实测 ~4096px，超限整块白屏）。
+          // 宽画布按上限横向降采样（点多时每 CSS px 分到的物理像素变少，轻微变糊可接受，白屏不可接受）。
+          const physW = Math.min(W * dpr, 4000)
+          canvas.width = physW
           canvas.height = H * dpr
-          ctx.scale(dpr, dpr)
-          this.renderLine(ctx, W, H)
+          ctx.scale(physW / W, dpr)
+          this.renderTimeLine(ctx, W, H)
         })
       // #endif
     },
-    renderLine(ctx, W, H) {
+    renderTimeLine(ctx, W, H) {
       const pts = this.series
-      const padL = 44
+      const n = pts.length
+      const padL = 16
       const padR = 16
       const padT = 18
-      const padB = 28
+      const padB = 30
       const plotW = W - padL - padR
       const plotH = H - padT - padB
       ctx.clearRect(0, 0, W, H)
 
-      const ws = pts.map((p) => p.weight)
-      let min = Math.min(...ws)
-      let max = Math.max(...ws)
-      if (min === max) {
-        min -= 0.5
-        max += 0.5
-      } else {
-        const m = (max - min) * 0.18
-        min -= m
-        max += m
-      }
-      const x = (i) => padL + (pts.length === 1 ? plotW / 2 : (plotW * i) / (pts.length - 1))
+      const min = this.yMin
+      const max = this.yMax
+      const step = this._step || 0
+      // 等间距：单点居中，多点按固定 step 排（与 computeLayout 的 chartW 一致）
+      const x = (i) => (n === 1 ? padL + plotW / 2 : padL + step * i)
       const y = (w) => padT + plotH - ((w - min) / (max - min)) * plotH
 
       // 横向网格（淡虚线，3 条）
@@ -258,7 +342,7 @@ export default {
       if (ctx.setLineDash) ctx.setLineDash([])
 
       // 面积填充（珊瑚渐隐）
-      if (pts.length > 1) {
+      if (n > 1) {
         const grd = ctx.createLinearGradient(0, padT, 0, padT + plotH)
         grd.addColorStop(0, 'rgba(242,130,92,0.18)')
         grd.addColorStop(1, 'rgba(242,130,92,0)')
@@ -266,22 +350,14 @@ export default {
         ctx.beginPath()
         ctx.moveTo(x(0), y(pts[0].weight))
         pts.forEach((p, i) => ctx.lineTo(x(i), y(p.weight)))
-        ctx.lineTo(x(pts.length - 1), padT + plotH)
+        ctx.lineTo(x(n - 1), padT + plotH)
         ctx.lineTo(x(0), padT + plotH)
         ctx.closePath()
         ctx.fill()
       }
 
-      // y 轴 max / min 标签
-      ctx.fillStyle = '#B5ABA2'
-      ctx.font = '10px sans-serif'
-      ctx.textAlign = 'right'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(max.toFixed(1), padL - 8, padT + 2)
-      ctx.fillText(min.toFixed(1), padL - 8, padT + plotH - 2)
-
       // 折线
-      if (pts.length > 1) {
+      if (n > 1) {
         ctx.strokeStyle = '#F2825C'
         ctx.lineWidth = 2.5
         ctx.lineJoin = 'round'
@@ -300,7 +376,7 @@ export default {
       pts.forEach((p, i) => {
         const px = x(i)
         const py = y(p.weight)
-        if (i === pts.length - 1) {
+        if (i === n - 1) {
           ctx.fillStyle = 'rgba(242,130,92,0.22)'
           ctx.beginPath()
           ctx.arc(px, py, 9, 0, Math.PI * 2)
@@ -320,18 +396,30 @@ export default {
         }
       })
 
-      // x 轴首尾日期
+      // 日期标签：按距离间隔挑点画（≥70px 才画下一个），杜绝重叠；首末必标
       ctx.fillStyle = '#B5ABA2'
+      ctx.font = '10px sans-serif'
       ctx.textBaseline = 'top'
-      ctx.textAlign = 'left'
-      ctx.fillText(this.shortDate(pts[0].date), padL, padT + plotH + 8)
-      if (pts.length > 1) {
-        ctx.textAlign = 'right'
-        ctx.fillText(this.shortDate(pts[pts.length - 1].date), padL + plotW, padT + plotH + 8)
+      const labelIdx = []
+      let lastX = -999
+      for (let i = 0; i < n; i++) {
+        if (x(i) - lastX >= 70) {
+          labelIdx.push(i)
+          lastX = x(i)
+        }
       }
+      if (n > 1 && labelIdx[labelIdx.length - 1] !== n - 1) {
+        if (x(n - 1) - x(labelIdx[labelIdx.length - 1]) < 70) labelIdx[labelIdx.length - 1] = n - 1
+        else labelIdx.push(n - 1)
+      }
+      labelIdx.forEach((i) => {
+        ctx.textAlign = i === 0 ? 'left' : i === n - 1 ? 'right' : 'center'
+        ctx.fillText(this.shortDate(pts[i].date), x(i), padT + plotH + 8)
+      })
     },
     shortDate(d) {
-      return d ? String(d).slice(5) : ''
+      // 带日防同月多点标签重复："2025-08-05" → "25/08/05"
+      return d ? String(d).slice(2, 10).replace(/-/g, '/') : ''
     },
     startEdit() {
       const p = this.pet
@@ -793,10 +881,48 @@ export default {
   opacity: 0.55;
 }
 
-.weight-chart {
+.weight-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
   width: 100%;
+  overflow: hidden;
+}
+.weight-yaxis {
+  width: 56rpx;
   height: 360rpx;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* 画布网格用 px 定位(padT 18px / padB 30px)，这里跟用 px 才能跨机型对齐（标签半行高约 7px） */
+  padding: 11px 0 23px;
+  box-sizing: border-box;
+}
+.weight-yaxis__t {
+  font-size: 20rpx;
+  color: #b5aba2;
+  text-align: right;
+  padding-right: 6rpx;
+}
+.weight-scroll {
+  flex: 1;
+  min-width: 0;
+  height: 360rpx;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.weight-chart {
+  height: 360rpx;
+  display: inline-block;
+  vertical-align: top;
+}
+.weight-hint {
   display: block;
+  font-size: 22rpx;
+  color: #c9bfb5;
+  text-align: center;
+  margin-top: 8rpx;
 }
 .chart-empty {
   padding: 40rpx 0;

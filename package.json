@@ -1,6 +1,6 @@
 {
   "name": "petslog",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "多宠家庭 AI 健康记录工具（微信小程序 · 自然语言录入 → AI 结构化归档）",
   "scripts": {
     "dev:mp-weixin": "uni -p mp-weixin",

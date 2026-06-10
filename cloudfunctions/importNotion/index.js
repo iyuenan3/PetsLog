@@ -121,8 +121,15 @@ async function importData(fid) {
     if (bad.length) return { ok: false, code: 'ATT_MISSING', msg: `${bad.length} 个附件未上传或不可解析，请先跑 storage:upload`, bad: bad.slice(0, 5) }
   }
 
-  // 2) 写 pets
+  // 2) 写 pets。latest_weight 由 records 派生（正常 app 靠 saveRecord 回写，导入须自算，否则列表显「体重未记」）
+  const lw = {} // name -> { weight, date }
+  for (const r of records) {
+    if (typeof r.weight !== 'number' || !(r.weight > 0)) continue
+    const cur = lw[r.pet], rt = String(r.time || '')
+    if (!cur || rt > cur.date) lw[r.pet] = { weight: r.weight, date: rt }
+  }
   for (const p of pets) {
+    const w = lw[p.name] || null
     await db.collection('pets').add({
       data: {
         family_id: fid,
@@ -138,8 +145,8 @@ async function importData(fid) {
         intro: p.intro || '',
         price_base: typeof p.price_base === 'number' ? p.price_base : null,
         avatar: '',
-        latest_weight: null,
-        latest_weight_date: '',
+        latest_weight: w ? w.weight : null,
+        latest_weight_date: w ? w.date : '',
         created_at: now,
       },
     })
@@ -149,8 +156,8 @@ async function importData(fid) {
   for (const r of records) {
     const atts = r.attachments || []
     // created_at 由事件日期派生：主时间线缺省按 created_at 倒序，若全用 now 则历史记录同值乱序 + limit 50 截断不可见。
-    // 用 time 的毫秒数让历史按事件日期排；缺日期回退 now（同日内不要求二级稳定，足够）。
-    const ts = Date.parse((r.time || '') + 'T00:00:00+08:00')
+    // Notion 源数据日期均不带时间（全量核对确认 is_datetime=0），按约定缺时间默认中午 12:00。
+    const ts = Date.parse((r.time || '') + 'T12:00:00+08:00')
     await db.collection('records').add({
       data: {
         _id: r._id,
@@ -173,7 +180,8 @@ async function importData(fid) {
     })
   }
 
-  // 4) 写 foods
+  // 4) 写 foods（foods 是轮3 新集合，云端可能尚未创建 → 先建，幂等）
+  await db.createCollection('foods').catch(() => {})
   for (const f of foods) {
     await db.collection('foods').add({
       data: {
@@ -195,6 +203,116 @@ async function importData(fid) {
   return { ok: true, pets: pets.length, records: records.length, foods: foods.length, attachments: allFileIDs.length, bytes: totalBytes }
 }
 
+// 续传：首轮 import 写完 pets/records 后在 foods 处崩（集合未建）。此动作只补 foods + storage_bytes，
+// 不动已正确写入的 pets/records/附件，避免 clear 误删 staged 附件。一次性用，带 foods 非空护栏防重复。
+async function importFoodsResume(fid) {
+  await db.createCollection('foods').catch(() => {})
+  const fc = await db.collection('foods').where({ family_id: fid }).limit(1).get().catch(() => ({ data: [] }))
+  if (fc.data.length) return { ok: false, code: 'FOODS_NOT_EMPTY', msg: 'foods 已有数据，跳过以防重复写入' }
+  const data = JSON.parse(JSON.stringify(require('./data.json')))
+  const foods = data.foods || []
+  const records = data.records || []
+  const now = Date.now()
+  for (const f of foods) {
+    await db.collection('foods').add({
+      data: {
+        family_id: fid,
+        name: f.name,
+        start_date: f.start_date || '',
+        end_date: f.end_date || '',
+        current: !!f.current,
+        note: f.note || '',
+        created_at: now,
+        updated_at: now,
+      },
+    })
+  }
+  // 回填 storage_bytes：首轮在写 foods 前崩，没跑到回填。只在当前为 0 时设，防重复累加。
+  // 前提：本工具只用于「clear 后 import 中途崩」的续传，此时家庭 storage_bytes 必为 0（clear 已归零）；
+  // 若未来家庭已有正常用量则不适用（会静默跳过回填），届时应走完整 clear + import。已于 2026-06-10 执行完毕。
+  let totalBytes = 0
+  for (const r of records) for (const a of r.attachments || []) totalBytes += Number(a.bytes) || 0
+  const fam = await db.collection('families').doc(fid).get().catch(() => null)
+  if (fam && fam.data && !fam.data.storage_bytes && totalBytes) {
+    await db.collection('families').doc(fid).update({ data: { storage_bytes: totalBytes } }).catch(() => {})
+  }
+  return { ok: true, foods: foods.length, storage_bytes: totalBytes }
+}
+
+// 回填 pets.latest_weight：导入写 pets 时置 null（正常 app 靠 saveRecord 回写，导入绕过了），
+// 列表页因此全显「体重未记」。按事件日期取每只宠最近一条带体重记录，回写 latest_weight + date。一次性，幂等可重跑。
+async function backfillWeight(fid) {
+  const pets = (await db.collection('pets').where({ family_id: fid }).limit(1000).get().catch(() => ({ data: [] }))).data
+  let updated = 0
+  for (const p of pets) {
+    let latest = null
+    for (let skip = 0; ; skip += 100) {
+      const rs = (await db.collection('records').where({ family_id: fid, pet: p.name }).field({ weight: true, time: true, created_at: true }).skip(skip).limit(100).get().catch(() => ({ data: [] }))).data
+      for (const r of rs) {
+        if (typeof r.weight !== 'number' || !(r.weight > 0)) continue
+        const rt = String(r.time || ''), lt = latest ? String(latest.time || '') : ''
+        if (!latest || rt > lt || (rt === lt && (r.created_at || 0) > (latest.created_at || 0))) latest = r
+      }
+      if (rs.length < 100) break
+    }
+    if (latest) {
+      await db.collection('pets').doc(p._id).update({ data: { latest_weight: latest.weight, latest_weight_date: latest.time || '' } }).catch(() => {})
+      updated++
+    }
+  }
+  return { ok: true, pets: pets.length, updated }
+}
+
+// 一次性修复（Notion 全量核对后）：① 删无日期记录（日期必填约定；含 CSV 空行脏数据 + Notion 源头漏填日期的，
+// 后者经用户确认删除，见 2026-06-11 核对）；② 导入记录 created_at 统一改为 事件日期+12:00（缺时间默认中午）。
+// 只动 imported:true 的记录，不碰用户真机自己记的。幂等可重跑。
+async function fixTimes(fid) {
+  const all = []
+  for (let skip = 0; ; skip += 100) {
+    const rs = (await db.collection('records').where({ family_id: fid, imported: true }).field({ time: true, pet: true, created_at: true }).skip(skip).limit(100).get().catch(() => ({ data: [] }))).data
+    all.push(...rs)
+    if (rs.length < 100) break
+  }
+  let updated = 0, removed = 0
+  for (const r of all) {
+    if (!r.time) {
+      await db.collection('records').doc(r._id).remove().catch(() => {})
+      removed++
+      continue
+    }
+    const ts = Date.parse((r.time || '') + 'T12:00:00+08:00')
+    if (Number.isFinite(ts) && r.created_at !== ts) {
+      await db.collection('records').doc(r._id).update({ data: { created_at: ts } }).catch(() => {})
+      updated++
+    }
+  }
+  return { ok: true, scanned: all.length, updated, removed }
+}
+
+// 只读校验：导入后数据体检（计数 + created_at 是否全在 12:00 + 脏记录残留），不写任何数据
+async function stats(fid) {
+  const out = { pets: 0, records: 0, imported: 0, foods: 0, noon: 0, emptyTime: [], emptyPet: [], offNoon: [] }
+  // count 全部兜底：集合不存在（如全新环境 foods 未建）抛 -502005，体检工具不该因此整体报错
+  const cnt = async (coll, where) => (await db.collection(coll).where(where).count().catch(() => ({ total: 0 }))).total
+  out.pets = await cnt('pets', { family_id: fid })
+  out.foods = await cnt('foods', { family_id: fid })
+  out.records = await cnt('records', { family_id: fid })
+  out.imported = await cnt('records', { family_id: fid, imported: true })
+  for (let skip = 0; ; skip += 100) {
+    const rs = (await db.collection('records').where({ family_id: fid, imported: true }).field({ time: true, pet: true, created_at: true }).skip(skip).limit(100).get().catch(() => ({ data: [] }))).data
+    for (const r of rs) {
+      if (!r.time) out.emptyTime.push(r._id)
+      if (!r.pet) out.emptyPet.push(r._id)
+      // 12:00+08:00 = 04:00 UTC → 当日毫秒余 14400000
+      if (r.created_at % 86400000 === 14400000) out.noon++
+      else out.offNoon.push({ id: r._id, time: r.time, created_at: r.created_at })
+    }
+    if (rs.length < 100) break
+  }
+  out.offNoon = out.offNoon.slice(0, 5)
+  return { ok: true, ...out }
+}
+
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
   const action = (event && event.action) || ''
@@ -207,6 +325,18 @@ exports.main = async (event) => {
     }
     if (action === 'import') {
       return await importData(fid)
+    }
+    if (action === 'import_foods') {
+      return await importFoodsResume(fid)
+    }
+    if (action === 'backfill_weight') {
+      return await backfillWeight(fid)
+    }
+    if (action === 'fix_times') {
+      return await fixTimes(fid)
+    }
+    if (action === 'stats') {
+      return await stats(fid)
     }
     return { ok: false, msg: 'unknown action: ' + action }
   } catch (e) {

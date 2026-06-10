@@ -70,3 +70,21 @@
 - 现象：`wxcloud function:upload` 部署全新函数（attachment）报 `{"code":"ResourceNotFound.Function"}` + TypeError 崩出，函数没建出来；同批已存在函数全部更新成功。
 - 根因：CLI 2.3.3 的 function:upload 在「判断函数是否存在」之前就先无条件轮询函数状态（waitFuncDeploy），新函数查无此函数 → 内部异常处理有 bug，走不到后面的 scfCreateFunction 创建路径。
 - 结论 / 操作：**新云函数首次用 DevTools GUI「上传并部署:云端安装依赖」创建**（GUI 部署的是 dist 拷贝，记得先重构建），创建后续更新一律走 CLI；新函数默认超时 3s，按需控制台调（attachment 要做 getTempFileURL + HEAD 体积复核，建议 30s）。
+
+## 历史导入执行三连坑（超时 3s / clear 误删 staged 附件 / 新集合未建）· 2026-06-11
+- 坑1：importNotion 新函数 GUI 首建后默认超时 3s，import 写 220 条必被杀（`Invoking task timed out after 3 seconds`）。一次性导入函数建好第一时间控制台调 60s。
+- 坑2（最隐蔽）：**partial import（中途超时）后再跑 clear，会把半写入记录引用的 staged 附件当「旧家庭文件」级联删掉**（clear 的 collectFileIDs 按记录附件收集 fileID，分不清新旧）。表现为下轮 import 报 ATT_MISSING。恢复：本地 staged 重传。教训：导入失败后**别先 clear**，先靠 NOT_EMPTY 护栏判断状态；或 clear 前确认无半写入记录。
+- 坑3：微信云开发**集合不会被 add 自动创建**，新集合（foods）没人建过则 import 写入直接抛 `-502005 Db or Table not exist`。所有「第一次写新集合」的云函数路径都要 `db.createCollection(x).catch(()=>{})` 兜底（foods 函数有，importNotion 漏了）。
+- 附带：`wxcloud storage:upload <本地> -r <远程>` 的 `-r` 是**目录语义**，传完整对象键会变成 `键/文件名` 双层；重传单文件也要按目录传。
+- 恢复模式：与其 clear 重导（要重传全部附件），不如给导入函数加**精准续传 / 修复动作**（import_foods / backfill_weight / fix_times）+ 只读 stats 体检（计数 + 不变量校验），每步幂等、可重跑、不碰云存储。
+
+## 微信 canvas 2d 物理尺寸有单边上限，宽画布不夹紧真机白屏 · 2026-06-11
+- 现象（评审 HIGH 提前拦截）：体重曲线改横滑后画布宽随点数线性涨（56px/点），canvas.width = cssW × dpr 无上限；27 个点 × dpr3 = 4440 物理像素，超微信 canvas 2d 单边上限（官方文档 1365×1365，社区实测 ~4096）整块白屏 / 绘制失败，安卓过大还会 crash。
+- 根治：物理宽夹紧 `physW = Math.min(W * dpr, 4000)`，`ctx.scale(physW / W, dpr)` 横向降采样（点多轻微变糊可接受，白屏不可接受）。
+- 教训：任何「内容驱动画布变宽 / 变高」的 canvas（长图、横滑图表、海报）都要夹物理尺寸；这是文档化硬上限不是个别机型怪癖（painter 等海报库都硬限 4096）。
+
+## 数据迁移验收：拉实时源全量 diff，别只信导出快照 · 2026-06-11
+- 模式：用户感觉「有些数据不正确」时，不逐条人肉对，用 Notion MCP（或源系统 API）把**实时数据全量拉回**（workflow 并行分批，9 宠 + 219 记录 + 12 主粮 = 240 页 4 分钟），本地脚本逐字段 diff 导入产物。
+- 假阳性先归一再下结论：换行（`<br>` vs `\n`）、有意的转换规则（驱虫 tag 归一、合成 desc）、同宠同日多记录的匹配错位（按字段打分选最优而非先到先得）。
+- 真问题往往在快照之外：CSV 尾部空行混入全空记录；**源头本身就漏数据**（2 条体重记录 Notion 里就没填日期，要用户决策而非代码兜底，相邻页面 ID + 快照时间可锚定大致日期辅助回忆）；时间语义约定（缺时间默认 12:00 而非 00:00，否则同日排序乱）。
+- 导出快照（CSV）会过期：核对一律以实时源为准；data.json / transform 同步修，保证未来重放与线上终态一致。
