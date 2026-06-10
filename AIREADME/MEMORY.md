@@ -65,3 +65,8 @@
 - 用法：`wxcloud function:upload cloudfunctions/<函数名> -e <envId> -n <函数名> --remoteNpmInstall`。直接传**源码目录**（绕开「改源码忘重构建、部署到旧 dist 拷贝」坑），云端装依赖自动忽略 node_modules，gitignore 的 config.local.js 会随包带上（机密只进私有云端，符合预期），轮询到 Active 才返回、失败会报错。
 - 边界：CLI 只更新代码；**超时 / 内存等函数配置改不了，仍走控制台**（更新路径不碰这些配置，控制台调的值不会被部署覆盖）。注意 npm 直装可能拿到旧版 1.1.8（无 function:upload），要 `@wxcloud/cli@latest`（验证时为 2.3.3）。
 - 2026-06-10 已用此通道部署 timeline / saveRecord / parseRecord 三函数验证通过。
+
+## @wxcloud/cli 创建「新」云函数会崩（只可靠更新已存在函数）· 2026-06-10
+- 现象：`wxcloud function:upload` 部署全新函数（attachment）报 `{"code":"ResourceNotFound.Function"}` + TypeError 崩出，函数没建出来；同批已存在函数全部更新成功。
+- 根因：CLI 2.3.3 的 function:upload 在「判断函数是否存在」之前就先无条件轮询函数状态（waitFuncDeploy），新函数查无此函数 → 内部异常处理有 bug，走不到后面的 scfCreateFunction 创建路径。
+- 结论 / 操作：**新云函数首次用 DevTools GUI「上传并部署:云端安装依赖」创建**（GUI 部署的是 dist 拷贝，记得先重构建），创建后续更新一律走 CLI；新函数默认超时 3s，按需控制台调（attachment 要做 getTempFileURL + HEAD 体积复核，建议 30s）。

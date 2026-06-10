@@ -19,6 +19,14 @@ exports.main = async (event) => {
     return { ok: false, code: e.code || 'AUTH', msg: e.msg || '无权限' }
   }
 
+  // 单条详情（记录详情页用）：按 id 取，校验属于本家庭，防跨家庭读
+  if (event && event.action === 'get') {
+    if (!event.id) return { ok: false, msg: 'no id' }
+    const r = await db.collection('records').doc(event.id).get().catch(() => null)
+    if (!r || !r.data || r.data.family_id !== familyId) return { ok: false, msg: 'not found' }
+    return { ok: true, data: r.data }
+  }
+
   const where = { family_id: familyId }
   if (event && event.pet) where.pet = event.pet
   // 默认按录入时间 created_at 倒序（主时间线 / 体重图沿用）；

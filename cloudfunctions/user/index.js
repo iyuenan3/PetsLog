@@ -36,6 +36,11 @@ exports.main = async (event) => {
     const res = await db.collection('users').where({ _openid: OPENID }).limit(1).get()
     if (res.data.length) {
       await db.collection('users').doc(res.data[0]._id).update({ data: patch })
+      // 换头像后删旧云存储文件，防孤儿 fileID 白占共享配额（见 ADR-011 清理）
+      const old = res.data[0].avatar
+      if ('avatar' in patch && old && patch.avatar !== old) {
+        await cloud.deleteFile({ fileList: [old] }).catch(() => {})
+      }
     } else {
       await db.collection('users').add({
         data: { _openid: OPENID, nickname: patch.nickname || '', avatar: patch.avatar || '', created_at: Date.now(), updated_at: Date.now() },

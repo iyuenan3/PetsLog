@@ -96,6 +96,28 @@
             <view class="field-row" v-if="parsed.tag"><text class="field-row__label">病程</text><text class="field-row__value">{{ parsed.tag }}</text></view>
             <view class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
           </view>
+
+          <!-- 附件（见 ADR-011）：确认归档前可挂图片 / 视频 / PDF，保存后上传登记 -->
+          <view class="att">
+            <text class="att__label">附件（病历照片 / 视频 / PDF，选填）</text>
+            <scroll-view scroll-x class="att__scroll" :show-scrollbar="false">
+              <view class="att__inner">
+                <view v-for="(a, i) in atts" :key="i" class="att-cell">
+                  <image v-if="a.type === 'image'" :src="a.tempPath" class="att-cell__img" mode="aspectFill" />
+                  <block v-else-if="a.type === 'video'">
+                    <image v-if="a.thumbTemp" :src="a.thumbTemp" class="att-cell__img" mode="aspectFill" />
+                    <view class="att-cell__mask">▶</view>
+                  </block>
+                  <view v-else class="att-cell__pdf">
+                    <text class="att-cell__pdf-ico">📄</text>
+                    <text class="att-cell__pdf-name">{{ a.name }}</text>
+                  </view>
+                  <text class="att-cell__del" @click.stop="removeAtt(i)">✕</text>
+                </view>
+                <view v-if="atts.length < attMax" class="att-cell att-cell--add" @click="addAtt">＋</view>
+              </view>
+            </scroll-view>
+          </view>
         </block>
 
         <view class="sheet__actions">
@@ -110,6 +132,7 @@
 <script>
 import { CLOUD_ENV } from '@/config'
 import { callFn } from '@/cloud'
+import { pickAttachments, uploadAndRegister, ATT_MAX_PER_RECORD } from '@/attachments'
 
 export default {
   data() {
@@ -119,6 +142,8 @@ export default {
       parsing: false,
       saving: false,
       parsed: null, // AI 解析后的结构化结果，待用户确认
+      atts: [], // 待上传附件（本地临时文件，确认归档后才上传，取消不留孤儿）
+      attMax: ATT_MAX_PER_RECORD,
       examples: ['示例猫今天吐了，体重 4.2kg', '下月 15 号给示例狗打疫苗', '买了盒驱虫药 2 支，明年 3 月过期'],
     }
   },
@@ -169,6 +194,7 @@ export default {
           uni.showToast({ title: '这条看起来不是健康记录', icon: 'none' })
           return
         }
+        this.atts = [] // 新一次解析，清掉上一轮残留的待传附件
         this.parsed = r.parsed
       } catch (e) {
         uni.showModal({
@@ -186,6 +212,14 @@ export default {
     },
     cancelParse() {
       this.parsed = null
+      this.atts = [] // 只是本地临时文件，丢弃即可，无云端孤儿
+    },
+    async addAtt() {
+      const picked = await pickAttachments(this.attMax - this.atts.length)
+      if (picked.length) this.atts = this.atts.concat(picked)
+    },
+    removeAtt(i) {
+      this.atts.splice(i, 1)
     },
     async confirmSave() {
       if (!this.parsed) return
@@ -196,9 +230,26 @@ export default {
         const res = await callFn('saveRecord', { record: this.parsed })
         const r = res.result || {}
         if (r.ok) {
+          // 健康记录带附件：先归档成功再上传登记（取消归档不产生云端孤儿；上传失败记录仍在，可去详情页补传）
+          if (kind !== 'med_stock' && kind !== 'reminder' && this.atts.length && r.id) {
+            uni.showLoading({ title: '上传附件中…', mask: true })
+            const up = await uploadAndRegister(r.id, this.atts)
+            uni.hideLoading()
+            if (!up.ok) {
+              await new Promise((done) =>
+                uni.showModal({
+                  title: '附件没传上',
+                  content: `记录已归档，但附件上传失败：${up.msg}。可稍后在时间线点开这条记录补传。`,
+                  showCancel: false,
+                  complete: done,
+                })
+              )
+            }
+          }
           uni.showToast({ title: okMsg, icon: 'success' })
           this.draft = ''
           this.parsed = null
+          this.atts = []
           // 让来源 tab 在返回后 onShow 刷新；稍等 toast 露出再返回
           setTimeout(() => {
             uni.navigateBack({ delta: 1 })
@@ -207,6 +258,7 @@ export default {
           uni.showToast({ title: r.msg || '保存失败', icon: 'none' })
         }
       } catch (e) {
+        uni.hideLoading()
         uni.showToast({ title: '保存出错', icon: 'none' })
       } finally {
         this.saving = false
@@ -406,6 +458,92 @@ export default {
   font-weight: 600;
   box-shadow: inset 0 0 0 2rpx var(--c-primary);
 }
+/* 附件选择区（确认卡片内） */
+.att {
+  margin-bottom: 28rpx;
+}
+.att__label {
+  display: block;
+  font-size: var(--fs-cap);
+  color: var(--c-text-2);
+  margin-bottom: 14rpx;
+}
+.att__scroll {
+  white-space: nowrap;
+}
+.att__inner {
+  display: inline-flex;
+  gap: 16rpx;
+}
+.att-cell {
+  position: relative;
+  width: 140rpx;
+  height: 140rpx;
+  flex: none;
+  border-radius: var(--r-sm);
+  background: var(--c-bg-sink);
+  overflow: hidden;
+}
+.att-cell__img {
+  width: 100%;
+  height: 100%;
+}
+.att-cell__mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+  font-size: 44rpx;
+}
+.att-cell__pdf {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  padding: 0 10rpx;
+  box-sizing: border-box;
+}
+.att-cell__pdf-ico {
+  font-size: 48rpx;
+}
+.att-cell__pdf-name {
+  max-width: 100%;
+  font-size: var(--fs-tiny);
+  color: var(--c-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.att-cell__del {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 44rpx;
+  text-align: center;
+  background: rgba(58, 51, 48, 0.55);
+  color: #fff;
+  font-size: var(--fs-tiny);
+  border-radius: 0 0 0 var(--r-sm);
+}
+.att-cell--add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56rpx;
+  color: var(--c-text-3);
+  border: 2rpx dashed var(--c-border);
+  background: transparent;
+  box-sizing: border-box;
+}
+
 .sheet__actions {
   display: flex;
   gap: 20rpx;

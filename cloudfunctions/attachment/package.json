@@ -1,0 +1,9 @@
+{
+  "name": "attachment",
+  "version": "1.0.0",
+  "description": "健康记录附件：登记(配额复核)/删除/删记录级联",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -2,7 +2,7 @@
 <!-- 数据契约 / 数据字典：collection 字段定义是内部真相源。对外 API 见文末（当前 N/A）。实现→ARCHITECTURE，为何→DECISIONS。 -->
 
 > 数据库 = 微信云开发文档型。隔离键：业务数据按 `family_id`（见 ADR-008），`users` 按 `_openid`。
-> 标记：**[新]** = 本批次（ADR-011/012/013）尚未落地项（轮2 附件 attachments / att_count / storage_bytes）；轮1 字段（records hospital / cost / tag、pets home_date / note / avatar、event_type 驱虫桶）已落地 v0.3.1；**[占位]** = 模型已定、建设排后（foods）。
+> 标记：**[占位]** = 模型已定、建设排后（foods）。ADR-011/012/013 批次：轮1 字段已落地 v0.3.1，轮2 附件（attachments / att_count / storage_bytes / att_log）已落地 v0.3.2。
 > 字段值约定：日期一律 `'YYYY-MM-DD'` 字符串；金额 / 体重为 number；时间戳 `created_at/updated_at` 为毫秒 number。
 
 ## pets（宠物档案 · family 隔离）
@@ -20,7 +20,7 @@
 | latest_weight_date | string | 最新体重日期（防补录旧体重覆盖「最新」） |
 | home_date | string | 到家日期 'YYYY-MM-DD'（陪伴时长） |
 | note | string | 备注（自由文本，如来历故事） |
-| avatar | string(fileID) | 头像照片，云存储 fileID（无则前端 emoji 兜底；换头像旧文件暂不清理，见 ROADMAP 待办） |
+| avatar | string(fileID) | 头像照片，云存储 fileID（无则前端 emoji 兜底；换头像 / 删宠物会删旧文件防孤儿，v0.3.2） |
 | created_at / updated_at | number | updated_at 仅 update 时写入，新建文档暂无（reminders 则 add 即写） |
 
 > EDITABLE 白名单（pets update）需同步加 home_date / note / avatar。
@@ -40,8 +40,8 @@
 | cost | number \| null | 费用（元）；三态可区分：null=未解析 / 0=免费 / 正数 |
 | tag | string | 病程标签（嗜酸性肉芽肿 / 尿闭 / 软骨病…，可空；与 event_type 双轴；落库 trim 防同名病程线散裂） |
 | desc | string | 干净事件描述（症状 / 处置，不含费用 / 医院 / 寒暄），parseRecord 抽取；给兽医小结拼接用，不暴露 raw 原话 |
-| **attachments** | array | **[新]** `[{ fileID, type:'image'\|'pdf'\|'video', name, size, uploaded_at }]`，单条 ≤9 |
-| **att_count** | number | **[新]** 附件数（列表角标） |
+| attachments | array | `[{ fileID, thumb(缩略图 fileID，可空), type:'image'\|'pdf'\|'video', name, size(主文件真实体积), bytes(计配额体积=主+缩略，删除按它回收), uploaded_at }]`，单条 ≤9；由 attachment 云函数登记（服务端 HEAD 复核真实体积，客户端报的 size 不可信） |
+| att_count | number | 附件数（时间线 📎 角标） |
 | created_at | number | |
 
 > 双轴：event_type 管「事件类型」（配色 / 分类），tag 管「病程线」（按 tag 筛 = 病程视图，先简版）。
@@ -76,7 +76,7 @@
 | _id | string | 家庭 id（= 各业务表 family_id） |
 | name | string | 家庭名 |
 | owner | string(openid) | 管理员 |
-| **storage_bytes** | number | **[新]** 附件云存储用量计数（上传 +size、删除 −size；家庭总量 ≤1GB） |
+| storage_bytes | number | 附件云存储用量计数（登记 +bytes、删除 −bytes，原子 inc；家庭总量 ≤1GB；并发下与真实用量可能轻微漂移，见 ADR-011 tradeoff） |
 | created_at | number | |
 
 ## family_members（成员关系 · 多对多真相源）
@@ -103,7 +103,7 @@
 |---|---|---|
 | _openid | string | **必须显式写**（云函数 add 不自动注入，见 MEMORY） |
 | nickname | string | 昵称 |
-| avatar | string(fileID) | 微信头像，云存储 |
+| avatar | string(fileID) | 微信头像，云存储（换头像删旧文件防孤儿，v0.3.2，与 pets.avatar 同机制） |
 | created_at / updated_at | number | |
 
 ## parse_log（解析限流流水 · family 隔离）
@@ -114,7 +114,16 @@
 | at | number | 毫秒时间戳；每次解析 add 一条流水（非计数器） |
 
 > 限流 = 按 `family_id + day` `count()` 文档条数 ≥ DAILY_LIMIT（默认 50，env `DAILY_PARSE_LIMIT` 可调）。
-> 附件**日上传量限速**（≤200MB/天/家庭）走类似「family_id + day」流水统计（新 upload_log 表或带 size 的流水，建设时定）。
+
+## att_log（附件日上传量流水 · family 隔离）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| family_id | string | 隔离键 |
+| day | string | 'YYYY-MM-DD'（北京时区） |
+| bytes | number | 本次登记计入配额的总字节（主文件 + 缩略图，真实体积） |
+| at | number | 毫秒时间戳；每次 register add 一条流水 |
+
+> 日上传限速（≤200MB/天/家庭）= 当日流水 bytes 求和 + 本次 > 上限即拒（attachment 云函数 register）。
 
 ## foods（主粮台账 · family 级 · **[占位]** 排后建）
 | 字段 | 类型 | 说明 |

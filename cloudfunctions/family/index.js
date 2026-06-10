@@ -247,14 +247,41 @@ async function transferAdmin(openid, event) {
   return { ok: true }
 }
 
-// 解散家庭：级联清掉该家庭全部数据 + 成员关系 + 邀请码 + 家庭文档。
+// 解散家庭：级联清掉该家庭全部数据 + 成员关系 + 邀请码 + 家庭文档 + 云存储文件（附件 / 宠物头像，见 ADR-011）。
+async function deleteFiles(fileIDs) {
+  const ids = fileIDs.filter(Boolean)
+  for (let i = 0; i < ids.length; i += 50) {
+    await cloud.deleteFile({ fileList: ids.slice(i, i + 50) }).catch(() => {}) // 清理尽力而为，失败不阻断解散
+  }
+}
+
+// 收集该家庭名下全部云存储 fileID：records 附件 + 宠物头像，两者都分页扫（默认 100 条截断会漏删；宠物数无上限）
+async function collectFamilyFileIDs(fid) {
+  const ids = []
+  for (let skip = 0; ; skip += 100) {
+    const r = await db.collection('records').where({ family_id: fid }).field({ attachments: true }).skip(skip).limit(100).get().catch(() => ({ data: [] }))
+    for (const rec of r.data) for (const a of rec.attachments || []) ids.push(a.fileID, a.thumb)
+    if (r.data.length < 100) break
+  }
+  for (let skip = 0; ; skip += 100) {
+    const ps = await db.collection('pets').where({ family_id: fid }).field({ avatar: true }).skip(skip).limit(100).get().catch(() => ({ data: [] }))
+    for (const p of ps.data) ids.push(p.avatar)
+    if (ps.data.length < 100) break
+  }
+  return ids.filter(Boolean)
+}
+
 async function cascadeDeleteFamily(fid) {
-  for (const c of ['records', 'meds', 'reminders', 'pets', 'parse_log']) {
+  // 先收集 fileID（文档删掉就找不回），再删文档，文件【放最后删】：
+  // 中途失败只剩存储孤儿（无 DB 引用），不会出现「家庭/记录还在但头像·附件已毁」的不可逆中间态（评审 low）。
+  const fileIDs = await collectFamilyFileIDs(fid)
+  for (const c of ['records', 'meds', 'reminders', 'pets', 'parse_log', 'att_log']) {
     await db.collection(c).where({ family_id: fid }).remove().catch(() => {})
   }
   await db.collection('invites').where({ family_id: fid }).remove().catch(() => {})
   await db.collection('family_members').where({ family_id: fid }).remove().catch(() => {})
   await db.collection('families').doc(fid).remove().catch(() => {})
+  await deleteFiles(fileIDs)
 }
 
 async function leave(openid, event) {

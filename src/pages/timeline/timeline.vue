@@ -14,7 +14,7 @@
     </scroll-view>
 
     <view v-if="records.length" class="tl-list">
-      <view v-for="r in shown" :key="r._id" class="tl-item">
+      <view v-for="r in shown" :key="r._id" class="tl-item" @click="openDetail(r)">
         <view class="tl-item__head">
           <view class="tl-dot" :class="eventClass(r.event_type)"></view>
           <text class="tl-item__pet">{{ r.pet || '未指定' }}</text>
@@ -22,12 +22,13 @@
           <text class="tl-item__time">{{ shortDate(r.time) }}</text>
         </view>
         <text class="tl-item__quote">{{ r.raw }}</text>
-        <view v-if="r.weight || r.med || r.hospital || r.cost != null || r.tag" class="tl-item__notes">
+        <view v-if="r.weight || r.med || r.hospital || r.cost != null || r.tag || r.att_count" class="tl-item__notes">
           <text v-if="r.weight" class="tl-note">⚖️ {{ r.weight }}kg</text>
           <text v-if="r.med" class="tl-note">💊 {{ r.med }}</text>
           <text v-if="r.hospital" class="tl-note">🏥 {{ r.hospital }}</text>
           <text v-if="r.cost != null" class="tl-note">💰 ¥{{ r.cost }}</text>
-          <text v-if="r.tag" class="tl-note tl-note--tag" @click="setTag(r.tag)">🏷️ {{ r.tag }}</text>
+          <text v-if="r.att_count" class="tl-note">📎 {{ r.att_count }}</text>
+          <text v-if="r.tag" class="tl-note tl-note--tag" @click.stop="setTag(r.tag)">🏷️ {{ r.tag }}</text>
         </view>
       </view>
     </view>
@@ -67,6 +68,10 @@ export default {
   methods: {
     setTag(t) {
       this.activeTag = t
+    },
+    // 进记录详情（看 / 补附件、删记录）；返回后 onShow 自动刷新
+    openDetail(r) {
+      uni.navigateTo({ url: `/pages/record-detail/record-detail?id=${r._id}` })
     },
     eventClass(t) {
       return { 症状: 'ev-symptom', 用药: 'ev-med', 疫苗: 'ev-vaccine', 驱虫: 'ev-deworm', 体重: 'ev-weight', 就医: 'ev-clinic' }[t] || 'ev-other'

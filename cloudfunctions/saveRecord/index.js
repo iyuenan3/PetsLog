@@ -103,6 +103,8 @@ exports.main = async (event) => {
     tag: (r.tag || '').trim(), // 病程标签（与 event_type 双轴）；trim 防同名病程线因首尾空格散裂
     desc: (r.desc || '').trim(), // 干净事件描述（不含费用 / 医院），给兽医小结拼接用，不暴露 raw 原话
     raw: r.raw || '',
+    attachments: [], // 附件列表（见 ADR-011），上传后由 attachment 云函数登记
+    att_count: 0,
     created_at: Date.now(),
   }
   const addRes = await db.collection('records').add({ data: doc })

@@ -3,6 +3,15 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## v0.3.2 · 2026-06-10 · 附件轮2（健康记录挂图片 / 视频 / PDF + 配额限额 + 记录详情页 + 级联清理）
+- Added: 健康记录附件（ADR-011）：records 加 `attachments[]`（fileID / thumb / type / name / size / bytes）+ `att_count`；新 `attachment` 云函数（register / remove / deleteRecord），登记前服务端按云存储真实体积复核（getTempFileURL + HEAD，客户端报的 size 不可信），超限删文件回滚。
+- Added: 配额三道闸（共享环境生命线）：单条 ≤9 个；家庭总存储 ≤1GB（families.`storage_bytes` 原子计数）；日上传 ≤200MB/家庭（新 `att_log` 流水，复用 parse_log 的 family_id+day 模式）。单文件上限：图 10MB / 视频 30MB·30s / PDF 10MB。
+- Added: 上传入口两处（ADR-011）：录入二次确认卡片选附件（确认归档后才上传，取消不留孤儿；上传失败记录仍在可补传）+ 新「记录详情页」事后补传。图片端侧压缩（长边 ≤2000 q80）+ 缩略图（360px），列表只下缩略图省 CDN 下行（1GB/月 真瓶颈）；视频 chooseMedia compressed；PDF 走 chooseMessageFile（小程序只能从聊天选文件）。
+- Added: 记录详情页 `pages/record-detail`：全部结构化字段 + 附件九宫格（点开 previewMedia 图视频混滑 / PDF downloadFile+openDocument 带本地缓存、长按删）+ 删除整条记录；时间线行加 📎 角标、点击进详情；timeline 云函数加 `get` 单条（family 校验防跨家庭读）。
+- Added: 级联清理（ADR-011 + 轮1 backlog 孤儿文件）：删附件 / 删记录回收 storage_bytes 并删云存储文件；解散家庭级联删全部附件 + 宠物头像（分页扫 records 防 100 条截断漏删）；宠物 / 用户换头像删旧 fileID、删宠物删头像（记录及其附件有意保留：删档案 ≠ 删病史）。
+- Changed: 云函数部署切换 `@wxcloud/cli function:upload`（命令行直传源码目录 + 云端装依赖，绕开 DevTools CLI 签名失败；超时 / 内存配置仍走控制台），见 DEPLOYMENT / MEMORY。
+- Hardened: 提交前多 agent 对抗式评审（6 视角找 + 逐条三视角表决证伪，93 agent）修一批真问题：① 安全：register 对客户端传入 fileID 零归属校验可删 / 读别家文件（high）→ 加「fileID 必须落在 att/<record_id>/ 路径 + record_id 经 getOwnedRecord 验权」双闸，验权前绝不删文件；② 并发：attachments 整组覆盖写改 `_.push`/`_.pull` 原子操作（防 last-write-wins 丢更新致孤儿 + 配额漂移），register 体积复核期间记录被删则 `stats.updated` 判 no-op 回滚；③ 健壮：register 调用包 try（弱网上传成功但调用失败补删文件防孤儿）、记录详情页补传加 try/finally（防异常锁页）、openDocument 加 fail 回调 + pdfCache 失效、getTempFileURL 链缓存加 TTL；④ 回归：deleteRecord 回写 pets.latest_weight（删最新体重记录后档案不失真）；⑤ 体积复核 HEAD 改并行 + 单次超时降 5s（防串行超云函数超时被杀）、日护栏求和分页（防 limit 1000 截断绕过）、解散家庭先删文档后删文件 + 宠物头像分页扫、图片客户端补 10MB 预检。
+
 ## v0.3.1 · 2026-06-09 · 字段扩展轮1（就诊医院 / 费用 / 病程 + 宠物到家日期 / 备注 / 头像 + 驱虫桶）
 - Added: records 加 `hospital`（就诊医院）/ `cost`（费用元，number\|null）/ `tag`（病程标签，与 event_type 双轴）/ `desc`（干净事件描述，不含费用 / 医院 / 寒暄，给兽医小结拼接用）；event_type 6 桶 → 7 桶（增「驱虫」）。parseRecord 同步抽取 + 7 桶分类，saveRecord 落库 + `EVENT_TYPES` 受控枚举校验。见 ADR-012/013。
 - Added: pets 加 `home_date`（到家日期）/ `note`（备注）/ `avatar`（头像云存储 fileID），EDITABLE 白名单同步；宠物档案页编辑可设三项（头像走 `wx.chooseMedia` → 云存储 fileID），宠物网格 / 档案头部展示真实头像（无则 emoji 兜底）。

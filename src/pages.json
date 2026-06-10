@@ -25,6 +25,10 @@
       "style": { "navigationBarTitleText": "宠物档案" }
     },
     {
+      "path": "pages/record-detail/record-detail",
+      "style": { "navigationBarTitleText": "记录详情" }
+    },
+    {
       "path": "pages/family/family",
       "style": { "navigationBarTitleText": "家庭管理" }
     },

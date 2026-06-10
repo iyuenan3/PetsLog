@@ -14,9 +14,9 @@
         │ wx.cloud.callFunction（自动带 openid + 客户端注入 active family_id，免自建登录态）
         ▼
 微信云开发 (Serverless)
-  ├─ 云函数（8）：parseRecord 解析 / saveRecord 落库 / pets·timeline·meds·reminders CRUD / family 家庭+鉴权守卫 / user 个人档案 / 频率限制
-  ├─ 云数据库（文档型，9 集合）：pets / records / meds / reminders / parse_log / families / family_members / invites / users，按 family 隔离（users 按 openid）
-  └─ 云存储：宠物头像等
+  ├─ 云函数（9）：parseRecord 解析 / saveRecord 落库 / pets·timeline·meds·reminders CRUD / family 家庭+鉴权守卫 / user 个人档案 / attachment 附件配额+级联 / 频率限制
+  ├─ 云数据库（文档型，10 集合）：pets / records / meds / reminders / parse_log / att_log / families / family_members / invites / users，按 family 隔离（users 按 openid）
+  └─ 云存储：记录附件（图片 / 视频 / PDF，家庭 ≤1GB，ADR-011）+ 宠物 / 用户头像
         │ 云函数 outbound（Node，不受小程序合法域名白名单约束）
         │ POST <自建 LLM 网关>/v1/chat/completions
         │ （OpenAI 兼容，key 存云函数环境变量，信任网关自签 root CA）

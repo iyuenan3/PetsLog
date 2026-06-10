@@ -92,6 +92,10 @@ exports.main = async (event) => {
     }
 
     await db.collection('pets').doc(id).update({ data: patch })
+    // 换头像后删旧云存储文件，否则旧 fileID 成孤儿白占共享配额（见 ADR-011 清理）
+    if ('avatar' in patch && cur.data.avatar && patch.avatar !== cur.data.avatar) {
+      await cloud.deleteFile({ fileList: [cur.data.avatar] }).catch(() => {})
+    }
     return { ok: true }
   }
 
@@ -101,7 +105,8 @@ exports.main = async (event) => {
     const cur = await db.collection('pets').doc(id).get().catch(() => null)
     if (!cur || !cur.data || cur.data.family_id !== familyId) return { ok: false, msg: 'not found' }
     await db.collection('pets').doc(id).remove()
-    // 历史记录有意保留在时间线（删档案 ≠ 删病史）。
+    // 头像文件随档案删（历史记录及其附件有意保留在时间线：删档案 ≠ 删病史）
+    if (cur.data.avatar) await cloud.deleteFile({ fileList: [cur.data.avatar] }).catch(() => {})
     return { ok: true }
   }
 
