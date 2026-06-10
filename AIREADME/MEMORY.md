@@ -58,3 +58,10 @@
 - 根因：20s 是早期为简单录入定的上限；轮1 起抽取字段变多（加 hospital / cost / tag / desc，system prompt + few-shot 更长、输出 JSON 更大），叠加复杂多子句输入 + 冷启动 + 网关延迟，realistic 输入下 LLM 生成就 >20s。先验尺：超时值＝所配上限，属「真超时（工作量超限）」非假故障，往「给够时间」修而非反复重试。
 - 根治：① 云函数超时控制台调到 **60s**（云函数 → parseRecord → 函数配置 → 超时时间；CLI 无此参数，改完 `cli cloud functions info` 看 timeout 验证）；② 代码 HTTP 请求 `timeout` 20000 → **45000**，须 < 云函数 60s，让 HTTP 先抛 gateway timeout 而非被云函数硬杀。
 - 教训：LLM 类云函数超时要随 prompt / 输出复杂度留足头寸；以后再加抽取字段或扩 few-shot，记得回看超时是否够。
+
+## 云函数 CLI 部署有解：@wxcloud/cli function:upload（推翻「只能 GUI」旧结论）· 2026-06-10
+- 旧结论「CLI 部署签名失败 → 云函数部署走 GUI，别指望 CLI」只对 **DevTools 自带 CLI** 成立（IDE 签名通道被微信后端拒）。
+- 新通道：`@wxcloud/cli`（npm 全局装，名义上是云托管 CLI，实际带 `function:upload` 能部署云开发云函数）。鉴权走 **CLI 密钥**（云开发控制台 → 设置 → 权限设置 生成，管理员扫码一次；**不需要开通云托管**，cloud.weixin.qq.com 的模板向导别点）。`wxcloud login -a <AppID> -k <密钥>` 后长期有效。
+- 用法：`wxcloud function:upload cloudfunctions/<函数名> -e <envId> -n <函数名> --remoteNpmInstall`。直接传**源码目录**（绕开「改源码忘重构建、部署到旧 dist 拷贝」坑），云端装依赖自动忽略 node_modules，gitignore 的 config.local.js 会随包带上（机密只进私有云端，符合预期），轮询到 Active 才返回、失败会报错。
+- 边界：CLI 只更新代码；**超时 / 内存等函数配置改不了，仍走控制台**（更新路径不碰这些配置，控制台调的值不会被部署覆盖）。注意 npm 直装可能拿到旧版 1.1.8（无 function:upload），要 `@wxcloud/cli@latest`（验证时为 2.3.3）。
+- 2026-06-10 已用此通道部署 timeline / saveRecord / parseRecord 三函数验证通过。

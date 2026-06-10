@@ -5,7 +5,8 @@
 
 ## 当前部署
 - **环境**：微信云开发免费环境（内测期免费；正式上线后第 15 天到期需买 ¥19.9/月 基础套餐）。
-- **云函数部署走 DevTools GUI「上传并部署:云端安装依赖」**（CLI 部署签名失败，详见 MEMORY）；微信读各函数 package.json 在云端装 `wx-server-sdk`。产物**不再带 node_modules**（vite 插件 cpSync filter 掉，否则数百 MB / 数万文件拖垮 DevTools 监视致不停刷新，详见 MEMORY）。
+- **云函数部署首选 `@wxcloud/cli`（命令行，2026-06-10 起）**：`wxcloud function:upload cloudfunctions/<函数名> -e <envId> -n <函数名> --remoteNpmInstall`。鉴权走「CLI 密钥」（云开发控制台 → 设置 → 权限设置 生成，管理员扫码一次；`wxcloud login -a <AppID> -k <密钥>` 后长期有效），绕开 DevTools CLI 的 IDE 签名通道（后者签名失败只能 GUI，详见 MEMORY）。直接传**源码目录**（无需先重构建 dist），云端装依赖（自动忽略 node_modules），部署后轮询到 Active 才返回。兜底仍可走 DevTools GUI「上传并部署:云端安装依赖」。注意：CLI 只更新代码，**超时 / 内存等函数配置仍须控制台改**。
+- 微信读各函数 package.json 在云端装 `wx-server-sdk`。构建产物**不带 node_modules**（vite 插件 cpSync filter 掉，否则数百 MB / 数万文件拖垮 DevTools 监视致不停刷新，详见 MEMORY）。
 - **集合自动创建**：parseRecord 幂等 `db.createCollection`（pets / records / meds / parse_log / reminders），无需手建。
 - **网关机密**：`cloudfunctions/parseRecord/config.local.js`（gitignore 排除，随云函数上传到私有云端），不入库。
 

@@ -31,7 +31,9 @@
 ## 常用命令
 ```bash
 npm run dev:mp-weixin   # 编译+监听 → 产物 dist/dev/mp-weixin（微信开发者工具导入此目录）
-# 云函数部署走 DevTools GUI「上传并部署:云端安装依赖」（CLI 签名失败；产物已不带 node_modules，见 AIREADME/MEMORY）
+wxcloud function:upload cloudfunctions/<函数名> -e cloud1-d5g69cxtta6c18918 -n <函数名> --remoteNpmInstall
+                        # 云函数部署首选（@wxcloud/cli，传源码目录、云端装依赖；登录态已配，超时/内存仍走控制台，见 AIREADME/MEMORY）
+# 兜底：DevTools GUI「上传并部署:云端安装依赖」（DevTools 自带 CLI 签名失败不可用）
 # 网关机密在 cloudfunctions/parseRecord/config.local.js（gitignore，不入库）
 ```
 
