@@ -147,3 +147,9 @@
   - **手动建宠入口**：宠物网格末尾「＋ 添加宠物」卡片 → pet.vue 创建模式（`?mode=new` 复用编辑表单，pets add 落库）。
 - Alternatives（否决）: 落库前总弹宠物选择器（多数输入名字正确，平添一步）；无匹配自动选最相似（歧义场景如「小七/小葵」错一字会静默归错宠，医疗数据不可猜）；拼音相似度库（云函数加依赖重，编辑距离 + 包含已覆盖主案，LLM 兜同音）；头像只换默认 emoji 集不让选（不解决同物种多宠区分）。
 - Tradeoff: ① 服务端两份模糊匹配函数复制（云函数目录隔离，无共享包），改动须同步两处；② 双字名编辑距离 1 容易歧义（小X 系列互距 1）→ 歧义保守交用户选，宁多点一下不归错档；③ avatar_emoji 再加一列，可选默认空。接口变更见 SPEC（parse 输出 new_pet/pet_unknown、saveRecord PET_UNKNOWN、pets.avatar_emoji）。
+
+## ADR-016 · LLM 上游改火山方舟 Coding Plan 直连，弃自建网关中转（反转 ADR-003）· 2026-06-11
+- Problem: 自建 newapi 网关是 AI 录入链路的单点（中转站故障 → 解析服务整体不可用，ADR-003 当年自认的 tradeoff ①），且其自签 root CA 是跨项目 pinned 约束（不可轮换，变更要联动），运维负担与脆弱面都大于收益。
+- Decision（反转 ADR-003）: parseRecord 直连**火山方舟 Coding Plan**（OpenAI 兼容协议 `https://ark.cn-beijing.volces.com/api/coding/v3`，模型 `doubao-seed-2.0-pro`）。配置瘦身为唯一机密 `ARK_API_KEY`（config.local.js / 云函数环境变量，环境变量优先）；端点与模型是公开信息，直接进代码做默认值（`ARK_BASE_URL` / `ARK_MODEL` 可覆盖）；**删除自签 CA 信任逻辑**（方舟是公网正规证书）。方舟另有 Anthropic 兼容端点（`/api/coding`）供 coding 工具用，本项目消费 OpenAI 形状不涉及。
+- Alternatives（否决）: 保留网关 + 直连做 fallback（仍要维护中转基础设施，双路径复杂度不值）；继续中转只换上游（单点不解决）。
+- Tradeoff: ① 失去网关的多模型路由与统一用量统计 → Coding Plan 自带用量管理，且本项目单一上游足够，换模型改一行配置即可；② ADR-003 的「换模型不改码」收益由 ARK_MODEL 配置项保留；③ CORE / RELATIONS / DEPLOYMENT 中「自签 CA pinned 联动」约束随之作废（本次同步清理），跨项目耦合减一。

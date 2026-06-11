@@ -3,7 +3,7 @@
 > 真相源 = `AIREADME/`。本文件只做 router：状态 / 路由 / 红线指针 / 维护责任 / 命令 / 元信息。
 
 ## 当前状态（2026-06-11）
-- **MVP 主链路 + 增强 + UI + 家庭多租户 + 个人中心 + 底部导航重构 + 字段扩展轮1 + 附件轮2 + 轮3（身价/简介/foods/历史导入）+ 轮4（录入防错别字/头像 emoji/手动建宠）均已落地（真机内测，版本 0.4.3）**。栈：uni-app（mp-weixin）+ 微信云开发（11 云函数 + 11 集合 + 云存储，env cloud1-…）+ 自建 OpenAI 兼容 LLM 网关（默认 auto-llm）。
+- **MVP 主链路 + 增强 + UI + 家庭多租户 + 个人中心 + 底部导航重构 + 字段扩展轮1 + 附件轮2 + 轮3（身价/简介/foods/历史导入）+ 轮4（录入防错别字/头像 emoji/手动建宠）均已落地（真机内测，版本 0.4.4）**。栈：uni-app（mp-weixin）+ 微信云开发（11 云函数 + 11 集合 + 云存储，env cloud1-…）+ 火山方舟 Coding Plan 直连（OpenAI 兼容，doubao-seed-2.0-pro，ADR-016）。
 - 增强：宠物档案编辑、体重曲线、用药·疫苗·驱虫提醒（站内）、一键截图给兽医；UI 走「温暖治愈」设计系统（CSS 令牌挂 page），见 `AIREADME/DECISIONS` ADR-006/007。
 - 导航：底部 5 tab → 4 tab（宠物 / 时间线 / 健康 / 我的）+ 中央凸起「＋」全局录入键（自定义 tabBar）；提醒 + 药品合并「健康」分段页；录入从首页常驻输入条迁到独立录入页，见 ADR-010。家庭成员名 / 头像读时关联个人档案（users）。
 - 字段扩展轮1（v0.3.1）：records 加就诊医院 / 费用 / 病程标签（双轴，时间线可按病程筛）+ event_type 增驱虫第 7 桶；pets 加到家日期 / 备注 / 头像，见 ADR-012/013。
@@ -25,8 +25,7 @@
 - 不碰医疗诊断 / 处方（严守工具属性）。
 - **宠物口径仅猫狗**：产品 / 文档对外一律以猫狗为准，不纳入其它宠物类型。
 - LLM key 不进前端（走云函数环境变量）。
-- **私有部署坐标不入库**：LLM 网关 endpoint / 自签 CA / token 走私有配置，绝不进公开仓库。
-- LLM 网关 root CA 在属主侧不可轮换，变更须联动本项目。
+- **LLM API Key 不入库**：ARK_API_KEY 走 config.local.js / 云函数环境变量，绝不进公开仓库。
 
 ## 维护责任（什么变 → 更新哪个）
 架构·选型→ARCHITECTURE（+ DECISIONS 记理由）｜部署·入口→DEPLOYMENT｜产品方向→PRD｜接口→SPEC｜优先级→ROADMAP｜踩坑→MEMORY｜release→CHANGELOG。append-only 三件套（DECISIONS / MEMORY / CHANGELOG）只追加。
@@ -37,7 +36,7 @@ npm run dev:mp-weixin   # 编译+监听 → 产物 dist/dev/mp-weixin（微信�
 wxcloud function:upload cloudfunctions/<函数名> -e cloud1-d5g69cxtta6c18918 -n <函数名> --remoteNpmInstall
                         # 云函数部署首选（@wxcloud/cli，传源码目录、云端装依赖；登录态已配，超时/内存仍走控制台，见 AIREADME/MEMORY）
 # 兜底：DevTools GUI「上传并部署:云端安装依赖」（DevTools 自带 CLI 签名失败不可用）
-# 网关机密在 cloudfunctions/parseRecord/config.local.js（gitignore，不入库）
+# LLM 机密(方舟 ARK_API_KEY)在 cloudfunctions/parseRecord/config.local.js（gitignore，不入库）
 ```
 
 ## 元信息

@@ -47,7 +47,7 @@ import { ensureFamily, getProfile, refreshFamilies, getActiveFamily } from '@/cl
 
 export default {
   data() {
-    return { profile: { nickname: '', avatar: '' }, fam: null, version: '0.4.3' }
+    return { profile: { nickname: '', avatar: '' }, fam: null, version: '0.4.4' }
   },
   onShow() {
     this.load()

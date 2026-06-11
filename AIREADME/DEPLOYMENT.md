@@ -8,7 +8,7 @@
 - **云函数部署首选 `@wxcloud/cli`（命令行，2026-06-10 起）**：`wxcloud function:upload cloudfunctions/<函数名> -e <envId> -n <函数名> --remoteNpmInstall`。鉴权走「CLI 密钥」（云开发控制台 → 设置 → 权限设置 生成，管理员扫码一次；`wxcloud login -a <AppID> -k <密钥>` 后长期有效），绕开 DevTools CLI 的 IDE 签名通道（后者签名失败只能 GUI，详见 MEMORY）。直接传**源码目录**（无需先重构建 dist），云端装依赖（自动忽略 node_modules），部署后轮询到 Active 才返回。兜底仍可走 DevTools GUI「上传并部署:云端安装依赖」。注意：CLI 只更新代码，**超时 / 内存等函数配置仍须控制台改**。
 - 微信读各函数 package.json 在云端装 `wx-server-sdk`。构建产物**不带 node_modules**（vite 插件 cpSync filter 掉，否则数百 MB / 数万文件拖垮 DevTools 监视致不停刷新，详见 MEMORY）。
 - **集合自动创建**：parseRecord 幂等 `db.createCollection`（pets / records / meds / parse_log / reminders），无需手建。
-- **网关机密**：`cloudfunctions/parseRecord/config.local.js`（gitignore 排除，随云函数上传到私有云端），不入库。
+- **LLM 机密**：`cloudfunctions/parseRecord/config.local.js`（gitignore 排除，随云函数上传到私有云端），唯一机密 = `ARK_API_KEY`（火山方舟），不入库。云函数控制台环境变量同名项优先。
 
 ## 计划形态
 - **后端 = 微信云开发环境**（Serverless）：无独立主机、无服务器、无域名、无 ICP 备案、无 SSL。云函数 + 云数据库 + 云存储托管在微信生态内，按量计费（自用 + 小圈子量级预计在免费额度内）。
@@ -18,12 +18,11 @@
 - 不需要域名（云开发免备案）。这是选云开发而非自建服务器的关键原因之一（开发者当前无可用 ICP 备案域名）。→ DECISIONS ADR-002。
 
 ## 共享底座引用
-- LLM 经自建的 OpenAI 兼容网关（私有基础设施）。本项目不复制其配置，只作为消费方信任其 root CA。
-- **私有部署坐标（不入库）**：网关 endpoint、自签 root CA、PetsLog 专属 token 属部署机密，存私有配置 / 云函数环境变量，绝不进公开仓库。
+- LLM 直连火山方舟 Coding Plan（OpenAI 兼容 `https://ark.cn-beijing.volces.com/api/coding/v3`，模型 `doubao-seed-2.0-pro`，ADR-016）。端点 / 模型公开，唯一机密是 API Key。
 
 ## 备份 / 升级 / 回滚
 ⚑ 待定。云数据库依赖微信云开发自带能力 + 定期导出（MVP 后定方案）。
 
 ## 运维约束
-- 部署前先在自建 LLM 网关建 **PetsLog 专属 token**（隔离用量统计），key 注入云函数环境变量。
-- 关注 LLM 网关单点可用性：它挂则 AI 录入功能不可用（自用可接受；远期商业化再评估 fallback 直连厂商 API）。
+- 部署前在火山方舟控制台拿 API Key 填入 config.local.js（或云函数环境变量 ARK_API_KEY）。
+- 上游可用性随方舟官方 SLA（不再有自建中转单点，ADR-016）。

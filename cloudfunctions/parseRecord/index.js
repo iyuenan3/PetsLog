@@ -13,18 +13,18 @@ async function assertMember(openid, familyId) {
   return r.data[0]
 }
 
-// 网关配置：优先云函数环境变量；本地开发可放 config.local.js
-// （gitignore 排除、不入库，但随云函数上传到你的私有云端）。
+// 上游 LLM = 火山方舟 Coding Plan 直连（OpenAI 兼容协议，见 ADR-016；不再走自建 newapi 中转，无自签 CA）。
+// 端点 / 模型有公开默认值，唯一机密是 ARK_API_KEY：优先云函数环境变量，否则读 config.local.js
+// （gitignore 排除、不入公开仓，但随云函数上传到你的私有云端）。
 let local = {}
 try {
   local = require('./config.local')
 } catch (e) {
   /* 没有本地配置就用环境变量 */
 }
-const BASE_URL = process.env.GATEWAY_BASE_URL || local.GATEWAY_BASE_URL || '' // 形如 https://<ip>:<port>/v1
-const TOKEN = process.env.GATEWAY_TOKEN || local.GATEWAY_TOKEN || ''
-const MODEL = process.env.GATEWAY_MODEL || local.GATEWAY_MODEL || 'auto-llm'
-const CA = process.env.GATEWAY_CA || local.GATEWAY_CA || '' // 自签 root CA（PEM 文本）
+const BASE_URL = process.env.ARK_BASE_URL || local.ARK_BASE_URL || 'https://ark.cn-beijing.volces.com/api/coding/v3'
+const TOKEN = process.env.ARK_API_KEY || local.ARK_API_KEY || ''
+const MODEL = process.env.ARK_MODEL || local.ARK_MODEL || 'doubao-seed-2.0-pro'
 const DAILY_LIMIT = Number(process.env.DAILY_PARSE_LIMIT || local.DAILY_PARSE_LIMIT || 50)
 
 // 首次调用自动建齐数据库集合（省去手动在控制台新建）。warm 容器内只建一次。
@@ -46,7 +46,7 @@ exports.main = async (event) => {
   const text = ((event && event.text) || '').trim()
   const familyId = event && event.family_id
   if (!text) return { ok: false, code: 'EMPTY', msg: '请输入内容' }
-  if (!BASE_URL || !TOKEN) return { ok: false, code: 'NO_GATEWAY', msg: '网关未配置（云函数环境变量）' }
+  if (!TOKEN) return { ok: false, code: 'NO_GATEWAY', msg: 'AI 上游未配置（ARK_API_KEY，见 config.local.js）' }
 
   await ensureCollections()
 
@@ -97,8 +97,8 @@ exports.main = async (event) => {
 
 function callGateway(text, petNames, today) {
   return new Promise((resolve, reject) => {
-    // 注：上游 doubao(auto-llm) 不支持 response_format=json_object（实测 400），
-    // 改靠强提示词 + temperature 0 + 下方 extractJson 解析容错。
+    // 注：doubao 系上游对 response_format=json_object 支持不稳（auto-llm 时代实测 400），
+    // 不依赖它，靠强提示词 + temperature 0 + 下方 extractJson 解析容错。
     const payload = JSON.stringify({
       model: MODEL,
       temperature: 0,
@@ -119,7 +119,6 @@ function callGateway(text, petNames, today) {
       // 让 HTTP 先抛 gateway timeout 而非被云函数硬杀）。云函数超时在控制台调（见 MEMORY）。
       timeout: 45000,
     }
-    if (CA) options.ca = CA // 信任自签 root CA，而非 rejectUnauthorized:false
     const req = https.request(options, (res) => {
       let body = ''
       res.on('data', (d) => (body += d))

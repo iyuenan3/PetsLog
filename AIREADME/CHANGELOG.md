@@ -3,6 +3,11 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## v0.4.4 · 2026-06-11 · LLM 上游切换：火山方舟 Coding Plan 直连（弃自建网关，ADR-016 反转 ADR-003）
+- Changed: parseRecord 上游从自建 newapi 网关中转改为**火山方舟 Coding Plan 直连**（OpenAI 兼容 `https://ark.cn-beijing.volces.com/api/coding/v3`，模型 `doubao-seed-2.0-pro`），消灭中转站单点（挂则 AI 录入整体不可用）。配置整套换名 `GATEWAY_*` → `ARK_*`，端点 / 模型进 config.local.js 可改（换后端 LLM 不动代码），唯一机密 ARK_API_KEY；**删除自签 root CA 信任逻辑**（方舟公网正规证书），「CA pinned 不可轮换」跨项目约束随之作废（CORE / RELATIONS / ARCHITECTURE / DEPLOYMENT / CLAUDE.md 同步清理）。
+- Fixed: dist/dev 与 dist/build 残留的旧 newapi config.local.js 副本（含退役 token + 自签 CA）覆盖清理。
+- Tested: 直连冒烟两用例 200（正常录入 + 错别字归一「示列猫」→「示例猫」模型层直接生效），延迟约 4s（旧网关复杂输入曾 20s+），JSON 干净含 new_pet 字段。已部署。
+
 ## v0.4.3 · 2026-06-11 · 体重曲线交互重做（拖动平移 + 点按数据点详情）
 - Changed: **体重曲线第三版交互**：弃用「scroll-view 套宽 canvas」（canvas 同层渲染失败时触摸被原生组件吞掉、横滑手势到不了 scroll-view，模拟器 / 真机表现不一，真机已证伪），改为 **canvas 固定视口宽 + 手指拖动平移重绘**（touch 事件直接绑 canvas，任何渲染模式都触发）。顺带连根消掉 4096 物理宽上限问题（画布恒为视口宽）、scroll-left 时序 hack、flex min-width 坑；拖动走普通实例属性不触发 setData。
 - Added: **点按数据点显示详情气泡**（完整日期 + 体重，深色圆角气泡 + 高亮圈）：8px 累计位移阈值区分拖动 / 点按，点空白收起，贴边夹紧 / 贴顶翻下 / 拖出视口跳过绘制，气泡随平移跟随。
