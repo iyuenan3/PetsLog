@@ -49,7 +49,7 @@
         <view class="row"><text class="row__k">生日</text><text class="row__v">{{ pet.birthday || '未填' }}</text></view>
         <view class="row"><text class="row__k">绝育</text><text class="row__v">{{ pet.neutered ? '是' : '否' }}</text></view>
         <view class="row"><text class="row__k">过敏史</text><text class="row__v">{{ pet.allergy || '无' }}</text></view>
-        <view class="row"><text class="row__k">慢病</text><text class="row__v">{{ pet.chronic || '无' }}</text></view>
+        <view class="row"><text class="row__k">病史</text><text class="row__v">{{ pet.chronic || '无' }}</text></view>
         <view class="row"><text class="row__k">最新体重</text><text class="row__v">{{ pet.latest_weight ? pet.latest_weight + 'kg' : '未记' }}</text></view>
         <view class="row"><text class="row__k">到家日期</text><text class="row__v">{{ pet.home_date || '未填' }}</text></view>
         <view class="row"><text class="row__k">初始身价</text><text class="row__v">{{ pet.price_base != null ? '¥' + pet.price_base : '未填' }}</text></view>
@@ -107,7 +107,7 @@
         </view>
         <view class="form-row"><text class="form-row__label">绝育</text><switch :checked="form.neutered" color="#f2825c" @change="onNeutered" /></view>
         <view class="form-row"><text class="form-row__label">过敏史</text><input class="form-input" v-model="form.allergy" placeholder="无则留空" placeholder-class="form-ph" /></view>
-        <view class="form-row"><text class="form-row__label">慢病</text><input class="form-input" v-model="form.chronic" placeholder="无则留空" placeholder-class="form-ph" /></view>
+        <view class="form-row"><text class="form-row__label">病史</text><input class="form-input" v-model="form.chronic" placeholder="无则留空" placeholder-class="form-ph" /></view>
         <view class="form-row"><text class="form-row__label">初始身价</text><input class="form-input" type="digit" v-model="form.price_base" placeholder="元，可留空" placeholder-class="form-ph" /></view>
         <view class="form-row"><text class="form-row__label">简介</text><input class="form-input" v-model="form.intro" placeholder="一句话介绍，可留空" placeholder-class="form-ph" /></view>
         <view class="form-row"><text class="form-row__label">备注</text><input class="form-input" v-model="form.note" placeholder="来历 / 习性等，可留空" placeholder-class="form-ph" /></view>
@@ -769,7 +769,7 @@ export default {
         ['年龄', this.ageText(p.birthday) || '未知'],
         ['绝育', p.neutered ? '是' : '否'],
         ['过敏史', p.allergy || '无'],
-        ['慢病', p.chronic || '无'],
+        ['病史', p.chronic || '无'],
         ['最新体重', p.latest_weight ? p.latest_weight + 'kg' : '未记'],
       ]
       basics.forEach(([k, v]) => {
