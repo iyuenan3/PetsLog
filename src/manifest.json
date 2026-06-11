@@ -2,8 +2,8 @@
     "name" : "PetsLog",
     "appid" : "",
     "description" : "多宠家庭 AI 健康记录工具",
-    "versionName" : "0.4.2",
-    "versionCode" : "8",
+    "versionName" : "0.4.3",
+    "versionCode" : "9",
     "transformPx" : false,
     "mp-weixin" : {
         "appid" : "wx0fff6b192bed48d0",

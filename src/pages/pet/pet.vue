@@ -19,16 +19,18 @@
         <text class="card-block__title">体重曲线</text>
         <text class="card-block__sub" v-if="series.length">{{ series.length }} 次 · 最新 {{ series[series.length - 1].weight }}kg</text>
       </view>
+      <!-- 横向平移：canvas 固定视口宽，手指在画布上拖动重绘（不用 scroll-view 套 canvas：
+           同层渲染失败时触摸被原生组件吞掉、滑动手势到不了 scroll-view，模拟器/真机表现不一） -->
       <view v-if="series.length" class="weight-wrap">
         <view class="weight-yaxis">
           <text class="weight-yaxis__t">{{ wMax }}</text>
           <text class="weight-yaxis__t">{{ wMin }}</text>
         </view>
-        <scroll-view scroll-x class="weight-scroll" :scroll-left="scrollLeft">
-          <canvas type="2d" id="weightChart" class="weight-chart" :style="{ width: chartW + 'px' }"></canvas>
-        </scroll-view>
+        <view class="weight-body">
+          <canvas type="2d" id="weightChart" class="weight-chart" @touchstart="chartTouchStart" @touchmove.stop="chartTouchMove" @touchend="chartTouchEnd"></canvas>
+        </view>
       </view>
-      <text v-if="series.length && canScroll" class="weight-hint">← 左右滑动查看更早记录</text>
+      <text v-if="series.length && canScroll" class="weight-hint">← 按住曲线左右拖动看更早记录</text>
       <view v-else-if="!series.length" class="chart-empty">
         <text class="chart-empty__icon">⚖️</text>
         <text class="chart-empty__title">还没有体重数据</text>
@@ -150,9 +152,8 @@ export default {
       // emoji 头像候选（猫狗口径 + 通用爪印）
       emojiOptions: ['🐱', '😺', '😸', '😻', '🐈', '🐈‍⬛', '🐯', '🦁', '🐶', '🐕', '🦮', '🐩', '🐕‍🦺', '🦊', '🐺', '🐾'],
       series: [],
-      // 体重曲线横滑：chartW 按时间跨度算（1 年 = 视口宽），默认滚到最右(最新)；y 轴范围全局固定
-      chartW: 0,
-      scrollLeft: 0,
+      // 体重曲线拖动平移：canvas 固定视口宽，虚拟内容宽 _contentW，_offsetX 为当前平移量（默认最右=最新）。
+      // _offsetX/_ctx 等用下划线普通属性存（不进 data，拖动重绘不触发 setData）
       canScroll: false,
       yMin: 0,
       yMax: 0,
@@ -256,43 +257,36 @@ export default {
         console.warn('weight load failed', e)
       }
     },
-    // 先量视口宽算横向布局，再画。布局：等间距（每点 ≥56px），点多画布变宽 → 横滑看更早
-    layoutAndDraw() {
+    // 先量视口宽算布局，再画。布局：等间距（每点 ≥56px），点多 → 虚拟内容变宽 → 拖动平移看更早
+    layoutAndDraw(retry) {
       if (!this.series.length) return
       // #ifdef MP-WEIXIN
       uni
         .createSelectorQuery()
         .in(this)
-        .select('.weight-scroll')
-        .fields({ size: true })
+        .select('#weightChart')
+        .fields({ node: true, size: true })
         .exec((res) => {
-          const vw = (res && res[0] && res[0].width) || uni.getSystemInfoSync().windowWidth - 60
-          this.computeLayout(vw)
-          this.$nextTick(() => {
-            this.drawChart()
-            // 默认滚到最右(最新)。宽画布布局未提交时 scroll-left 会被钳到 0，故先延迟一拍，
-            // 再二次校验实际滚动位置：没到位则先赋实际值再赋目标值（绕开同值二次赋值不生效）。
-            const target = Math.max(0, this.chartW - Math.round(vw))
-            setTimeout(() => {
-              this.scrollLeft = target
-            }, 100)
-            setTimeout(() => {
-              uni
-                .createSelectorQuery()
-                .in(this)
-                .select('.weight-scroll')
-                .scrollOffset()
-                .exec((r) => {
-                  const cur = r && r[0] ? r[0].scrollLeft : 0
-                  if (Math.abs(cur - target) > 2) {
-                    this.scrollLeft = cur
-                    this.$nextTick(() => {
-                      this.scrollLeft = target
-                    })
-                  }
-                })
-            }, 500)
-          })
+          if (!res || !res[0] || !res[0].node) {
+            // canvas 尚未渲染好稍后重试；封顶 10 次（页面已销毁时 query 永远空，无上限会在逻辑层永久空转）
+            const r = (retry || 0) + 1
+            if (r <= 10) setTimeout(() => this.layoutAndDraw(r), 60)
+            return
+          }
+          const canvas = res[0].node
+          const W = res[0].width
+          const H = res[0].height
+          this.computeLayout(W)
+          const dpr = uni.getSystemInfoSync().pixelRatio || 2
+          canvas.width = W * dpr // 视口宽画布（≈400 CSS px），远低于微信 canvas 2d ~4096 物理上限
+          canvas.height = H * dpr
+          const ctx = canvas.getContext('2d')
+          ctx.scale(dpr, dpr)
+          // 存引用供拖动重绘（普通属性不进 data，重绘不触发 setData）
+          this._ctx = ctx
+          this._W = W
+          this._H = H
+          this.renderTimeLine(ctx, W, H)
         })
       // #endif
     },
@@ -311,44 +305,75 @@ export default {
       }
       this.yMin = min
       this.yMax = max
-      // 等间距：每点至少 56px（密集期也拉开看得清）；点稀疏时平铺填满视口。点多 → 画布变宽 → 可横滑
+      // 等间距：每点至少 56px（密集期也拉开看得清）；点稀疏时平铺填满视口
       const n = pts.length
-      const padX = 32 // 画布内 padL + padR（与 renderTimeLine 的 16+16 保持一致，否则末点高亮圈贴边被裁）
+      const padX = 32 // 画布内 padL + padR（与 renderTimeLine 的 16+16 一致）
       const plotFull = Math.max(60, Math.round(vw) - padX)
       const minStep = 56
       const step = n > 1 ? Math.max(minStep, plotFull / (n - 1)) : 0
       this._step = step
-      this.chartW = Math.max(Math.round(vw), Math.round(padX + step * (n - 1)))
-      this.canScroll = this.chartW > Math.round(vw) + 2
+      const contentW = Math.max(Math.round(vw), Math.round(padX + step * (n - 1)))
+      this._maxOffset = Math.max(0, contentW - Math.round(vw))
+      this._offsetX = this._maxOffset // 默认平移到最右 = 最新
+      this.canScroll = this._maxOffset > 0
+      this._sel = null // 数据/布局变化时收起点详情气泡
     },
-    drawChart() {
-      if (!this.series.length) return
-      // #ifdef MP-WEIXIN
+    chartTouchStart(e) {
+      const t = e.touches && e.touches[0]
+      this._tx = t ? t.clientX : 0 // 拖动增量基准（每次 touchmove 刷新）
+      this._sx = t ? t.clientX : 0 // 点按阈值起点（不刷新；_tx 每帧被刷会让慢拖的瞬时增量 <8px 误判成点按）
+      this._sy = t ? t.clientY : 0
+      this._moved = false // 区分拖动 / 点按：累计位移超阈值算拖动，touchend 不再当点按
+    },
+    chartTouchMove(e) {
+      const t = e.touches && e.touches[0]
+      if (!t) return
+      if (Math.abs(t.clientX - this._sx) > 8 || Math.abs(t.clientY - this._sy) > 8) this._moved = true
+      if (!this.canScroll || !this._ctx) return
+      const dx = t.clientX - this._tx
+      this._tx = t.clientX
+      const next = Math.min(this._maxOffset, Math.max(0, this._offsetX - dx))
+      if (next === this._offsetX) return
+      this._offsetX = next
+      this.renderTimeLine(this._ctx, this._W, this._H)
+    },
+    // 点按数据点 → 气泡显示该点日期 + 体重；点空白处收起
+    chartTouchEnd(e) {
+      if (this._moved || !this._ctx) return
+      const t = e.changedTouches && e.changedTouches[0]
+      if (!t) return
+      // 平移量同步快照：异步 rect 回调期间用户可能已再次拖动，用回调时刻的 _offsetX 会命中错点
+      const off = this._offsetX || 0
+      // 实时查 canvas 视口位置换算本地坐标（页面可滚动，不能用缓存的 rect）
       uni
         .createSelectorQuery()
         .in(this)
         .select('#weightChart')
-        .fields({ node: true, size: true })
+        .boundingClientRect()
         .exec((res) => {
-          if (!res || !res[0] || !res[0].node) {
-            // canvas 尚未渲染好，稍后重试一次
-            setTimeout(() => this.drawChart(), 60)
-            return
+          const rect = res && res[0]
+          if (!rect) return
+          const lx = t.clientX - rect.left
+          const ly = t.clientY - rect.top
+          const pts = this.series
+          const n = pts.length
+          const step = this._step || 0
+          const padL = 16
+          const plotW = this._W - 32
+          const x = (i) => (n === 1 ? padL + plotW / 2 : padL + step * i - off)
+          // 按 x 找最近点（阈值 28px）；y 限制在图区内（H-24 排除底部日期标签区，padB=30 留 6px 容差）
+          let best = -1
+          let bestDx = 28
+          for (let i = 0; i < n; i++) {
+            const dx = Math.abs(x(i) - lx)
+            if (dx < bestDx) {
+              bestDx = dx
+              best = i
+            }
           }
-          const canvas = res[0].node
-          const ctx = canvas.getContext('2d')
-          const dpr = uni.getSystemInfoSync().pixelRatio || 2
-          const W = res[0].width // = chartW（CSS 宽已绑定）
-          const H = res[0].height
-          // 微信 canvas 2d 物理尺寸有单边上限（官方文档 1365*1365，实测 ~4096px，超限整块白屏）。
-          // 宽画布按上限横向降采样（点多时每 CSS px 分到的物理像素变少，轻微变糊可接受，白屏不可接受）。
-          const physW = Math.min(W * dpr, 4000)
-          canvas.width = physW
-          canvas.height = H * dpr
-          ctx.scale(physW / W, dpr)
-          this.renderTimeLine(ctx, W, H)
+          this._sel = best >= 0 && ly >= 0 && ly <= this._H - 24 ? best : null
+          this.renderTimeLine(this._ctx, this._W, this._H)
         })
-      // #endif
     },
     renderTimeLine(ctx, W, H) {
       const pts = this.series
@@ -364,8 +389,9 @@ export default {
       const min = this.yMin
       const max = this.yMax
       const step = this._step || 0
-      // 等间距：单点居中，多点按固定 step 排（与 computeLayout 的 chartW 一致）
-      const x = (i) => (n === 1 ? padL + plotW / 2 : padL + step * i)
+      const off = this._offsetX || 0
+      // 等间距：单点居中，多点按固定 step 排，再减当前平移量（拖动平移看更早）
+      const x = (i) => (n === 1 ? padL + plotW / 2 : padL + step * i - off)
       const y = (w) => padT + plotH - ((w - min) / (max - min)) * plotH
 
       // 横向网格（淡虚线，3 条）
@@ -456,6 +482,42 @@ export default {
         ctx.textAlign = i === 0 ? 'left' : i === n - 1 ? 'right' : 'center'
         ctx.fillText(this.shortDate(pts[i].date), x(i), padT + plotH + 8)
       })
+
+      // 选中点详情气泡：完整日期 + 体重（点按数据点触发，点空白收起；随平移跟随）。
+      // 点被拖出视口时跳过绘制（否则气泡被夹紧在画布边缘悬空指向不可见的点），_sel 保留，拖回来气泡再现
+      if (this._sel != null && this._sel >= 0 && this._sel < n && x(this._sel) >= -9 && x(this._sel) <= W + 9) {
+        const i = this._sel
+        const px = x(i)
+        const py = y(pts[i].weight)
+        ctx.strokeStyle = '#F2825C'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.arc(px, py, 8, 0, Math.PI * 2)
+        ctx.stroke()
+        const label = `${pts[i].date || '日期未知'} · ${pts[i].weight}kg`
+        ctx.font = '11px sans-serif'
+        const tw = ctx.measureText(label).width
+        const bw = tw + 18
+        const bh = 24
+        let bx = px - bw / 2
+        bx = Math.max(4, Math.min(W - 4 - bw, bx))
+        let by = py - bh - 12
+        if (by < 2) by = py + 14 // 点贴顶时气泡画在点下方
+        ctx.fillStyle = 'rgba(61, 50, 44, 0.92)'
+        const r = 6
+        ctx.beginPath()
+        ctx.moveTo(bx + r, by)
+        ctx.arcTo(bx + bw, by, bx + bw, by + bh, r)
+        ctx.arcTo(bx + bw, by + bh, bx, by + bh, r)
+        ctx.arcTo(bx, by + bh, bx, by, r)
+        ctx.arcTo(bx, by, bx + bw, by, r)
+        ctx.closePath()
+        ctx.fill()
+        ctx.fillStyle = '#FFFFFF'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(label, bx + bw / 2, by + bh / 2 + 0.5)
+      }
     },
     shortDate(d) {
       // 带日防同月多点标签重复："2025-08-05" → "25/08/05"
@@ -982,17 +1044,16 @@ export default {
   text-align: right;
   padding-right: 6rpx;
 }
-.weight-scroll {
+.weight-body {
   flex: 1;
   min-width: 0;
   height: 360rpx;
-  white-space: nowrap;
   overflow: hidden;
 }
 .weight-chart {
+  width: 100%;
   height: 360rpx;
-  display: inline-block;
-  vertical-align: top;
+  display: block;
 }
 .weight-hint {
   display: block;
