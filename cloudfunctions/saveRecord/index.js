@@ -29,6 +29,32 @@ function numOrNull(v) {
   return Number.isFinite(n) ? n : null
 }
 
+// 宠物名模糊匹配（ADR-015，与 parseRecord 同款，云函数目录隔离须两处同步改）：
+// 编辑距离 ≤1（≥2 字名错 / 漏一字）或互相包含（简称）。【唯一候选才返回】，歧义回 null 交用户选，绝不猜。
+// 按 Unicode code point 切分：emoji 名（如「🐶」）是 UTF-16 代理对，按 .length 算会绕过单字护栏 + 不同动物 emoji 互距 1 误 snap。
+function fuzzyMatchPet(name, names) {
+  if (!name) return null
+  const cp = (s) => Array.from(String(s))
+  const dist = (A, B) => {
+    const m = A.length, n = B.length
+    if (Math.abs(m - n) > 1) return 9
+    const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+    for (let j = 0; j <= n; j++) d[0][j] = j
+    for (let i = 1; i <= m; i++)
+      for (let j = 1; j <= n; j++)
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (A[i - 1] === B[j - 1] ? 0 : 1))
+    return d[m][n]
+  }
+  const A = cp(name)
+  const cands = new Set()
+  for (const n of names) {
+    const B = cp(n)
+    if (Math.max(A.length, B.length) >= 2 && dist(A, B) <= 1) cands.add(n)
+    else if (A.length >= 2 && B.length >= 2 && (n.includes(name) || name.includes(n))) cands.add(n)
+  }
+  return cands.size === 1 ? [...cands][0] : null
+}
+
 async function assertMember(openid, familyId) {
   if (!familyId) throw { code: 'NO_FAMILY', msg: '缺少家庭上下文' }
   const r = await db.collection('family_members').where({ family_id: familyId, openid }).limit(1).get()
@@ -52,6 +78,31 @@ exports.main = async (event) => {
     return { ok: false, code: e.code || 'AUTH', msg: e.msg || '无权限' }
   }
 
+  // 宠物名统一解析（ADR-015 + 评审硬化）：record / reminder 都先验名（med_stock 无宠跳过），
+  // 且必须在任何写入之前（PET_UNKNOWN 零写入）。规则：
+  // - 在库 → 直用；
+  // - record 且显式新增意图(new_pet) → 放行建档；
+  // - record 且家庭还没有任何宠物 → 视同新增（0 宠无可匹配对象，不放行就是首录死端；确认卡片已展示「将建档」）；
+  // - 其余一律拒 PET_UNKNOWN（附名单 + fuzzy 建议名）。【不做静默 snap】：parse 层 snap 用户在确认卡片可见，
+  //   落库层名字不在库属异常态（名单已变 / 绕过 UI），静默改派=把记录写进别的宠物，医疗数据不可猜。
+  const resolvedPet = String((r && r.pet) || '').trim()
+  let petExists = false
+  if (resolvedPet && r.kind !== 'med_stock') {
+    const names = (await db.collection('pets').where({ family_id: familyId }).field({ name: true }).get()).data
+      .map((p) => p.name)
+      .filter(Boolean)
+    petExists = names.includes(resolvedPet)
+    if (!petExists) {
+      const isRecord = r.kind !== 'reminder'
+      const explicitNew = isRecord && r.new_pet === true
+      const firstPet = isRecord && names.length === 0
+      if (!explicitNew && !firstPet) {
+        const suggest = fuzzyMatchPet(resolvedPet, names) || ''
+        return { ok: false, code: 'PET_UNKNOWN', msg: `没找到叫「${resolvedPet}」的宠物，请选择已有宠物`, pets: names, suggest }
+      }
+    }
+  }
+
   // 提醒
   if (r.kind === 'reminder') {
     if (!r.rem_title && !r.pet) return { ok: false, code: 'EMPTY_REMINDER', msg: '提醒内容缺失' }
@@ -60,7 +111,7 @@ exports.main = async (event) => {
     const remRes = await db.collection('reminders').add({
       data: {
         family_id: familyId,
-        pet: r.pet || '',
+        pet: resolvedPet,
         type: TYPES.includes(r.rem_type) ? r.rem_type : '其它',
         title: r.rem_title || '',
         next_date: normalizeDate(r.rem_date, ''),
@@ -93,7 +144,7 @@ exports.main = async (event) => {
 
   const doc = {
     family_id: familyId,
-    pet: r.pet || '',
+    pet: resolvedPet,
     time: normalizeDate(r.time, ''),
     event_type: EVENT_TYPES.includes(r.event_type) ? r.event_type : '其它',
     weight: typeof r.weight === 'number' ? r.weight : null,
@@ -109,7 +160,7 @@ exports.main = async (event) => {
   }
   const addRes = await db.collection('records').add({ data: doc })
 
-  // 宠物 upsert（按家庭）：新名字自动建档；已有的若带体重则更新最新体重
+  // 宠物 upsert（按家庭）：已有的若带体重则更新最新体重；建档只剩「new_pet 显式意图 / 0 宠首录」两条路（上方守卫保证）
   let petCreated = false
   if (doc.pet) {
     const petRes = await db.collection('pets').where({ family_id: familyId, name: doc.pet }).get()
@@ -120,6 +171,7 @@ exports.main = async (event) => {
         await db.collection('pets').doc(p._id).update({ data: { latest_weight: doc.weight, latest_weight_date: doc.time || '' } })
       }
     } else {
+      // 字段集与 pets add 对齐（缺省值），避免后续读取 undefined 漂移
       await db.collection('pets').add({
         data: {
           family_id: familyId,
@@ -130,6 +182,12 @@ exports.main = async (event) => {
           neutered: false,
           allergy: '',
           chronic: '',
+          home_date: '',
+          note: '',
+          intro: '',
+          price_base: null,
+          avatar: '',
+          avatar_emoji: '',
           latest_weight: doc.weight || null,
           latest_weight_date: doc.weight ? doc.time || '' : '',
           created_at: Date.now(),
@@ -139,5 +197,5 @@ exports.main = async (event) => {
     }
   }
 
-  return { ok: true, id: addRes._id, petCreated }
+  return { ok: true, id: addRes._id, petCreated, pet: doc.pet }
 }

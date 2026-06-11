@@ -10,7 +10,7 @@ async function assertMember(openid, familyId) {
 }
 
 // 宠物档案 CRUD（按家庭隔离）。action: list | get | add | update | delete
-const EDITABLE = ['name', 'species', 'breed', 'birthday', 'neutered', 'allergy', 'chronic', 'latest_weight', 'home_date', 'note', 'intro', 'price_base', 'avatar']
+const EDITABLE = ['name', 'species', 'breed', 'birthday', 'neutered', 'allergy', 'chronic', 'latest_weight', 'home_date', 'note', 'intro', 'price_base', 'avatar', 'avatar_emoji']
 
 // 数字容错：number 原样；'2000'/'¥2,000' 取数；空 / 无数字 → null
 function numOrNull(v) {
@@ -47,11 +47,15 @@ exports.main = async (event) => {
 
   if (action === 'add') {
     const p = event.pet || {}
-    if (!p.name) return { ok: false, msg: 'name required' }
+    const name = String(p.name || '').trim() // 服务端 trim：客户端入参不可信，尾空格名会让 records 按名关联失配 + fuzzy 出肉眼不可分候选
+    if (!name) return { ok: false, msg: 'name required' }
+    // 同名查重：records/reminders 按名字关联，重名档案会共享时间线 + 体重回写只更新其一（ADR-015 评审硬化）
+    const dup = await db.collection('pets').where({ family_id: familyId, name }).limit(1).get()
+    if (dup.data.length) return { ok: false, msg: `已有叫「${name}」的宠物` }
     const res = await db.collection('pets').add({
       data: {
         family_id: familyId,
-        name: p.name,
+        name,
         species: p.species === 'dog' ? 'dog' : 'cat',
         breed: p.breed || '',
         birthday: p.birthday || '',
@@ -64,6 +68,7 @@ exports.main = async (event) => {
         intro: p.intro || '', // 简介（自由文本，见 ADR-014）
         price_base: numOrNull(p.price_base), // 初始身价（当前身价前端派生 = base + cost 累计）
         avatar: p.avatar || '', // 头像云存储 fileID
+        avatar_emoji: typeof p.avatar_emoji === 'string' ? p.avatar_emoji.slice(0, 8) : '', // 自选 emoji 头像（照片 > emoji > 物种默认，ADR-015）；类型收紧防对象入库
         created_at: Date.now(),
       },
     })
@@ -85,6 +90,8 @@ exports.main = async (event) => {
       else if (k === 'latest_weight') {
         if (typeof p.latest_weight === 'number') patch.latest_weight = p.latest_weight
       } else if (k === 'price_base') patch.price_base = numOrNull(p.price_base) // 三态 null/0/正数
+      else if (k === 'name') patch.name = String(p.name || '').trim() // 服务端 trim，与 add 对齐
+      else if (k === 'avatar_emoji') patch.avatar_emoji = typeof p.avatar_emoji === 'string' ? p.avatar_emoji.slice(0, 8) : ''
       else patch[k] = p[k] || ''
     }
     if ('name' in patch && !patch.name) return { ok: false, msg: '名字必填' }
@@ -92,6 +99,9 @@ exports.main = async (event) => {
 
     // 改名级联（按家庭）：records + reminders 的 pet 字段一并改掉，否则按名字查会对不上
     if (patch.name && patch.name !== cur.data.name) {
+      // 改名撞已有名同样会产生重名档案，先查重拒绝
+      const dup = await db.collection('pets').where({ family_id: familyId, name: patch.name }).limit(1).get()
+      if (dup.data.length) return { ok: false, msg: `已有叫「${patch.name}」的宠物` }
       await db
         .collection('records')
         .where({ family_id: familyId, pet: cur.data.name })

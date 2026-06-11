@@ -11,7 +11,8 @@ const SYSTEM = `你是宠物健康记录的结构化提取引擎，不是聊天�
 
 kind=record 时填：
 - valid: boolean。是否是有效的宠物健康记录。闲聊、问诊、与宠物健康无关的内容一律 valid=false。
-- pet: string。宠物名。优先匹配【已有宠物】列表里的名字；匹配不到时填用户原话里的名字，再匹配不到填 ""。
+- pet: string。宠物名。【必须优先归一到「已有宠物」列表里的名字】：用户写了错别字、同音字、形近字、简称、漏字，只要能合理对应列表里某只，就填列表里的标准名（如列表有「示例猫」，用户写「示列猫 / 试例猫 / 例猫」都填「示例猫」）。确实无法对应任何一只时才照抄原话里的名字；没提名字填 ""。
+- new_pet: boolean。用户是否在【明确表达新增一只宠物】（如「新来的 / 新成员 / 添加宠物 / 领养了 / 捡到一只」）。只是名字不在列表里【不算】新增意图，填 false。
 - species: string。"cat" 或 "dog"；能判断就判断（「橘猫 / 布偶」→cat，「金毛 / 狗」→dog），判断不了填 "cat"。
 - time: string。事件时间 YYYY-MM-DD；「今天 / 昨天」按相对今天算；没提填今天。
 - event_type: string。症状 | 用药 | 疫苗 | 驱虫 | 体重 | 就医 | 其它。已做的驱虫（体内 / 体外）归「驱虫」。
@@ -54,7 +55,7 @@ function buildMessages(text, petNames, today) {
     {
       role: 'assistant',
       content:
-        '{"kind":"record","valid":true,"pet":"示例猫","species":"cat","time":"2026-01-01","event_type":"症状","weight":4.2,"med":null,"hospital":"","cost":null,"tag":"","desc":"呕吐两次","raw":"示例猫今天吐了两次，称了下4.2kg"}',
+        '{"kind":"record","valid":true,"pet":"示例猫","new_pet":false,"species":"cat","time":"2026-01-01","event_type":"症状","weight":4.2,"med":null,"hospital":"","cost":null,"tag":"","desc":"呕吐两次","raw":"示例猫今天吐了两次，称了下4.2kg"}',
     },
     {
       role: 'user',
@@ -62,7 +63,7 @@ function buildMessages(text, petNames, today) {
     },
     {
       role: 'assistant',
-      content: '{"kind":"record","valid":false,"pet":"","species":"cat","time":"2026-01-01","event_type":"其它","weight":null,"med":null,"hospital":"","cost":null,"tag":"","desc":"","raw":"明天天气不错"}',
+      content: '{"kind":"record","valid":false,"pet":"","new_pet":false,"species":"cat","time":"2026-01-01","event_type":"其它","weight":null,"med":null,"hospital":"","cost":null,"tag":"","desc":"","raw":"明天天气不错"}',
     },
     {
       role: 'user',
@@ -71,7 +72,7 @@ function buildMessages(text, petNames, today) {
     {
       role: 'assistant',
       content:
-        '{"kind":"record","valid":true,"pet":"示例猫","species":"cat","time":"2026-01-01","event_type":"就医","weight":null,"med":null,"hospital":"爱康医院","cost":480,"tag":"嗜酸性肉芽肿","desc":"复查嗜酸性肉芽肿","raw":"带示例猫去爱康医院复查嗜酸性肉芽肿，花了480"}',
+        '{"kind":"record","valid":true,"pet":"示例猫","new_pet":false,"species":"cat","time":"2026-01-01","event_type":"就医","weight":null,"med":null,"hospital":"爱康医院","cost":480,"tag":"嗜酸性肉芽肿","desc":"复查嗜酸性肉芽肿","raw":"带示例猫去爱康医院复查嗜酸性肉芽肿，花了480"}',
     },
     {
       role: 'user',
@@ -80,7 +81,7 @@ function buildMessages(text, petNames, today) {
     {
       role: 'assistant',
       content:
-        '{"kind":"record","valid":true,"pet":"示例狗","species":"dog","time":"2026-01-01","event_type":"驱虫","weight":null,"med":"体外驱虫","hospital":"","cost":null,"tag":"","desc":"体外驱虫","raw":"今天给示例狗做了体外驱虫"}',
+        '{"kind":"record","valid":true,"pet":"示例狗","new_pet":false,"species":"dog","time":"2026-01-01","event_type":"驱虫","weight":null,"med":"体外驱虫","hospital":"","cost":null,"tag":"","desc":"体外驱虫","raw":"今天给示例狗做了体外驱虫"}',
     },
     {
       role: 'user',
@@ -97,6 +98,26 @@ function buildMessages(text, petNames, today) {
     {
       role: 'assistant',
       content: '{"kind":"reminder","pet":"示例狗","rem_type":"驱虫","rem_title":"体外驱虫","rem_date":"2026-01-15","rem_repeat_days":30,"raw":"每个月给示例狗做一次体外驱虫，这个月15号开始"}',
+    },
+    // 错别字归一：用户写错名，pet 必须填列表里的标准名，且 new_pet=false
+    {
+      role: 'user',
+      content: '今天是 2026-01-01。\n【已有宠物】示例猫、示例狗\n【用户这句话】示列猫今天拉稀了\n\n只输出 JSON。',
+    },
+    {
+      role: 'assistant',
+      content:
+        '{"kind":"record","valid":true,"pet":"示例猫","new_pet":false,"species":"cat","time":"2026-01-01","event_type":"症状","weight":null,"med":null,"hospital":"","cost":null,"tag":"","desc":"腹泻","raw":"示列猫今天拉稀了"}',
+    },
+    // 显式新增意图：明确说「新来的」才 new_pet=true，名字照抄
+    {
+      role: 'user',
+      content: '今天是 2026-01-01。\n【已有宠物】示例猫、示例狗\n【用户这句话】家里新来了只橘猫叫示例橘，刚称了2.1kg\n\n只输出 JSON。',
+    },
+    {
+      role: 'assistant',
+      content:
+        '{"kind":"record","valid":true,"pet":"示例橘","new_pet":true,"species":"cat","time":"2026-01-01","event_type":"体重","weight":2.1,"med":null,"hospital":"","cost":null,"tag":"","desc":"到家首称体重","raw":"家里新来了只橘猫叫示例橘，刚称了2.1kg"}',
     },
     { role: 'user', content: user },
   ]

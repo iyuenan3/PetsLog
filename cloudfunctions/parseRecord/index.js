@@ -75,13 +75,24 @@ exports.main = async (event) => {
     return { ok: false, code: 'LLM_ERROR', msg: 'AI 解析失败', detail: String((e && e.message) || e) }
   }
 
-  // 标记是否为新宠物（名字不在已有列表里），供前端确认卡片提示「将建档」
-  parsed.is_new = !!parsed.pet && !petNames.includes(parsed.pet)
+  // 宠物名解析（ADR-015，建档凭意图不凭名字）：
+  // ① LLM 已被提示词要求把错别字归一到已有名；② 漏网的服务端模糊兜底（唯一近似才 snap，歧义不猜）；
+  // ③ 都不中且非显式新增意图 → pet_unknown，前端确认卡片让用户从已有宠物里选。
+  // 0 宠家庭首录视同新增（无可匹配对象 = 无错别字风险；不放行则首录死端。确认卡片会显示「🆕 将建档」，点确认即同意）
+  if (parsed.kind === 'record' && parsed.pet && !petNames.length) parsed.new_pet = true
+  if (parsed.pet && !parsed.new_pet && !petNames.includes(parsed.pet)) {
+    const snapped = fuzzyMatchPet(parsed.pet, petNames)
+    if (snapped) parsed.pet = snapped
+  }
+  parsed.pet_unknown = !!parsed.pet && !parsed.new_pet && !petNames.includes(parsed.pet)
+  // is_new = 显式新增意图且名字确实是新的（确认卡片 🆕 将建档只在此时显示）
+  parsed.is_new = !!parsed.new_pet && !!parsed.pet && !petNames.includes(parsed.pet)
 
   // 记一条解析流水用于限流（落库在 saveRecord，二次确认后）
   await db.collection('parse_log').add({ data: { family_id: familyId, day: today, at: Date.now() } })
 
-  return { ok: true, parsed }
+  // pets 名单随返回带回：pet_unknown 时前端直接渲染选择 chips，免再发一次 list 请求
+  return { ok: true, parsed, pets: petNames }
 }
 
 function callGateway(text, petNames, today) {
@@ -140,12 +151,39 @@ function extractJson(s) {
   return JSON.parse(t)
 }
 
+// 宠物名模糊匹配（ADR-015，与 saveRecord 同款，云函数目录隔离须两处同步改）：
+// 编辑距离 ≤1（≥2 字名错 / 漏一字）或互相包含（简称）。【唯一候选才返回】，歧义（如「小X」系列互距 1）回 null 交用户选，绝不猜。
+// 按 Unicode code point 切分：emoji 名（如「🐶」）是 UTF-16 代理对，按 .length 算会绕过单字护栏 + 不同动物 emoji 互距 1 误 snap。
+function fuzzyMatchPet(name, names) {
+  if (!name) return null
+  const cp = (s) => Array.from(String(s))
+  const dist = (A, B) => {
+    const m = A.length, n = B.length
+    if (Math.abs(m - n) > 1) return 9
+    const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+    for (let j = 0; j <= n; j++) d[0][j] = j
+    for (let i = 1; i <= m; i++)
+      for (let j = 1; j <= n; j++)
+        d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (A[i - 1] === B[j - 1] ? 0 : 1))
+    return d[m][n]
+  }
+  const A = cp(name)
+  const cands = new Set()
+  for (const n of names) {
+    const B = cp(n)
+    if (Math.max(A.length, B.length) >= 2 && dist(A, B) <= 1) cands.add(n)
+    else if (A.length >= 2 && B.length >= 2 && (n.includes(name) || name.includes(n))) cands.add(n)
+  }
+  return cands.size === 1 ? [...cands][0] : null
+}
+
 function normalize(o, raw, today) {
   const kind = ['med_stock', 'reminder'].includes(o.kind) ? o.kind : 'record'
   return {
     kind,
     valid: o.valid !== false,
-    pet: o.pet || '',
+    pet: String(o.pet || '').trim(), // trim 与 saveRecord 对齐，否则尾空格让精确名误判 pet_unknown；String 防 LLM 输出数字名
+    new_pet: o.new_pet === true, // 显式新增宠物意图（ADR-015），缺省 false
     species: o.species === 'dog' ? 'dog' : 'cat',
     time: normalizeDate(o.time, today),
     event_type: o.event_type || '其它',

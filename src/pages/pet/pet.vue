@@ -1,20 +1,20 @@
 <template>
   <view class="page" v-if="pet">
-    <!-- 头部 -->
-    <view class="profile-head">
+    <!-- 头部（创建模式只显示表单） -->
+    <view class="profile-head" v-if="!creating">
       <view class="profile-head__avatar" :class="pet.species === 'dog' ? 'is-dog' : 'is-cat'">
         <image v-if="pet.avatar" :src="pet.avatar" class="profile-head__avatar-img" mode="aspectFill"></image>
-        <text v-else>{{ pet.species === 'dog' ? '🐶' : '🐱' }}</text>
+        <text v-else>{{ pet.avatar_emoji || (pet.species === 'dog' ? '🐶' : '🐱') }}</text>
       </view>
       <text class="profile-head__name">{{ pet.name }}</text>
       <text class="profile-head__meta">{{ ageText(pet.birthday) || '年龄未知' }} · {{ pet.species === 'dog' ? '狗' : '猫' }}</text>
     </view>
 
     <!-- 生成给兽医的小结 -->
-    <button class="btn-vet" hover-class="btn-vet--press" hover-stay-time="80" :loading="exporting" @click="exportVet">📋 生成给兽医的小结</button>
+    <button v-if="!creating" class="btn-vet" hover-class="btn-vet--press" hover-stay-time="80" :loading="exporting" @click="exportVet">📋 生成给兽医的小结</button>
 
     <!-- 体重曲线 -->
-    <view class="card-block">
+    <view class="card-block" v-if="!creating">
       <view class="card-block__head">
         <text class="card-block__title">体重曲线</text>
         <text class="card-block__sub" v-if="series.length">{{ series.length }} 次 · 最新 {{ series[series.length - 1].weight }}kg</text>
@@ -57,15 +57,29 @@
       </view>
     </view>
 
-    <!-- 基础档案：编辑 -->
+    <!-- 基础档案：编辑 / 创建 -->
     <view class="card-block" v-else>
-      <view class="card-block__head"><text class="card-block__title">编辑档案</text></view>
+      <view class="card-block__head"><text class="card-block__title">{{ creating ? '新宠物建档' : '编辑档案' }}</text></view>
       <view class="form">
         <view class="form-row">
           <text class="form-row__label">头像</text>
           <view class="avatar-edit" hover-class="avatar-edit--press" hover-stay-time="60" @click="pickAvatar">
             <image v-if="form.avatar" :src="form.avatar" class="avatar-edit__img" mode="aspectFill"></image>
+            <text v-else-if="form.avatar_emoji" class="avatar-edit__emoji">{{ form.avatar_emoji }}</text>
             <text v-else class="avatar-edit__ph">＋</text>
+          </view>
+        </view>
+        <!-- emoji 头像（ADR-015）：点选即用；已传照片时照片优先，选 emoji 会移除照片 -->
+        <view class="form-row form-row--top">
+          <text class="form-row__label">或选 emoji</text>
+          <view class="emoji-grid">
+            <text
+              v-for="e in emojiOptions"
+              :key="e"
+              :class="['emoji-cell', form.avatar_emoji === e && !form.avatar ? 'emoji-cell--active' : '']"
+              @click="pickEmoji(e)"
+              >{{ e }}</text
+            >
           </view>
         </view>
         <view class="form-row"><text class="form-row__label">名字</text><input class="form-input" v-model="form.name" placeholder="必填" placeholder-class="form-ph" /></view>
@@ -98,9 +112,9 @@
       </view>
       <view class="form-actions">
         <button class="btn-ghost" hover-class="btn-ghost--press" hover-stay-time="60" @click="cancelEdit">取消</button>
-        <button class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" :loading="saving" @click="save">保存</button>
+        <button class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" :loading="saving" @click="save">{{ creating ? '建档' : '保存' }}</button>
       </view>
-      <view class="del-link" hover-class="del-link--press" hover-stay-time="60" @click="confirmDelete">删除这只宠物的<text class="del-link__hot">档案</text></view>
+      <view v-if="!creating" class="del-link" hover-class="del-link--press" hover-stay-time="60" @click="confirmDelete">删除这只宠物的<text class="del-link__hot">档案</text></view>
     </view>
 
     <!-- 给兽医的小结：生成结果浮层 -->
@@ -132,6 +146,9 @@ export default {
     return {
       id: '',
       pet: null,
+      creating: false, // 创建模式（?mode=new，ADR-015 手动建宠入口）
+      // emoji 头像候选（猫狗口径 + 通用爪印）
+      emojiOptions: ['🐱', '😺', '😸', '😻', '🐈', '🐈‍⬛', '🐯', '🦁', '🐶', '🐕', '🦮', '🐩', '🐕‍🦺', '🦊', '🐺', '🐾'],
       series: [],
       // 体重曲线横滑：chartW 按时间跨度算（1 年 = 视口宽），默认滚到最右(最新)；y 轴范围全局固定
       chartW: 0,
@@ -154,6 +171,29 @@ export default {
   },
   onLoad(opts) {
     this.id = (opts && opts.id) || ''
+    if (opts && opts.mode === 'new') {
+      // 创建模式：空档案直接进编辑表单（ADR-015）
+      this.creating = true
+      this.pet = { name: '', species: 'cat' }
+      this.form = {
+        name: '',
+        species: 'cat',
+        breed: '',
+        birthday: '',
+        neutered: false,
+        allergy: '',
+        chronic: '',
+        home_date: '',
+        note: '',
+        intro: '',
+        price_base: '',
+        avatar: '',
+        avatar_emoji: '',
+      }
+      this.editing = true
+      uni.setNavigationBarTitle({ title: '添加宠物' })
+      return
+    }
     this.load()
   },
   computed: {
@@ -436,11 +476,36 @@ export default {
         intro: p.intro || '',
         price_base: p.price_base != null ? String(p.price_base) : '',
         avatar: p.avatar || '',
+        avatar_emoji: p.avatar_emoji || '',
       }
       this.editing = true
     },
+    // 丢弃本编辑会话新传未落库的头像文件（头像是即选即传，ADR-011「取消不留孤儿」要求显式清理）。
+    // 只删「≠ 库内已存 avatar」的，绝不动已落库文件。
+    discardTempAvatar() {
+      const saved = (this.pet && this.pet.avatar) || ''
+      const tmp = this.form && this.form.avatar
+      // #ifdef MP-WEIXIN
+      if (tmp && tmp !== saved && typeof wx !== 'undefined' && wx.cloud) {
+        wx.cloud.deleteFile({ fileList: [tmp] }).catch(() => {})
+      }
+      // #endif
+    },
     cancelEdit() {
+      this.discardTempAvatar()
+      // 创建模式取消 = 放弃建档返回上一页
+      if (this.creating) {
+        uni.navigateBack({ delta: 1 })
+        return
+      }
       this.editing = false
+    },
+    pickEmoji(e) {
+      // 选 emoji 表示想用 emoji 当头像：清掉照片（显示优先级 照片 > emoji，不清照片永远盖住）。
+      // 本会话刚传未落库的照片文件顺手删掉，否则成云存储孤儿
+      this.discardTempAvatar()
+      this.form.avatar_emoji = e
+      this.form.avatar = ''
     },
     pickSpecies(s) {
       this.form.species = s
@@ -466,7 +531,9 @@ export default {
           if (!tmp) return
           uni.showLoading({ title: '上传中…' })
           try {
-            this.form.avatar = await uploadAvatar(tmp)
+            const next = await uploadAvatar(tmp)
+            this.discardTempAvatar() // 同会话反复换图：新图传成后再删上一张未落库的（先删后传若上传失败会指向已删文件）
+            this.form.avatar = next
           } catch (e) {
             uni.showToast({ title: '头像上传失败', icon: 'none' })
           } finally {
@@ -488,9 +555,19 @@ export default {
       this.saving = true
       try {
         const pet = { ...this.form, name: this.form.name.trim() }
-        const res = await callFn('pets', { action: 'update', id: this.id, pet })
+        // 创建模式（ADR-015 手动建宠）：pets add 落库后切换为该宠详情
+        const res = this.creating
+          ? await callFn('pets', { action: 'add', pet })
+          : await callFn('pets', { action: 'update', id: this.id, pet })
         if (res.result && res.result.ok) {
-          uni.showToast({ title: '已保存', icon: 'success' })
+          uni.showToast({ title: this.creating ? '已建档' : '已保存', icon: 'success' })
+          if (this.creating) {
+            this.creating = false
+            this.id = res.result.id
+            // 先用表单值立即渲染头部（load 是异步的，否则短暂显示空名占位；load 失败也有合理兜底）
+            this.pet = { ...this.pet, ...pet, price_base: pet.price_base !== '' && pet.price_base != null ? Number(pet.price_base) : null }
+            uni.setNavigationBarTitle({ title: pet.name })
+          }
           this.editing = false
           this.load()
         } else {
@@ -1035,6 +1112,34 @@ export default {
 .avatar-edit__img {
   width: 100%;
   height: 100%;
+}
+.avatar-edit__emoji {
+  font-size: 64rpx;
+}
+.form-row--top {
+  align-items: flex-start;
+}
+.emoji-grid {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  justify-content: flex-end;
+}
+.emoji-cell {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-bg-sink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+  border: 2rpx solid transparent;
+}
+.emoji-cell--active {
+  background: var(--c-primary-tint);
+  border-color: var(--c-primary);
 }
 .avatar-edit__ph {
   font-size: 56rpx;

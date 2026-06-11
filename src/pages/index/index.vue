@@ -32,10 +32,16 @@
         >
           <view class="pet-card__avatar" :class="p.species === 'dog' ? 'is-dog' : 'is-cat'">
             <image v-if="p.avatar" :src="p.avatar" class="pet-card__avatar-img" mode="aspectFill"></image>
-            <text v-else>{{ speciesEmoji(p.species) }}</text>
+            <text v-else>{{ p.avatar_emoji || speciesEmoji(p.species) }}</text>
           </view>
           <text class="pet-card__name">{{ p.name }}</text>
           <text class="pet-card__meta">{{ ageText(p.birthday) || '年龄未知' }} · {{ p.latest_weight ? p.latest_weight + 'kg' : '体重未记' }}</text>
+        </view>
+        <!-- 手动建宠入口（ADR-015）：除自然语言侧路外的显式按钮 -->
+        <view class="pet-card pet-card--add" hover-class="pet-card--press" hover-stay-time="80" @click="addPet">
+          <view class="pet-card__avatar pet-card__avatar--add"><text>＋</text></view>
+          <text class="pet-card__name pet-card__name--add">添加宠物</text>
+          <text class="pet-card__meta">建一份新档案</text>
         </view>
       </view>
 
@@ -45,6 +51,7 @@
         <text class="empty__title">还没有毛孩子</text>
         <text class="empty__desc">点 ＋ 说一句，比如「新来的橘猫示例 3.2kg」，我会自动建档</text>
         <button class="empty__cta" hover-class="empty__cta--press" hover-stay-time="60" @click="goRecord">＋ 记一笔</button>
+        <text class="empty__alt" @click="addPet">或手动添加宠物档案</text>
       </view>
     </scroll-view>
   </view>
@@ -88,6 +95,9 @@ export default {
       } catch (e) {
         console.warn('loadPets failed', e)
       }
+    },
+    addPet() {
+      uni.navigateTo({ url: '/pages/pet/pet?mode=new' })
     },
     openPet(p) {
       const id = p && p._id ? p._id : ''
@@ -229,6 +239,21 @@ export default {
   height: 100%;
   border-radius: var(--r-pill);
 }
+.pet-card--add {
+  background: transparent;
+  box-shadow: none;
+  border: 3rpx dashed rgba(242, 130, 92, 0.35);
+}
+.pet-card__avatar--add {
+  background: var(--c-bg-sink);
+  box-shadow: none;
+  color: var(--c-primary);
+  font-size: 56rpx;
+  font-weight: 300;
+}
+.pet-card__name--add {
+  color: var(--c-text-2);
+}
 .pet-card__name {
   margin-top: 20rpx;
   font-size: var(--fs-h2);
@@ -282,6 +307,12 @@ export default {
   color: var(--c-text-inv);
   font-size: var(--fs-body);
   font-weight: 600;
+}
+.empty__alt {
+  margin-top: 28rpx;
+  font-size: var(--fs-sub);
+  color: var(--c-primary);
+  text-decoration: underline;
 }
 .empty__cta--press {
   transform: scale(0.97);

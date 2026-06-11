@@ -3,6 +3,14 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## v0.4.2 · 2026-06-11 · 轮4：录入防错别字（意图驱动建档）+ 头像 emoji 自定义 + 手动建宠入口
+- Added: **录入防错别字三层防线（ADR-015）**：① parseRecord prompt 强化「错别字 / 同音 / 简称必须归一到已有宠物名」+ 新增 `new_pet` 意图字段（仅「新来的 / 添加宠物 / 领养 / 捡到」类明确表述为 true）+ 错别字与新增两个 few-shot；② parse 层服务端模糊兜底（编辑距离 ≤1 / 互含、按 Unicode code point 算防 emoji 名代理对误判、唯一候选才 snap，结果展示在确认卡片可复核）；③ saveRecord 建档凭意图不凭名字：只在 `new_pet=true` 或 0 宠首录时建档，名字不在库一律拒 `PET_UNKNOWN`（零写入，附名单 + suggest），确认卡片「❓ 没找到这只」+ 已有宠物 chips 点选。**reminder 通道同享防线**（评审抓的：错别字提醒原来会挂幽灵名）。
+- Added: **头像 emoji 自定义**：pets 加 `avatar_emoji`（编辑表单 16 格 emoji 选择器 + 照片上传并存）；显示优先级 照片 > 自选 emoji > 物种默认 🐱/🐶；选 emoji 自动清照片并删旧云文件。
+- Added: **手动建宠入口**：宠物网格末尾虚线「＋ 添加宠物」卡片 + 空状态「或手动添加宠物档案」链接 → pet.vue 创建模式（`?mode=new` 复用编辑表单，建档后原地变身详情页）。
+- Hardened: 67-agent 对抗式评审（4 视角 × 3 票表决）确认 17 条、修 9 处：0 宠空状态录入死端（HIGH，收紧建档 + 入口缺位叠加出的首跑死路 → 0 宠首录视同新增 + 空状态入口）；saveRecord 落库层静默 snap 会把记录改派给别的宠物（→ 只 suggest 不 snap）；reminder 绕过防线；pets add / 改名无查重无 trim 可建重名档案（→ 服务端 trim + family+name 查重）；pickEmoji / 创建取消 / 反复换图三条云存储孤儿头像路径（→ discardTempAvatar 统一清理，传成后再删旧）；单 emoji 名绕过单字护栏互距 1 误 snap（→ code point 切分）；parse 不 trim 与 save 不一致；new_pet 没名字被静默吞（→ 拦截提示补名）；avatar_emoji 类型收紧 slice(0,8) + saveRecord 建档字段集与 pets add 对齐。
+- Tested: 新增 `tests/saveRecord.cloudfn.test.js`（27 断言：PET_UNKNOWN 零写入 / suggest / 0 宠放行 / reminder 防线 / emoji 名 / trim / 隔离）+ `tests/pets.cloudfn.test.js`（8 断言：查重 / trim / 类型收紧）；五套共 109 断言（npm test）。
+- Changed: pets / parseRecord / saveRecord 已 CLI 重新部署；SPEC 补宠物名解析契约 + avatar_emoji 字典。
+
 ## v0.4.1 · 2026-06-11 · 轮3 导入执行收口 + Notion 实时全量核对清洗 + 体重曲线横滑
 - Added: importNotion 增 4 个一次性运维动作：`import_foods`（首轮 import 在 foods 集合未建处崩的续传，带 FOODS_NOT_EMPTY 护栏）、`backfill_weight`（从 records 按事件日期回填 pets.latest_weight，导入绕过 saveRecord 回写所致）、`fix_times`（删无日期记录 + 导入记录 created_at 统一「事件日期 + 12:00」）、`stats`（只读体检：计数 + noon 校验 + 脏记录扫描，count 全兜底集合不存在）。主 import 同步：写 pets 自算 latest_weight、created_at 改 12:00 派生、写 foods 前 createCollection 兜底。
 - Changed: 体重曲线重做：等间距（每点 ≥56px）+ scroll-view 横滑（固定 y 轴不随滑动跑）+ 默认滚到最新（实测滚动偏移二次校验，绕开同值赋值不生效）+ 日期标签按间距挑点画（≥70px，带日防同月重复）。**canvas 物理宽夹紧 ≤4000px**：微信 canvas 2d 有单边上限（文档 1365×1365，实测 ~4096），乔治 27 个体重点 × dpr3 = 4440 已越线，不夹真机整块白屏（评审 HIGH）。

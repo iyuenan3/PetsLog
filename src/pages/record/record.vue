@@ -62,7 +62,18 @@
           <text class="sheet__title">设个提醒 🔔</text>
           <text class="sheet__hint">到期会在宠物页和健康页提示你</text>
           <view class="sheet__fields">
-            <view class="field-row" v-if="parsed.pet"><text class="field-row__label">宠物</text><text class="field-row__value">{{ parsed.pet }}</text></view>
+            <view class="field-row" v-if="parsed.pet">
+              <text class="field-row__label">宠物</text>
+              <text class="field-row__value">{{ parsed.pet }}<text v-if="parsed.pet_unknown" class="new-badge new-badge--warn"> ❓ 没找到这只</text></text>
+            </view>
+            <!-- 提醒同样不挂幽灵宠物名（ADR-015 评审硬化）：错别字时从已有宠物点选 -->
+            <view class="field-row" v-if="parsed.pet_unknown">
+              <text class="field-row__label">选一只</text>
+              <view class="chips" v-if="petOptions.length">
+                <text v-for="n in petOptions" :key="n" class="chip" @click="pickPet(n)">{{ n }}</text>
+              </view>
+              <text v-else class="field-row__value field-row__value--empty">还没有宠物档案，先到宠物页添加</text>
+            </view>
             <view class="field-row"><text class="field-row__label">类型</text><text class="field-row__value">{{ parsed.rem_type || '其它' }}</text></view>
             <view class="field-row"><text class="field-row__label">事项</text><text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.rem_title }">{{ parsed.rem_title || '待确认' }}</text></view>
             <view class="field-row"><text class="field-row__label">到期</text><text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.rem_date }">{{ parsed.rem_date || '未识别' }}</text></view>
@@ -78,7 +89,15 @@
           <view class="sheet__fields">
             <view class="field-row">
               <text class="field-row__label">宠物</text>
-              <text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.pet }">{{ parsed.pet || '待确认' }}<text v-if="parsed.is_new" class="new-badge"> 🆕 将建档</text></text>
+              <text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.pet || parsed.pet_unknown }">{{ parsed.pet || '待确认' }}<text v-if="parsed.is_new" class="new-badge"> 🆕 将建档</text><text v-else-if="parsed.pet_unknown" class="new-badge new-badge--warn"> ❓ 没找到这只</text></text>
+            </view>
+            <!-- 名字没匹配上（错别字等，ADR-015）：让用户从家里宠物里点选，不自动建档 -->
+            <view class="field-row" v-if="parsed.pet_unknown">
+              <text class="field-row__label">选一只</text>
+              <view class="chips" v-if="petOptions.length">
+                <text v-for="n in petOptions" :key="n" class="chip" @click="pickPet(n)">{{ n }}</text>
+              </view>
+              <text v-else class="field-row__value field-row__value--empty">还没有宠物档案，先到宠物页添加</text>
             </view>
             <view class="field-row" v-if="parsed.is_new">
               <text class="field-row__label">种类</text>
@@ -142,6 +161,7 @@ export default {
       parsing: false,
       saving: false,
       parsed: null, // AI 解析后的结构化结果，待用户确认
+      petOptions: [], // 家庭已有宠物名单（parseRecord 带回），pet_unknown 时供点选（ADR-015）
       atts: [], // 待上传附件（本地临时文件，确认归档后才上传，取消不留孤儿）
       attMax: ATT_MAX_PER_RECORD,
       examples: ['示例猫今天吐了，体重 4.2kg', '下月 15 号给示例狗打疫苗', '买了盒驱虫药 2 支，明年 3 月过期'],
@@ -195,6 +215,7 @@ export default {
           return
         }
         this.atts = [] // 新一次解析，清掉上一轮残留的待传附件
+        this.petOptions = r.pets || []
         this.parsed = r.parsed
       } catch (e) {
         uni.showModal({
@@ -210,6 +231,11 @@ export default {
     setSpecies(s) {
       if (this.parsed) this.parsed.species = s
     },
+    pickPet(name) {
+      if (!this.parsed) return
+      this.parsed.pet = name
+      this.parsed.pet_unknown = false
+    },
     cancelParse() {
       this.parsed = null
       this.atts = [] // 只是本地临时文件，丢弃即可，无云端孤儿
@@ -224,6 +250,16 @@ export default {
     async confirmSave() {
       if (!this.parsed) return
       const kind = this.parsed.kind
+      // 名字没匹配上时不放行（ADR-015，record + reminder 都拦）：先点选已有宠物（服务端 PET_UNKNOWN 双保险）
+      if (kind !== 'med_stock' && this.parsed.pet_unknown) {
+        uni.showToast({ title: '先选一只宠物吧', icon: 'none' })
+        return
+      }
+      // 显式新增意图但没听清名字：建档意图不能被静默吞掉
+      if (kind !== 'med_stock' && kind !== 'reminder' && this.parsed.new_pet && !this.parsed.pet) {
+        uni.showToast({ title: '没听清名字，补一句宠物叫什么吧', icon: 'none' })
+        return
+      }
       const okMsg = kind === 'med_stock' ? '已入库' : kind === 'reminder' ? '已设提醒' : '已归档'
       this.saving = true
       try {
@@ -254,6 +290,11 @@ export default {
           setTimeout(() => {
             uni.navigateBack({ delta: 1 })
           }, 600)
+        } else if (r.code === 'PET_UNKNOWN') {
+          // 服务端兜底拒了（前端态被绕过 / 解析后名单变化）：回到选择态
+          this.parsed.pet_unknown = true
+          if (r.pets && r.pets.length) this.petOptions = r.pets
+          uni.showToast({ title: r.msg || '没找到这只宠物，请选择', icon: 'none' })
         } else {
           uni.showToast({ title: r.msg || '保存失败', icon: 'none' })
         }
@@ -434,6 +475,9 @@ export default {
   font-size: var(--fs-tiny);
   color: var(--c-warning);
   font-weight: 500;
+}
+.new-badge--warn {
+  color: #d65a4a;
 }
 .chips {
   flex: 1;

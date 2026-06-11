@@ -22,11 +22,13 @@
 | note | string | 备注（自由文本，如来历故事） |
 | intro | string | 简介（自由文本，用户自填；与 note 区分：note 偏备忘、intro 偏介绍，见 ADR-014） |
 | price_base | number \| null | 初始身价（元，ADR-014 反转 ADR-013「身价不入库」）；当前身价不落库 = price_base + 该宠 records.cost 累计，前端实时派生 |
-| avatar | string(fileID) | 头像照片，云存储 fileID（无则前端 emoji 兜底；换头像 / 删宠物会删旧文件防孤儿，v0.3.2） |
+| avatar | string(fileID) | 头像照片，云存储 fileID（换头像 / 删宠物会删旧文件防孤儿，v0.3.2） |
+| avatar_emoji | string | 自选 emoji 头像（ADR-015）。显示优先级：avatar 照片 > avatar_emoji > 物种默认 🐱/🐶；前端选 emoji 时清空 avatar（pets update 顺带删旧照片文件） |
 | created_at / updated_at | number | updated_at 仅 update 时写入，新建文档暂无（reminders 则 add 即写） |
 
-> EDITABLE 白名单（pets update）需同步加 home_date / note / intro / avatar / price_base。
+> EDITABLE 白名单（pets update）需同步加 home_date / note / intro / avatar / price_base / avatar_emoji。
 > 「当前身价」与「累计花费」均派生：累计花费 = 该宠 records.cost 之和；当前身价 = price_base + 累计花费（前端聚合，不落库）。
+> 宠物名解析契约（ADR-015，录入防错别字）：parseRecord 输出 `new_pet`（LLM 判定的「明确新增宠物」意图）+ `pet_unknown`（名字无匹配且非新增意图，前端确认卡片须让用户从已有宠物点选）+ 顶层回传 `pets` 名单；模糊匹配（编辑距离 ≤1 / 互含，按 code point 算，**唯一候选才 snap**）只发生在 parse 层（结果用户在卡片可见）。saveRecord 对 record + reminder 都先验名：在库 → 用；record 且 `new_pet=true` 或 0 宠家庭首录 → 建档；其余拒 `code:'PET_UNKNOWN'`（附 pets 名单 + suggest 建议名，零写入，**落库层不静默 snap**）。模糊匹配函数 parseRecord / saveRecord 各持一份，改须两处同步。
 
 ## records（健康时间线 · family 隔离）
 | 字段 | 类型 | 说明 |
