@@ -147,6 +147,24 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(r.ok === false && r.code === 'PET_UNKNOWN' && !r.suggest, '单 emoji 名不近似, suggest 空')
   })
 
+  // 7g. 事件时间到分: time 存到分 + created_at 由事件时间精确派生 + latest_weight_date 仍纯日期(ADR-018)
+  await run('时间到分: time/created_at 到分, latest_weight_date 纯日期', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    const r = await fn.main({ family_id: 'F1', record: { pet: '示例猫', time: '2026-06-11 14:30', event_type: '体重', weight: 5 } })
+    assert(r.ok === true && recs()[0].time === '2026-06-11 14:30', 'time 落库到分')
+    assert(recs()[0].created_at === Date.parse('2026-06-11T14:30:00+08:00'), 'created_at 由事件时间精确派生(东八区)')
+    const p = pets().find((x) => x.name === '示例猫')
+    assert(p && p.latest_weight_date === '2026-06-11', 'latest_weight_date 仍纯日期(取日期段)')
+  })
+
+  // 7h. 仅日期(AI 未给时刻 / 旧数据) → created_at 落当日中午 12:00(延续历史导入约定)
+  await run('仅日期: created_at 落中午12点', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    const r = await fn.main({ family_id: 'F1', record: { pet: '示例猫', time: '2026-06-11', event_type: '症状' } })
+    assert(r.ok === true && recs()[0].time === '2026-06-11', '仅日期原样存')
+    assert(recs()[0].created_at === Date.parse('2026-06-11T12:00:00+08:00'), '缺时刻 created_at = 当日中午')
+  })
+
   // 8. pet 为空照常存(无宠记录,现状语义)
   await run('pet 空: 照常存不触发解析', async () => {
     CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])

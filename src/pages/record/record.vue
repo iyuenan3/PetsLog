@@ -1,10 +1,13 @@
 <template>
-  <view class="page">
-    <!-- 录入编辑区（确认弹层弹出时隐藏，规避原生 textarea 层级穿透） -->
-    <view v-if="!parsed" class="rec">
-      <text class="rec__title">记一笔 🐾</text>
-      <text class="rec__hint">用大白话说一句，AI 自动归档。可记健康、设提醒、入库药品。</text>
-
+  <view class="page" :class="{ 'page--entry': !parsed }" @click="onScrimTap">
+    <!-- 入口卡（点＋弹出，见 ADR-017）：自然语言居中主入口 + 结构化 / 语音次级。
+         卡在普通文档流（非 position:fixed），原生 textarea 不踩层级穿透坑；暗背景点空白处关闭。 -->
+    <view v-if="!parsed" class="card" @click.stop>
+      <view class="card__head">
+        <text class="card__title">记录 🐾</text>
+        <text class="card__close" hover-class="card__close--press" hover-stay-time="60" @click="close">✕</text>
+      </view>
+      <text class="card__hint">用大白话说一句，AI 自动归档。可记健康、设提醒、入库药品。</text>
       <textarea
         v-model="draft"
         class="rec__input"
@@ -17,7 +20,6 @@
         @focus="focused = true"
         @blur="focused = false"
       />
-
       <view class="rec__examples">
         <text
           v-for="(ex, i) in examples"
@@ -28,7 +30,6 @@
           @click="fill(ex)"
         >{{ ex }}</text>
       </view>
-
       <button
         class="rec__btn"
         :class="{ 'rec__btn--loading': parsing }"
@@ -37,36 +38,58 @@
         :loading="parsing"
         @click="onSend"
       >{{ parsing ? '解析中…' : '记 录' }}</button>
+
+      <!-- 或换种方式：结构化（点开整页表单，不调 LLM）/ 语音（敬请期待） -->
+      <view class="card__alt-divider">
+        <view class="card__alt-line"></view>
+        <text class="card__alt-text">或换种方式</text>
+        <view class="card__alt-line"></view>
+      </view>
+      <view class="alt-entries">
+        <view class="alt-entry" hover-class="alt-entry--press" hover-stay-time="60" @click="openManual">
+          <text class="alt-entry__ico">⌨️</text>
+          <text class="alt-entry__name">结构化逐项</text>
+        </view>
+        <view class="alt-entry alt-entry--soon" hover-class="alt-entry--press" hover-stay-time="60" @click="voiceSoon">
+          <text class="alt-entry__ico">🎤</text>
+          <text class="alt-entry__name">语音</text>
+          <text class="alt-entry__soon">敬请期待</text>
+        </view>
+      </view>
     </view>
 
-    <!-- 解析结果确认弹层 -->
-    <view v-if="parsed" class="sheet-mask" @click="cancelParse">
-      <view class="sheet" @click.stop>
-        <view class="sheet__grab"></view>
+    <!-- 录入表单（整页内联，不用弹层）：结构化直填 + AI 结果可编辑，见 ADR-017 -->
+    <view v-else class="form">
+        <!-- 手动直填可切类型（AI 解析态 kind 由解析决定，不显示切换） -->
+        <view v-if="manual" class="kind-switch">
+          <text :class="['kind-switch__item', parsed.kind === 'record' ? 'kind-switch__item--active' : '']" @click="setManualKind('record')">🩺 记录</text>
+          <text :class="['kind-switch__item', parsed.kind === 'reminder' ? 'kind-switch__item--active' : '']" @click="setManualKind('reminder')">🔔 提醒</text>
+          <text :class="['kind-switch__item', parsed.kind === 'med_stock' ? 'kind-switch__item--active' : '']" @click="setManualKind('med_stock')">💊 入库</text>
+        </view>
 
-        <!-- 药品入库 -->
+        <!-- 药品入库（可编辑，见 ADR-017） -->
         <block v-if="parsed.kind === 'med_stock'">
-          <text class="sheet__title">入库一盒药 💊</text>
+          <text class="sheet__title">{{ manual ? '手动入库一盒药 💊' : '入库一盒药 💊' }}</text>
           <text class="sheet__hint">确认后存进药品库存</text>
           <view class="sheet__fields">
-            <view class="field-row"><text class="field-row__label">药品</text><text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.med_name }">{{ parsed.med_name || '待确认' }}</text></view>
-            <view class="field-row" v-if="parsed.med_effect"><text class="field-row__label">功效</text><text class="field-row__value">{{ parsed.med_effect }}</text></view>
-            <view class="field-row"><text class="field-row__label">数量</text><text class="field-row__value">{{ parsed.med_quantity }}</text></view>
-            <view class="field-row"><text class="field-row__label">过期</text><text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.med_expire }">{{ parsed.med_expire || '未填' }}</text></view>
-            <view class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
+            <view class="field-row"><text class="field-row__label">药品</text><input class="field-row__input" v-model="parsed.med_name" placeholder="药品名" placeholder-class="ph" /></view>
+            <view class="field-row"><text class="field-row__label">功效</text><input class="field-row__input" v-model="parsed.med_effect" placeholder="选填" placeholder-class="ph" /></view>
+            <view class="field-row"><text class="field-row__label">数量</text><input class="field-row__input" type="number" v-model="parsed.med_quantity" placeholder="1" placeholder-class="ph" /></view>
+            <view class="field-row"><text class="field-row__label">过期</text>
+              <picker class="field-row__pick" mode="date" :value="parsed.med_expire || today()" @change="onPickDate('med_expire', $event)">
+                <view class="pickbox"><text class="pickbox__v" :class="{ 'field-row__value--empty': !parsed.med_expire }">{{ parsed.med_expire || '未填' }}</text><text class="pickbox__c">▾</text></view>
+              </picker>
+            </view>
+            <view v-if="!manual" class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
           </view>
         </block>
 
-        <!-- 提醒 -->
+        <!-- 提醒（可编辑，见 ADR-017） -->
         <block v-else-if="parsed.kind === 'reminder'">
-          <text class="sheet__title">设个提醒 🔔</text>
+          <text class="sheet__title">{{ manual ? '手动设提醒 🔔' : '设个提醒 🔔' }}</text>
           <text class="sheet__hint">到期会在宠物页和健康页提示你</text>
           <view class="sheet__fields">
-            <view class="field-row" v-if="parsed.pet">
-              <text class="field-row__label">宠物</text>
-              <text class="field-row__value">{{ parsed.pet }}<text v-if="parsed.pet_unknown" class="new-badge new-badge--warn"> ❓ 没找到这只</text></text>
-            </view>
-            <!-- 提醒同样不挂幽灵宠物名（ADR-015 评审硬化）：错别字时从已有宠物点选 -->
+            <!-- 提醒不挂幽灵宠物名（ADR-015 评审硬化）：错别字时从已有宠物点选，正常态 picker 选（宠物可空） -->
             <view class="field-row" v-if="parsed.pet_unknown">
               <text class="field-row__label">选一只</text>
               <view class="chips" v-if="petOptions.length">
@@ -74,46 +97,85 @@
               </view>
               <text v-else class="field-row__value field-row__value--empty">还没有宠物档案，先到宠物页添加</text>
             </view>
-            <view class="field-row"><text class="field-row__label">类型</text><text class="field-row__value">{{ parsed.rem_type || '其它' }}</text></view>
-            <view class="field-row"><text class="field-row__label">事项</text><text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.rem_title }">{{ parsed.rem_title || '待确认' }}</text></view>
-            <view class="field-row"><text class="field-row__label">到期</text><text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.rem_date }">{{ parsed.rem_date || '未识别' }}</text></view>
-            <view class="field-row" v-if="parsed.rem_repeat_days"><text class="field-row__label">重复</text><text class="field-row__value">{{ repeatText(parsed.rem_repeat_days) }}</text></view>
-            <view class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
+            <view class="field-row" v-else>
+              <text class="field-row__label">宠物</text>
+              <picker v-if="petOptions.length" class="field-row__pick" mode="selector" :range="petOptions" :value="petIdx" @change="onPickPet($event)">
+                <view class="pickbox"><text class="pickbox__v" :class="{ 'field-row__value--empty': !parsed.pet }">{{ parsed.pet || '不指定' }}</text><text class="pickbox__c">▾</text></view>
+              </picker>
+              <text v-else class="field-row__value field-row__value--empty">不指定</text>
+            </view>
+            <view class="field-row"><text class="field-row__label">类型</text>
+              <picker class="field-row__pick" mode="selector" :range="REM_TYPES" :value="remTypeIdx" @change="onPickRemType($event)">
+                <view class="pickbox"><text class="pickbox__v">{{ parsed.rem_type || '其它' }}</text><text class="pickbox__c">▾</text></view>
+              </picker>
+            </view>
+            <view class="field-row"><text class="field-row__label">事项</text><input class="field-row__input" v-model="parsed.rem_title" placeholder="做什么" placeholder-class="ph" /></view>
+            <view class="field-row"><text class="field-row__label">到期</text>
+              <picker class="field-row__pick" mode="date" :value="parsed.rem_date || today()" @change="onPickDate('rem_date', $event)">
+                <view class="pickbox"><text class="pickbox__v" :class="{ 'field-row__value--empty': !parsed.rem_date }">{{ parsed.rem_date || '未识别' }}</text><text class="pickbox__c">▾</text></view>
+              </picker>
+            </view>
+            <view class="field-row"><text class="field-row__label">重复</text>
+              <picker class="field-row__pick" mode="selector" :range="repeatLabels" :value="repeatIdx" @change="onPickRepeat($event)">
+                <view class="pickbox"><text class="pickbox__v">{{ repeatText(parsed.rem_repeat_days) }}</text><text class="pickbox__c">▾</text></view>
+              </picker>
+            </view>
+            <view v-if="!manual" class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
           </view>
         </block>
 
-        <!-- 健康记录 -->
+        <!-- 健康记录（可编辑，见 ADR-017） -->
         <block v-else>
-          <text class="sheet__title">记一笔健康记录 🩺</text>
+          <text class="sheet__title">{{ manual ? '手动记录 🩺' : '记录健康事件 🩺' }}</text>
           <text class="sheet__hint">确认后归档到时间线</text>
           <view class="sheet__fields">
-            <view class="field-row">
-              <text class="field-row__label">宠物</text>
-              <text class="field-row__value" :class="{ 'field-row__value--empty': !parsed.pet || parsed.pet_unknown }">{{ parsed.pet || '待确认' }}<text v-if="parsed.is_new" class="new-badge"> 🆕 将建档</text><text v-else-if="parsed.pet_unknown" class="new-badge new-badge--warn"> ❓ 没找到这只</text></text>
-            </view>
-            <!-- 名字没匹配上（错别字等，ADR-015）：让用户从家里宠物里点选，不自动建档 -->
-            <view class="field-row" v-if="parsed.pet_unknown">
-              <text class="field-row__label">选一只</text>
-              <view class="chips" v-if="petOptions.length">
-                <text v-for="n in petOptions" :key="n" class="chip" @click="pickPet(n)">{{ n }}</text>
+            <!-- 宠物三态：① is_new 建档意图（名字可改 + 选种类，ADR-015 唯一建档通道）② 错别字没匹配上→点选 ③ 正常→picker 选已有 -->
+            <template v-if="parsed.is_new">
+              <view class="field-row"><text class="field-row__label">宠物</text><input class="field-row__input" v-model="parsed.pet" placeholder="新宠物名" placeholder-class="ph" /><text class="new-badge"> 🆕 将建档</text></view>
+              <view class="field-row"><text class="field-row__label">种类</text>
+                <view class="chips">
+                  <text :class="['chip', parsed.species === 'cat' ? 'chip--active' : '']" @click="setSpecies('cat')">🐱 猫</text>
+                  <text :class="['chip', parsed.species === 'dog' ? 'chip--active' : '']" @click="setSpecies('dog')">🐶 狗</text>
+                </view>
               </view>
-              <text v-else class="field-row__value field-row__value--empty">还没有宠物档案，先到宠物页添加</text>
-            </view>
-            <view class="field-row" v-if="parsed.is_new">
-              <text class="field-row__label">种类</text>
-              <view class="chips">
-                <text :class="['chip', parsed.species === 'cat' ? 'chip--active' : '']" @click="setSpecies('cat')">🐱 猫</text>
-                <text :class="['chip', parsed.species === 'dog' ? 'chip--active' : '']" @click="setSpecies('dog')">🐶 狗</text>
+            </template>
+            <template v-else-if="parsed.pet_unknown">
+              <view class="field-row"><text class="field-row__label">宠物</text><text class="field-row__value field-row__value--empty">{{ parsed.pet || '待确认' }}<text class="new-badge new-badge--warn"> ❓ 没找到这只</text></text></view>
+              <view class="field-row"><text class="field-row__label">选一只</text>
+                <view class="chips" v-if="petOptions.length"><text v-for="n in petOptions" :key="n" class="chip" @click="pickPet(n)">{{ n }}</text></view>
+                <text v-else class="field-row__value field-row__value--empty">还没有宠物档案，先到宠物页添加</text>
+              </view>
+            </template>
+            <template v-else>
+              <view class="field-row"><text class="field-row__label">宠物</text>
+                <picker v-if="petOptions.length" class="field-row__pick" mode="selector" :range="petOptions" :value="petIdx" @change="onPickPet($event)">
+                  <view class="pickbox"><text class="pickbox__v" :class="{ 'field-row__value--empty': !parsed.pet }">{{ parsed.pet || '请选择' }}</text><text class="pickbox__c">▾</text></view>
+                </picker>
+                <text v-else class="field-row__value field-row__value--empty" @click="goAddPet">还没有宠物，去添加 ›</text>
+              </view>
+            </template>
+            <view class="field-row"><text class="field-row__label">时间</text>
+              <view class="dt-pick">
+                <picker class="dt-pick__part" mode="date" :value="timeDate" @change="onPickTimeDate($event)">
+                  <view class="pickbox"><text class="pickbox__v">{{ timeDate }}</text><text class="pickbox__c">▾</text></view>
+                </picker>
+                <picker class="dt-pick__part" mode="time" :value="timeClock" @change="onPickTimeClock($event)">
+                  <view class="pickbox"><text class="pickbox__v">{{ timeClock }}</text><text class="pickbox__c">▾</text></view>
+                </picker>
               </view>
             </view>
-            <view class="field-row"><text class="field-row__label">时间</text><text class="field-row__value">{{ parsed.time || '今天' }}</text></view>
-            <view class="field-row"><text class="field-row__label">类型</text><text class="field-row__value">{{ parsed.event_type || '其它' }}</text></view>
-            <view class="field-row" v-if="parsed.weight"><text class="field-row__label">体重</text><text class="field-row__value">{{ parsed.weight }}kg</text></view>
-            <view class="field-row" v-if="parsed.med"><text class="field-row__label">用药</text><text class="field-row__value">{{ parsed.med }}</text></view>
-            <view class="field-row" v-if="parsed.hospital"><text class="field-row__label">医院</text><text class="field-row__value">{{ parsed.hospital }}</text></view>
-            <view class="field-row" v-if="parsed.cost != null"><text class="field-row__label">费用</text><text class="field-row__value">¥{{ parsed.cost }}</text></view>
-            <view class="field-row" v-if="parsed.tag"><text class="field-row__label">病程</text><text class="field-row__value">{{ parsed.tag }}</text></view>
-            <view class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
+            <view class="field-row"><text class="field-row__label">类型</text>
+              <picker class="field-row__pick" mode="selector" :range="EVENT_TYPES" :value="evtIdx" @change="onPickEvt($event)">
+                <view class="pickbox"><text class="pickbox__v">{{ parsed.event_type || '其它' }}</text><text class="pickbox__c">▾</text></view>
+              </picker>
+            </view>
+            <view class="field-row"><text class="field-row__label">体重</text><input class="field-row__input" type="digit" v-model="parsed.weight" placeholder="选填，单位 kg" placeholder-class="ph" /></view>
+            <view class="field-row"><text class="field-row__label">描述</text><input class="field-row__input" v-model="parsed.desc" placeholder="症状 / 事件描述" placeholder-class="ph" /></view>
+            <view class="field-row"><text class="field-row__label">用药</text><input class="field-row__input" v-model="parsed.med" placeholder="选填" placeholder-class="ph" /></view>
+            <view class="field-row"><text class="field-row__label">医院</text><input class="field-row__input" v-model="parsed.hospital" placeholder="选填" placeholder-class="ph" /></view>
+            <view class="field-row"><text class="field-row__label">费用</text><input class="field-row__input" type="digit" v-model="parsed.cost" placeholder="选填，单位 元" placeholder-class="ph" /></view>
+            <view class="field-row"><text class="field-row__label">病程</text><input class="field-row__input" v-model="parsed.tag" placeholder="如 嗜酸性肉芽肿（选填）" placeholder-class="ph" /></view>
+            <view v-if="!manual" class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
           </view>
 
           <!-- 附件（见 ADR-011）：确认归档前可挂图片 / 视频 / PDF，保存后上传登记 -->
@@ -143,7 +205,6 @@
           <button class="btn-ghost" hover-class="btn-ghost--press" hover-stay-time="60" @click="cancelParse">返回修改</button>
           <button class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" :loading="saving" @click="confirmSave">{{ confirmBtnText() }}</button>
         </view>
-      </view>
     </view>
   </view>
 </template>
@@ -160,12 +221,58 @@ export default {
       focused: false,
       parsing: false,
       saving: false,
-      parsed: null, // AI 解析后的结构化结果，待用户确认
-      petOptions: [], // 家庭已有宠物名单（parseRecord 带回），pet_unknown 时供点选（ADR-015）
+      parsed: null, // 结构化结果（AI 解析 or 手动直填），待用户确认 / 编辑
+      manual: false, // 手动直填态（ADR-017）：可切 kind、隐藏「原文」、标题改「手动…」
+      petOptions: [], // 家庭已有宠物名单（AI 走 parseRecord 带回，手动走 pets list），picker / 错别字点选用
       atts: [], // 待上传附件（本地临时文件，确认归档后才上传，取消不留孤儿）
       attMax: ATT_MAX_PER_RECORD,
       examples: ['示例猫今天吐了，体重 4.2kg', '下月 15 号给示例狗打疫苗', '买了盒驱虫药 2 支，明年 3 月过期'],
+      // 受控枚举（与 saveRecord 落库校验对齐）；可编辑卡片的 picker range
+      EVENT_TYPES: ['症状', '用药', '疫苗', '驱虫', '体重', '就医', '其它'],
+      REM_TYPES: ['用药', '疫苗', '驱虫', '其它'],
+      REPEAT_OPTS: [
+        { label: '不重复', days: 0 },
+        { label: '每天', days: 1 },
+        { label: '每周', days: 7 },
+        { label: '每两周', days: 14 },
+        { label: '每月', days: 30 },
+        { label: '每3个月', days: 90 },
+        { label: '每半年', days: 182 },
+        { label: '每年', days: 365 },
+      ],
     }
+  },
+  computed: {
+    // picker 高亮项下标（parsed 为空时回 0；值不在枚举里回兜底项）
+    petIdx() {
+      const i = this.petOptions.indexOf(this.parsed && this.parsed.pet)
+      return i < 0 ? 0 : i
+    },
+    evtIdx() {
+      const i = this.EVENT_TYPES.indexOf(this.parsed && this.parsed.event_type)
+      return i < 0 ? this.EVENT_TYPES.length - 1 : i
+    },
+    remTypeIdx() {
+      const i = this.REM_TYPES.indexOf(this.parsed && this.parsed.rem_type)
+      return i < 0 ? this.REM_TYPES.length - 1 : i
+    },
+    repeatLabels() {
+      return this.REPEAT_OPTS.map((o) => o.label)
+    },
+    repeatIdx() {
+      const d = (this.parsed && this.parsed.rem_repeat_days) || 0
+      const i = this.REPEAT_OPTS.findIndex((o) => o.days === d)
+      return i < 0 ? 0 : i
+    },
+    // 事件时间拆「日期 / 时刻」给两个 picker（parsed.time 是单一真相 'YYYY-MM-DD HH:mm'，见 ADR-018）
+    timeDate() {
+      const t = String((this.parsed && this.parsed.time) || '')
+      return /^\d{4}-\d{2}-\d{2}/.test(t) ? t.slice(0, 10) : this.today()
+    },
+    timeClock() {
+      const t = String((this.parsed && this.parsed.time) || '')
+      return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(t) ? t.slice(11, 16) : '12:00'
+    },
   },
   methods: {
     cloudReady() {
@@ -206,6 +313,7 @@ export default {
       try {
         const res = await callFn('parseRecord', { text })
         const r = res.result || {}
+        if (this.manual) return // 解析返回前用户已切到结构化手动表单：丢弃这次 NL 结果，不覆盖
         if (!r.ok) {
           uni.showToast({ title: r.msg || '解析失败', icon: 'none' })
           return
@@ -217,6 +325,7 @@ export default {
         this.atts = [] // 新一次解析，清掉上一轮残留的待传附件
         this.petOptions = r.pets || []
         this.parsed = r.parsed
+        this.ensureEventClock() // 事件时间精确到分（ADR-018）：AI 只给日期时补当前时刻，卡片显示=落库时间
       } catch (e) {
         uni.showModal({
           title: 'AI 解析出错',
@@ -236,8 +345,131 @@ export default {
       this.parsed.pet = name
       this.parsed.pet_unknown = false
     },
+    // ===== 入口卡（ADR-017）=====
+    onScrimTap() {
+      // 点卡片外的暗背景关闭（卡片自身 @click.stop 不冒泡到此）；表单态不响应
+      if (!this.parsed) this.close()
+    },
+    close() {
+      uni.navigateBack({ delta: 1 })
+    },
+    voiceSoon() {
+      uni.showToast({ title: '语音录入开发中，敬请期待', icon: 'none' })
+    },
+    // ===== 手动直填（不调 LLM，见 ADR-017）=====
+    today() {
+      const d = new Date()
+      const z = (n) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`
+    },
+    nowClock() {
+      const d = new Date()
+      const z = (n) => String(n).padStart(2, '0')
+      return `${z(d.getHours())}:${z(d.getMinutes())}`
+    },
+    nowDateTime() {
+      return `${this.today()} ${this.nowClock()}` // 'YYYY-MM-DD HH:mm'，事件时间默认当前（精确到分，ADR-018）
+    },
+    // 确保 parsed.time 含时分（AI 只给日期时补当前时刻），让确认卡片显示的时间 = 最终落库时间
+    ensureEventClock() {
+      if (!this.parsed || this.parsed.kind !== 'record') return
+      const t = String(this.parsed.time || '')
+      if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(t)) {
+        const d = /^\d{4}-\d{2}-\d{2}/.test(t) ? t.slice(0, 10) : this.today()
+        this.parsed.time = `${d} ${this.nowClock()}`
+      }
+    },
+    onPickTimeDate(e) {
+      if (this.parsed) this.parsed.time = `${e.detail.value} ${this.timeClock}`
+    },
+    onPickTimeClock(e) {
+      if (this.parsed) this.parsed.time = `${this.timeDate} ${e.detail.value}`
+    },
+    // 数字出站归一：input 给的是字符串，转 number|null 再发，否则 saveRecord 的 typeof==='number' 兜底会把 "4.2" 判空丢值
+    numOrNull(v) {
+      if (typeof v === 'number') return Number.isFinite(v) ? v : null
+      if (v == null || v === '') return null
+      const s = String(v).replace(/[^\d.]/g, '')
+      if (s === '' || s === '.') return null
+      const n = Number(s)
+      return Number.isFinite(n) ? n : null
+    },
+    blankRecord() {
+      // 全字段空白记录（kind 可切），手动直填初值
+      return {
+        kind: 'record', valid: true, pet: '', new_pet: false, is_new: false, pet_unknown: false, species: 'cat',
+        time: this.nowDateTime(), event_type: '其它', weight: null, med: '', hospital: '', cost: null, tag: '', desc: '', raw: '',
+        rem_type: '其它', rem_title: '', rem_date: '', rem_repeat_days: 0,
+        med_name: '', med_effect: '', med_quantity: 1, med_expire: '',
+      }
+    },
+    async openManual() {
+      if (this.parsing) return // 解析进行中不切结构化，避免 LLM 结果回填覆盖手动表单
+      if (!this.cloudReady()) {
+        uni.showToast({ title: '请先配置云环境(CLOUD_ENV)', icon: 'none' })
+        return
+      }
+      // 手动不经 parseRecord，单独拉宠物名单供 picker（callFn 自动注入 family_id）
+      try {
+        const res = await callFn('pets', { action: 'list' })
+        const r = res.result || {}
+        this.petOptions = (r.ok && Array.isArray(r.data) ? r.data : []).map((p) => p.name).filter(Boolean)
+      } catch (e) {
+        this.petOptions = []
+      }
+      this.atts = []
+      this.manual = true
+      this.parsed = this.blankRecord()
+    },
+    setManualKind(k) {
+      if (this.parsed) this.parsed.kind = k
+    },
+    onPickPet(e) {
+      const n = this.petOptions[Number(e.detail.value)]
+      if (n != null && this.parsed) {
+        this.parsed.pet = n
+        this.parsed.pet_unknown = false
+      }
+    },
+    onPickEvt(e) {
+      const v = this.EVENT_TYPES[Number(e.detail.value)]
+      if (v && this.parsed) this.parsed.event_type = v
+    },
+    onPickRemType(e) {
+      const v = this.REM_TYPES[Number(e.detail.value)]
+      if (v && this.parsed) this.parsed.rem_type = v
+    },
+    onPickRepeat(e) {
+      const o = this.REPEAT_OPTS[Number(e.detail.value)]
+      if (o && this.parsed) this.parsed.rem_repeat_days = o.days
+    },
+    onPickDate(field, e) {
+      if (this.parsed) this.parsed[field] = e.detail.value
+    },
+    goAddPet() {
+      uni.navigateTo({ url: '/pages/pet/pet?mode=new' })
+    },
+    // 出站清洗：可编辑后字段含字符串，按 kind 拼干净 record（数字强转），saveRecord 仍二次校验
+    buildRecord() {
+      const p = this.parsed
+      const base = {
+        kind: p.kind, valid: true, pet: (p.pet || '').trim(), new_pet: !!p.new_pet, is_new: !!p.is_new,
+        pet_unknown: !!p.pet_unknown, species: p.species === 'dog' ? 'dog' : 'cat', raw: p.raw || '',
+      }
+      if (p.kind === 'med_stock') {
+        return { ...base, med_name: (p.med_name || '').trim(), med_effect: (p.med_effect || '').trim(), med_quantity: this.numOrNull(p.med_quantity) || 1, med_expire: p.med_expire || '' }
+      }
+      if (p.kind === 'reminder') {
+        return { ...base, rem_type: p.rem_type || '其它', rem_title: (p.rem_title || '').trim(), rem_date: p.rem_date || '', rem_repeat_days: this.numOrNull(p.rem_repeat_days) || 0 }
+      }
+      return {
+        ...base, time: p.time || this.nowDateTime(), event_type: p.event_type || '其它', weight: this.numOrNull(p.weight),
+        med: (p.med || '').trim(), hospital: (p.hospital || '').trim(), cost: this.numOrNull(p.cost), tag: (p.tag || '').trim(), desc: (p.desc || '').trim(),
+      }
+    },
     cancelParse() {
       this.parsed = null
+      this.manual = false
       this.atts = [] // 只是本地临时文件，丢弃即可，无云端孤儿
     },
     async addAtt() {
@@ -260,10 +492,15 @@ export default {
         uni.showToast({ title: '没听清名字，补一句宠物叫什么吧', icon: 'none' })
         return
       }
+      // 健康记录必须落到一只宠物（手动直填 / AI 都拦）：非建档意图且没选宠 → 不放行（saveRecord 也会拒，前端先省一次往返）
+      if (kind === 'record' && !this.parsed.is_new && !(this.parsed.pet || '').trim()) {
+        uni.showToast({ title: '先选一只宠物吧', icon: 'none' })
+        return
+      }
       const okMsg = kind === 'med_stock' ? '已入库' : kind === 'reminder' ? '已设提醒' : '已归档'
       this.saving = true
       try {
-        const res = await callFn('saveRecord', { record: this.parsed })
+        const res = await callFn('saveRecord', { record: this.buildRecord() })
         const r = res.result || {}
         if (r.ok) {
           // 健康记录带附件：先归档成功再上传登记（取消归档不产生云端孤儿；上传失败记录仍在，可去详情页补传）
@@ -285,6 +522,7 @@ export default {
           uni.showToast({ title: okMsg, icon: 'success' })
           this.draft = ''
           this.parsed = null
+          this.manual = false
           this.atts = []
           // 让来源 tab 在返回后 onShow 刷新；稍等 toast 露出再返回
           setTimeout(() => {
@@ -315,19 +553,48 @@ export default {
   padding: 32rpx var(--pad-page) 48rpx;
   box-sizing: border-box;
 }
-
-/* 录入编辑区 */
-.rec {
+/* 入口卡态：暗背景 + 居中卡（普通文档流，非 fixed，原生 textarea 不踩层级穿透坑，见 ADR-017） */
+.page--entry {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40rpx 24rpx;
+  background: rgba(58, 51, 48, 0.45);
 }
-.rec__title {
-  font-size: var(--fs-display);
+
+/* 入口卡 */
+.card {
+  width: 100%;
+  background: var(--c-card);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-3);
+  padding: 24rpx var(--pad-page) 32rpx;
+  box-sizing: border-box;
+}
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card__title {
+  font-size: var(--fs-h2);
   font-weight: 700;
   color: var(--c-text);
 }
-.rec__hint {
-  margin-top: 10rpx;
+.card__close {
+  width: 56rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  text-align: center;
+  font-size: var(--fs-body);
+  color: var(--c-text-3);
+}
+.card__close--press {
+  opacity: 0.5;
+}
+.card__hint {
+  display: block;
+  margin-top: 4rpx;
   font-size: var(--fs-sub);
   color: var(--c-text-2);
   line-height: 1.5;
@@ -392,38 +659,60 @@ export default {
   background: var(--c-primary-soft);
   box-shadow: none;
 }
-
-/* 确认弹层 */
-.sheet-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(58, 51, 48, 0.38);
+/* 「或换种方式」分隔 + 次级入口（结构化 / 语音，ADR-017） */
+.card__alt-divider {
   display: flex;
-  align-items: flex-end;
-  z-index: 50;
+  align-items: center;
+  gap: 16rpx;
+  margin: 28rpx 0 20rpx;
 }
-.sheet {
-  width: 100%;
-  background: var(--c-card);
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-  box-shadow: var(--sh-3);
-  padding: 16rpx var(--pad-page) calc(32rpx + env(safe-area-inset-bottom));
-  animation: sheet-up 0.26s cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-@keyframes sheet-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-.sheet__grab {
-  width: 64rpx;
-  height: 8rpx;
-  border-radius: var(--r-pill);
+.card__alt-line {
+  flex: 1;
+  height: 2rpx;
   background: var(--c-divider);
-  margin: 8rpx auto 24rpx;
+}
+.card__alt-text {
+  font-size: var(--fs-cap);
+  color: var(--c-text-3);
+}
+.alt-entries {
+  display: flex;
+  gap: 16rpx;
+}
+.alt-entry {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+  padding: 20rpx 8rpx;
+  background: var(--c-bg-sink);
+  border-radius: var(--r-lg);
+}
+.alt-entry--press {
+  transform: scale(0.97);
+}
+.alt-entry__ico {
+  font-size: 40rpx;
+  line-height: 1.15;
+}
+.alt-entry__name {
+  font-size: var(--fs-sub);
+  font-weight: 600;
+  color: var(--c-text);
+}
+.alt-entry--soon {
+  opacity: 0.7;
+}
+.alt-entry__soon {
+  font-size: var(--fs-tiny);
+  color: var(--c-text-3);
+}
+
+/* 录入表单（整页内联，替代旧底部弹层；规避原生 input/picker 在 fixed 弹层的层级穿透） */
+.form {
+  padding-top: 8rpx;
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
 }
 .sheet__title {
   display: block;
@@ -502,6 +791,80 @@ export default {
   font-weight: 600;
   box-shadow: inset 0 0 0 2rpx var(--c-primary);
 }
+
+/* 手动 kind 分段切换（ADR-017） */
+.kind-switch {
+  display: flex;
+  gap: 8rpx;
+  margin-bottom: 24rpx;
+  padding: 8rpx;
+  background: var(--c-bg-sink);
+  border-radius: var(--r-pill);
+}
+.kind-switch__item {
+  flex: 1;
+  height: 68rpx;
+  line-height: 68rpx;
+  text-align: center;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sub);
+  color: var(--c-text-2);
+}
+.kind-switch__item--active {
+  background: var(--c-card);
+  color: var(--c-primary-deep);
+  font-weight: 600;
+  box-shadow: var(--sh-1);
+}
+
+/* 可编辑字段：行内 input / picker（右对齐，贴合只读 field-row__value 排版） */
+.field-row__input {
+  flex: 1;
+  min-width: 0;
+  height: 56rpx;
+  padding: 0;
+  background: transparent;
+  text-align: right;
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--c-text);
+}
+.ph {
+  color: var(--c-text-3);
+  font-weight: 400;
+}
+.field-row__pick {
+  flex: 1;
+  min-width: 0;
+}
+.pickbox {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10rpx;
+}
+.pickbox__v {
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--c-text);
+  text-align: right;
+}
+.pickbox__c {
+  font-size: var(--fs-tiny);
+  color: var(--c-primary);
+}
+/* 事件时间：日期 + 时刻两段（精确到分，ADR-018） */
+.dt-pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 28rpx;
+}
+.dt-pick__part {
+  min-width: 0;
+}
+
 /* 附件选择区（确认卡片内） */
 .att {
   margin-bottom: 28rpx;

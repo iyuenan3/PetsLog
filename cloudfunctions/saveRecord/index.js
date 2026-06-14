@@ -18,6 +18,30 @@ function normalizeDate(v, fallback) {
   return fallback
 }
 
+// 事件时间归一（records.time，精确到分）：'YYYY-MM-DD HH:mm'（含带秒 / 单数位时分）→ 补零归一；
+// 仅日期 'YYYY-MM-DD' → 原样（不强加时间，旧记录 / AI 未给时保持纯日期）；解析不出回退 fallback。
+// 字典序仍单调（日期段定长零填充，时间段在其后），兽医小结按 time 排不失真。
+function normalizeDateTime(v, fallback) {
+  const t = String(v == null ? '' : v).trim()
+  const z = (n) => String(n).padStart(2, '0')
+  let m = t.match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})[ T](\d{1,2}):(\d{1,2})/)
+  if (m) return `${m[1]}-${z(m[2])}-${z(m[3])} ${z(m[4])}:${z(m[5])}`
+  m = t.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})\D*$/)
+  if (m) return `${m[1]}-${z(m[2])}-${z(m[3])}`
+  return fallback
+}
+
+// 事件时间 → created_at（ms，东八区）：有分用准点；仅日期用中午 12:00（延续历史导入约定，
+// 避免补录旧记录按 created_at 排到主时间线顶）；都不是回退当前时刻。主时间线 / 体重图按此排序。
+function createdAtFromTime(dt) {
+  const s = String(dt || '').trim()
+  let m = s.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})$/)
+  if (m) return Date.parse(`${m[1]}T${m[2]}:00+08:00`) || Date.now()
+  m = s.match(/^(\d{4}-\d{2}-\d{2})$/)
+  if (m) return Date.parse(`${m[1]}T12:00:00+08:00`) || Date.now()
+  return Date.now()
+}
+
 // 费用容错：number 原样；"480" / "480元" 取数；空 / 无数字串（如「免费」「未知」）/ 非数 → null
 // 注意：必须在 Number() 前判空串，否则 Number('')===0 会把无数字串错判成 0，污染「免费就诊(0)」语义
 function numOrNull(v) {
@@ -142,10 +166,11 @@ exports.main = async (event) => {
     return { ok: true, id: medRes._id, kind: 'med_stock' }
   }
 
+  const eventTime = normalizeDateTime(r.time, '') // 事件时间，精确到分（旧 / AI 未给时为纯日期）
   const doc = {
     family_id: familyId,
     pet: resolvedPet,
-    time: normalizeDate(r.time, ''),
+    time: eventTime,
     event_type: EVENT_TYPES.includes(r.event_type) ? r.event_type : '其它',
     weight: typeof r.weight === 'number' ? r.weight : null,
     med: r.med || null,
@@ -156,7 +181,7 @@ exports.main = async (event) => {
     raw: r.raw || '',
     attachments: [], // 附件列表（见 ADR-011），上传后由 attachment 云函数登记
     att_count: 0,
-    created_at: Date.now(),
+    created_at: createdAtFromTime(eventTime), // 由事件时间派生（精确到分；缺时中午），主时间线按此排
   }
   const addRes = await db.collection('records').add({ data: doc })
 
@@ -167,8 +192,9 @@ exports.main = async (event) => {
     if (petRes.data.length) {
       const p = petRes.data[0]
       // 仅当新记录日期 >= 已存最新体重日期时才回写，避免补录旧体重把「最新」覆盖回退
-      if (doc.weight && (!p.latest_weight_date || (doc.time || '') >= p.latest_weight_date)) {
-        await db.collection('pets').doc(p._id).update({ data: { latest_weight: doc.weight, latest_weight_date: doc.time || '' } })
+      const wDate = (doc.time || '').slice(0, 10) // latest_weight_date 保持纯日期语义（time 现含到分）
+      if (doc.weight && (!p.latest_weight_date || wDate >= p.latest_weight_date)) {
+        await db.collection('pets').doc(p._id).update({ data: { latest_weight: doc.weight, latest_weight_date: wDate } })
       }
     } else {
       // 字段集与 pets add 对齐（缺省值），避免后续读取 undefined 漂移
@@ -189,7 +215,7 @@ exports.main = async (event) => {
           avatar: '',
           avatar_emoji: '',
           latest_weight: doc.weight || null,
-          latest_weight_date: doc.weight ? doc.time || '' : '',
+          latest_weight_date: doc.weight ? (doc.time || '').slice(0, 10) : '',
           created_at: Date.now(),
         },
       })

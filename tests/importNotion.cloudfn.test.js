@@ -96,7 +96,7 @@ const FAKE_DATA = {
     { name: '示例狗', species: 'dog', breed: '柯基', birthday: '2021-01-01', home_date: '2021-02-01', chronic: '已绝育', note: '', intro: '', price_base: 0, neutered: true },
   ],
   records: [
-    { _id: 'imp_h_0', pet: '示例猫', time: '2023-06-19', event_type: '就医', tag: '软骨病', desc: '复查', raw: '复查', weight: 4.2, hospital: '爱康', cost: 480, med: '钙片', attachments: [{ key_name: '0.pdf', type: 'pdf', name: '病历.pdf', size: 1000, bytes: 1000 }] },
+    { _id: 'imp_h_0', pet: '示例猫', time: '2023-06-19', event_type: '就医', tag: '软骨病 ', desc: '复查', raw: '复查', weight: 4.2, hospital: '爱康', cost: 480, med: '钙片', attachments: [{ key_name: '0.pdf', type: 'pdf', name: '病历.pdf', size: 1000, bytes: 1000 }] },
     { _id: 'imp_d_0_0', pet: '示例狗', time: '2023-09-19', event_type: '驱虫', tag: '驱虫', desc: '猫驱虫', raw: '猫驱虫', weight: null, hospital: '', cost: null, med: '大宠爱', attachments: [] },
   ],
   foods: [{ name: '渴望', start_date: '2022-01-01', end_date: '', current: true, note: '' }],
@@ -123,26 +123,26 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
 
 ;(async () => {
   // 1. 家庭解析：admin 命中对名家庭
-  await run('resolve: admin 命中「南山有乔木」', async () => {
+  await run('resolve: admin 命中「测试家」', async () => {
     CUR_OPENID = 'uA'
-    seedFamily('F1', '南山有乔木', [{ openid: 'uA', role: 'admin' }])
+    seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }])
     seedFamily('F2', '别的家', [{ openid: 'uA', role: 'admin' }])
-    const r = await fn.main({ action: 'clear', family_name: '南山有乔木' })
+    const r = await fn.main({ action: 'clear', family_name: '测试家' })
     assert(r.ok === true && r.family_id === 'F1', '应解析到 F1，实际 ' + JSON.stringify(r))
   })
 
   // 2. 非管理员拒
   await run('resolve: 非管理员 → 拒', async () => {
     CUR_OPENID = 'uB'
-    seedFamily('F1', '南山有乔木', [{ openid: 'uA', role: 'admin' }, { openid: 'uB', role: 'member' }])
-    const r = await fn.main({ action: 'clear', family_name: '南山有乔木' })
+    seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }, { openid: 'uB', role: 'member' }])
+    const r = await fn.main({ action: 'clear', family_name: '测试家' })
     assert(r.ok === false && (r.code === 'NOT_ADMIN' || r.code === 'NOT_FOUND'), '非管理员应被拒，实际 ' + JSON.stringify(r))
   })
 
   // 3. 错误家庭名拒
   await run('resolve: 家庭名不存在 → 拒', async () => {
     CUR_OPENID = 'uA'
-    seedFamily('F1', '南山有乔木', [{ openid: 'uA', role: 'admin' }])
+    seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }])
     const r = await fn.main({ action: 'clear', family_name: '不存在的家' })
     assert(r.ok === false && r.code === 'NOT_FOUND', '应 NOT_FOUND，实际 ' + JSON.stringify(r))
   })
@@ -150,13 +150,13 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
   // 4. clear 只删目标家庭、删文件、归零 storage_bytes，别家不动
   await run('clear: 只清目标家庭 + 删文件 + 归零，别家不动', async () => {
     CUR_OPENID = 'uA'
-    seedFamily('F1', '南山有乔木', [{ openid: 'uA', role: 'admin' }])
+    seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }])
     seedFamily('F2', '别人家', [{ openid: 'uX', role: 'admin' }])
     DB_INST.data.families.find((f) => f._id === 'F1').storage_bytes = 5000
     DB_INST.data.pets = [{ _id: 'p1', family_id: 'F1', name: 'a', avatar: 'cloud://av1' }, { _id: 'p2', family_id: 'F2', name: 'b', avatar: 'cloud://av2' }]
     DB_INST.data.records = [{ _id: 'r1', family_id: 'F1', attachments: [{ fileID: 'cloud://f1', thumb: '' }] }, { _id: 'r2', family_id: 'F2', attachments: [{ fileID: 'cloud://f2', thumb: '' }] }]
     DB_INST.data.foods = [{ _id: 'fo1', family_id: 'F1', name: 'x' }, { _id: 'fo2', family_id: 'F2', name: 'y' }]
-    const r = await fn.main({ action: 'clear', family_name: '南山有乔木' })
+    const r = await fn.main({ action: 'clear', family_name: '测试家' })
     assert(r.ok === true, 'clear 应成功')
     assert(DB_INST.data.pets.length === 1 && DB_INST.data.pets[0].family_id === 'F2', 'F1 pets 删尽，F2 留')
     assert(DB_INST.data.records.length === 1 && DB_INST.data.records[0].family_id === 'F2', 'F1 records 删尽，F2 留')
@@ -169,8 +169,8 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
   // 5. import 正常：拼对 fileID、写 pets/records/foods、storage_bytes 回填
   await run('import: 拼 fileID + 写库 + 回填配额', async () => {
     CUR_OPENID = 'uA'
-    seedFamily('F1', '南山有乔木', [{ openid: 'uA', role: 'admin' }])
-    const r = await fn.main({ action: 'import', family_name: '南山有乔木' })
+    seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }])
+    const r = await fn.main({ action: 'import', family_name: '测试家' })
     assert(r.ok === true, 'import 应成功，实际 ' + JSON.stringify(r))
     assert((DB_INST.data.pets || []).length === 2, '应写 2 宠物')
     assert((DB_INST.data.records || []).length === 2, '应写 2 记录')
@@ -178,6 +178,7 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     const rec = DB_INST.data.records.find((x) => x._id === 'imp_h_0')
     assert(rec.attachments[0].fileID === PREFIX + 'att/imp_h_0/0.pdf', 'fileID 应拼成 prefix+att/imp_h_0/0.pdf，实际 ' + rec.attachments[0].fileID)
     assert(rec.att_count === 1, 'att_count=1')
+    assert(rec.tag === '软骨病', 'tag 落库 trim（去首尾空格，免 course 精确匹配查空）')
     assert(!('key_name' in rec.attachments[0]), 'key_name 应被清掉')
     assert(rec.imported === true, '应打 imported 标记')
     const dog = DB_INST.data.pets.find((p) => p.name === '示例狗')
@@ -189,9 +190,9 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
   // 5b. 幂等守卫：家庭已有 pets/records 时再 import → NOT_EMPTY 拒，不写脏数据
   await run('import: 非空家庭再导 → NOT_EMPTY 拒', async () => {
     CUR_OPENID = 'uA'
-    seedFamily('F1', '南山有乔木', [{ openid: 'uA', role: 'admin' }])
+    seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }])
     DB_INST.data.pets = [{ _id: 'existing', family_id: 'F1', name: '已有猫' }]
-    const r = await fn.main({ action: 'import', family_name: '南山有乔木' })
+    const r = await fn.main({ action: 'import', family_name: '测试家' })
     assert(r.ok === false && r.code === 'NOT_EMPTY', '已有数据应拒 NOT_EMPTY，实际 ' + JSON.stringify(r))
     assert((DB_INST.data.records || []).length === 0, '拒后不写 records')
   })
@@ -199,11 +200,48 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
   // 6. import 坏链中止：附件未上传 → ATT_MISSING，不写库
   await run('import: 附件坏链 → ATT_MISSING 中止不写库', async () => {
     CUR_OPENID = 'uA'
-    seedFamily('F1', '南山有乔木', [{ openid: 'uA', role: 'admin' }])
+    seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }])
     MISSING_FILEIDS.add(PREFIX + 'att/imp_h_0/0.pdf') // 模拟该附件没传上去
-    const r = await fn.main({ action: 'import', family_name: '南山有乔木' })
+    const r = await fn.main({ action: 'import', family_name: '测试家' })
     assert(r.ok === false && r.code === 'ATT_MISSING', '应 ATT_MISSING，实际 ' + JSON.stringify(r))
     assert((DB_INST.data.pets || []).length === 0 && (DB_INST.data.records || []).length === 0, '中止时不应写任何库')
+  })
+
+  // 7. clean_tags（ADR-019 tag 治理）：dryRun 预览 / 真清非病程 tag / 留病程 / 别家不动 / 只动 tag / 幂等
+  const seedCleanRecs = () => {
+    DB_INST.data.records = [
+      { _id: 'r1', family_id: 'F1', tag: '驱虫', raw: '原文1', desc: 'd1' },
+      { _id: 'r2', family_id: 'F1', tag: '记录体重', raw: '原文2', desc: 'd2' },
+      { _id: 'r3', family_id: 'F1', tag: '嗜酸性肉芽肿', raw: '原文3', desc: 'd3' },
+      { _id: 'r4', family_id: 'F1', tag: '', raw: '原文4', desc: 'd4' },
+      { _id: 'r5', family_id: 'F2', tag: '驱虫', raw: '别家', desc: 'dx' },
+    ]
+  }
+  await run('clean_tags: dryRun 默认只预览不写', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }]); seedFamily('F2', '别家', [{ openid: 'uX', role: 'admin' }])
+    seedCleanRecs()
+    const r = await fn.main({ action: 'clean_tags', family_name: '测试家' })
+    assert(r.ok === true && r.dryRun === true, '默认应 dryRun 预览')
+    assert(r.matched === 2 && r.cleared === 0, 'dryRun 命中 2 不写，实际 ' + JSON.stringify({ m: r.matched, c: r.cleared }))
+    assert(r.byTag['驱虫'] === 1 && r.byTag['记录体重'] === 1, 'byTag 计数对')
+    assert(DB_INST.data.records.find((x) => x._id === 'r1').tag === '驱虫', 'dryRun 不改库')
+  })
+  await run('clean_tags: dryRun:false 清非病程 / 留病程 / 别家不动 / 只动 tag', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }]); seedFamily('F2', '别家', [{ openid: 'uX', role: 'admin' }])
+    seedCleanRecs()
+    const r = await fn.main({ action: 'clean_tags', family_name: '测试家', dryRun: false })
+    assert(r.ok === true && r.dryRun === false && r.cleared === 2, '应真清 2 条，实际 ' + JSON.stringify({ d: r.dryRun, c: r.cleared }))
+    const g = (id) => DB_INST.data.records.find((x) => x._id === id)
+    assert(g('r1').tag === '' && g('r2').tag === '', '非病程 tag(驱虫/记录体重)清空')
+    assert(g('r3').tag === '嗜酸性肉芽肿', '病程 tag 保留')
+    assert(g('r5').tag === '驱虫', '别家 F2 绝不动')
+    assert(g('r1').raw === '原文1' && g('r1').desc === 'd1', '只动 tag，raw/desc 一律不碰')
+  })
+  await run('clean_tags: 幂等，清完再跑 0 命中', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }])
+    DB_INST.data.records = [{ _id: 'r1', family_id: 'F1', tag: '', raw: 'x' }, { _id: 'r3', family_id: 'F1', tag: '尿闭', raw: 'y' }]
+    const r = await fn.main({ action: 'clean_tags', family_name: '测试家', dryRun: false })
+    assert(r.matched === 0 && r.cleared === 0, '已无非病程 tag 应 0 命中，实际 ' + JSON.stringify({ m: r.matched, c: r.cleared }))
   })
 
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)

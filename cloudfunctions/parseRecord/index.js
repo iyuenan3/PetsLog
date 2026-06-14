@@ -64,13 +64,21 @@ exports.main = async (event) => {
     return { ok: false, code: 'RATE_LIMIT', msg: `今日记录次数已达上限（${DAILY_LIMIT}）` }
   }
 
-  // 取家庭已有宠物名单做实体匹配
-  const petsRes = await db.collection('pets').where({ family_id: familyId }).field({ name: true }).get()
-  const petNames = petsRes.data.map((p) => p.name).filter(Boolean)
+  // 取家庭已有宠物（名 + 物种）：名用于服务端实体匹配，物种喂 LLM 助 species 判断 / 同名消歧（ADR-020）
+  const petsRes = await db.collection('pets').where({ family_id: familyId }).field({ name: true, species: true }).get()
+  const pets = petsRes.data.filter((p) => p.name)
+  const petNames = pets.map((p) => p.name)
+
+  // 病程标签候选（ADR-020）：喂 LLM「优先复用该家庭已用病程 tag」，把开放集收敛成准闭集、提 tag 准确率。
+  // 治理后非病程 tag 已清（ADR-019），库里剩的 tag 即病程线；新家庭为空（不喂跨家庭静态全集，免污染）。
+  // limit 1000 = 候选启发式上限（现实家庭记录数远低于此，病程 tag 高频复现，足以覆盖全集，不必为候选分页拖慢每次解析）；
+  // Phase 1 的 timeline `list_tags`（distinct，ADR-019）落地后改走它，chip 全集与 LLM 候选一份两用。
+  const tagRes = await db.collection('records').where({ family_id: familyId }).field({ tag: true }).limit(1000).get().catch(() => ({ data: [] }))
+  const courseTags = [...new Set(tagRes.data.map((r) => (r.tag || '').trim()).filter(Boolean))]
 
   let parsed
   try {
-    parsed = await callGateway(text, petNames, today)
+    parsed = await callGateway(text, pets, courseTags, today)
   } catch (e) {
     return { ok: false, code: 'LLM_ERROR', msg: 'AI 解析失败', detail: String((e && e.message) || e) }
   }
@@ -95,14 +103,14 @@ exports.main = async (event) => {
   return { ok: true, parsed, pets: petNames }
 }
 
-function callGateway(text, petNames, today) {
+function callGateway(text, pets, tags, today) {
   return new Promise((resolve, reject) => {
     // 注：doubao 系上游对 response_format=json_object 支持不稳（auto-llm 时代实测 400），
     // 不依赖它，靠强提示词 + temperature 0 + 下方 extractJson 解析容错。
     const payload = JSON.stringify({
       model: MODEL,
       temperature: 0,
-      messages: buildMessages(text, petNames, today),
+      messages: buildMessages(text, pets, tags, today),
     })
     const u = new URL(BASE_URL.replace(/\/$/, '') + '/chat/completions')
     const options = {
@@ -184,7 +192,7 @@ function normalize(o, raw, today) {
     pet: String(o.pet || '').trim(), // trim 与 saveRecord 对齐，否则尾空格让精确名误判 pet_unknown；String 防 LLM 输出数字名
     new_pet: o.new_pet === true, // 显式新增宠物意图（ADR-015），缺省 false
     species: o.species === 'dog' ? 'dog' : 'cat',
-    time: normalizeDate(o.time, today),
+    time: normalizeDateTime(o.time, today), // 事件时间，精确到分（缺时分则纯日期，前端补默认）
     event_type: o.event_type || '其它',
     weight: typeof o.weight === 'number' ? o.weight : null,
     med: o.med || null,
@@ -203,7 +211,8 @@ function normalize(o, raw, today) {
     rem_title: o.rem_title || '',
     rem_date: normalizeDate(o.rem_date, ''),
     rem_repeat_days: typeof o.rem_repeat_days === 'number' ? o.rem_repeat_days : Number(o.rem_repeat_days) || 0,
-    raw: o.raw || raw,
+    // ADR-020：原文逐字落库，以服务端收到的用户 text 为准，不取 LLM 回填的 raw（防 LLM 改错别字 / 吞字致原文失真）
+    raw,
   }
 }
 
@@ -217,6 +226,18 @@ function normalizeDate(v, fallback) {
     const z = (n) => String(n).padStart(2, '0')
     return `${m[1]}-${z(m[2])}-${z(m[3])}`
   }
+  return fallback
+}
+
+// 事件时间归一（records.time，精确到分）：LLM 给出时分（如「下午3点半」→「15:30」）则保留 'YYYY-MM-DD HH:mm'；
+// 只给日期则保持纯日期（前端确认卡片会补默认时分，最终落库 created_at 由 saveRecord 派生）。与 saveRecord 同款，两处同步改。
+function normalizeDateTime(v, fallback) {
+  const t = String(v == null ? '' : v).trim()
+  const z = (n) => String(n).padStart(2, '0')
+  let m = t.match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})[ T](\d{1,2}):(\d{1,2})/)
+  if (m) return `${m[1]}-${z(m[2])}-${z(m[3])} ${z(m[4])}:${z(m[5])}`
+  m = t.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})\D*$/)
+  if (m) return `${m[1]}-${z(m[2])}-${z(m[3])}`
   return fallback
 }
 

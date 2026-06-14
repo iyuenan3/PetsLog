@@ -1,7 +1,7 @@
 # DEPLOYMENT — PetsLog
 <!-- 跑哪/怎么跑/共享什么。key→哪都不写。共享底座属本项目就写这；消费别人的只在 RELATIONS 指属主。 -->
 
-内测部署中（2026-06-10）。后端已上微信云开发环境 `cloud1-…`（envId 非机密，存 `src/config.js`）；9 个云函数（parseRecord / saveRecord / pets / timeline / meds / reminders / family / user / attachment）+ 10 个集合（pets / records / meds / reminders / parse_log / att_log / families / family_members / invites / users）+ 云存储（附件 / 头像），录入主链路 + 提醒 + 家庭多租户 + 个人中心真机跑通。前端走体验版，未正式上架。
+内测部署中（2026-06-11）。后端已上微信云开发环境 `cloud1-…`（envId 非机密，存 `src/config.js`）；11 个云函数（parseRecord / saveRecord / pets / timeline / meds / reminders / family / user / attachment / foods / importNotion）+ 11 个集合（pets / records / meds / reminders / parse_log / att_log / families / family_members / invites / users / foods）+ 云存储（附件 / 头像），录入主链路 + 提醒 + 家庭多租户 + 个人中心 + 附件 + 主粮真机跑通。前端走体验版，未正式上架。
 
 ## 当前部署
 - **环境**：微信云开发免费环境（内测期免费；正式上线后第 15 天到期需买 ¥19.9/月 基础套餐）。
@@ -14,8 +14,31 @@
 - **后端 = 微信云开发环境**（Serverless）：无独立主机、无服务器、无域名、无 ICP 备案、无 SSL。云函数 + 云数据库 + 云存储托管在微信生态内，按量计费（自用 + 小圈子量级预计在免费额度内）。
 - **前端 = 微信小程序**：开发者工具上传 → 微信审核 → 发布。初期免费内测；收会员费需企业主体 + 个体工商户营业执照 + 微信支付（远期）。
 
+## 内测发布（体验版）
+内测走「体验版」：免 ICP 备案、免提审，受体验成员名单约束。正式公开（线上版）才需 ICP 备案 + 提审 + 类目资质。
+
+**前端代码版（CLI / GUI 流程，与云函数 wxcloud 部署是两条独立链路）：**
+- 出生产包：`npm run build:mp-weixin` → `dist/build/mp-weixin`（≈0.65MB，远低于 2MB 主包上限，无需分包）。
+- DevTools 导入 `dist/build/mp-weixin` → 工具栏「上传」→ 填版本号 + 备注 → 进 mp.weixin.qq.com 版本管理「开发版本」。**上传只传小程序代码，不含 cloudfunctions**（云函数走 `wxcloud function:upload`，互不影响）。
+- mp 后台：开发版本 → 「选为体验版」生成二维码；成员管理 → 体验成员加微信号；发二维码给内测者扫码进。
+
+**用户隐私保护指引（上内测前必填，否则隐私接口直接 fail）：** mp 后台 → 设置 → 用户隐私保护，按下表声明（按实际代码扫描，2026-06-11）：
+
+| 个人信息类型 | 用途 / 收集场景 | 触发接口 |
+|---|---|---|
+| 相册（选取的图片 / 视频） | 给健康记录挂病历照片 / 视频、设宠物头像 | `wx.chooseMedia`（attachments.js / pet.vue） |
+| 摄像头 | 拍照 / 录像作病历附件或头像 | `wx.chooseMedia`（sourceType=camera） |
+| 选中的文件 | 选微信聊天里的 PDF 病历作附件 | `wx.chooseMessageFile`（attachments.js） |
+| 保存到相册 | 把生成的「兽医小结」图存到相册 | `wx.saveImageToPhotosAlbum`（pet.vue，scope.writePhotosAlbum） |
+| 微信头像 / 昵称 | 个人中心填头像（chooseAvatar）/ 昵称 | `open-type=chooseAvatar`（profile.vue）/ `input type=nickname` |
+| 微信 openid | 账号体系 + 家庭多租户隔离键 | 云开发登录态自动获取（非主动授权接口，但建议在指引中说明） |
+
+- **待补（语音轮）**：录音 / 麦克风（`scope.record`，同声传译插件），做语音录入时同步加进本指引。
+- 类目避开「医疗 / 健康（诊断）」受限类目，选「工具」类，守「不碰医疗诊断 / 处方」红线。
+
 ## 域名 / 入口
 - 不需要域名（云开发免备案）。这是选云开发而非自建服务器的关键原因之一（开发者当前无可用 ICP 备案域名）。→ DECISIONS ADR-002。
+- 前端只走云调用（`wx.cloud`），LLM 出网在云函数服务端（不受小程序域名白名单限制），故「合法域名 / 业务域名」基本无需配置。
 
 ## 共享底座引用
 - LLM 直连火山方舟 Coding Plan（OpenAI 兼容 `https://ark.cn-beijing.volces.com/api/coding/v3`，模型 `doubao-seed-2.0-pro`，ADR-016）。端点 / 模型公开，唯一机密是 API Key。

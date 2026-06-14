@@ -12,6 +12,17 @@
 - 云函数：`parseRecord`（解析）/ `saveRecord`（落库）/ `pets`·`timeline`·`meds`·`reminders`（CRUD）/ `family`（家庭 CRUD + 集中 assertMember/assertAdmin 守卫）/ `user`（个人档案）。
 - **隔离键须显式写**：云函数服务端 add【不会】自动注入 `_openid`（仅小程序端 SDK 会），凡按身份/家庭隔离的写入，隔离键（`family_id` 或显式 `_openid`/`openid`）必须显式落库，否则按它永远查不回。见 MEMORY。
 
+## 多租户隔离（红线）
+攻击者 = 合法登录用户，`OPENID` 由 `cloud.getWXContext()` 取（不可伪造），但 `event` 里的 `family_id` / 记录 id / `record_id` / `openid` / `pet` 等客户端入参一律不可信。四条隔离不变式，每个涉及家庭数据的 action 都须满足（审计 2026-06-14 全绿，见 `tests/isolation.e2e.test.js`）：
+1. **鉴权闸前置零例外**：触库前必先 `assertMember(OPENID, familyId)`（写敏感 / 管理操作过 `assertAdmin`）；连解析、限流计数、只读列表都不放过。
+2. **family_id 作用域闭合**：所有 `where` 带 `family_id`；不存在「只按 name/pet 跨家庭查」（唯二按 name 的查询 saveRecord 宠物名、attachment 重算体重都带 `family_id`）。
+3. **IDOR 防护**：凡 `doc(clientId).get/update/remove`，clientId 不可信，必先取文档校验 `doc.family_id === familyId`（或 id 来自 `family_id` 受限查询）。reminders 用 `own()`、foods/attachment 用 `getOwnedRecord`、pets 内联校验、saveRecord 体重回写用 `family_id+name` 查出的 `_id`。
+4. **openid 单一可信源**：身份一律取 `getWXContext` 的 `OPENID`；客户端 `event.openid` 只能当「操作对象」（removeMember/transferAdmin 的 target），绝不当身份。闸用的 `familyId` 必须与后续所有查询同一个变量（无「闸 A 查 B」短路）。
+
+跨函数契约：`parseRecord` 从不写库，`saveRecord` 收到 parse 结果后用自己的 `event.family_id` **独立再过一次闸**并以服务端变量 stamp 每条写入，绝不取 record 里的 client 字段（攻击者篡改 save 的 family_id → `NOT_MEMBER`）。`importNotion` 不收客户端 family_id，按 `OPENID + role:'admin'` 反查家庭名（同名 `AMBIGUOUS` 拒）。
+
+**⚠️ assertMember 是各云函数手工复制的多份副本**（family/pets/timeline/saveRecord/parseRecord/reminders/meds/foods/attachment 各一份，family 拆 `getMembership`+`assertAdmin`，importNotion 用更严的 `resolveFamily`），**非共享 lib**。当前全部语义一致，但任意一份被单独改动（去掉 `family_id` 条件、把 `throw` 改成 `return`、漏判 0 命中）都不会被编译期发现，会让该函数整体失守。**红线：改任一份 assertMember 必须 N 份同步 + 跑 `npm test`（含 `tests/isolation.e2e.test.js` 隔离回归）通过才提交。**
+
 ## 偏好模式
 - LLM 调用收敛到单个云函数 `parseRecord`，便于换模型、限流、改 prompt。
 - AI 强制 JSON：强提示词 + temperature 0 + 云函数 `extractJson` 容错解析（不用 response_format，见 DECISIONS ADR-005）；非健康 / 非药品内容返回 `valid=false`。

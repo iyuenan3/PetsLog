@@ -18,7 +18,11 @@
     },
     {
       "path": "pages/record/record",
-      "style": { "navigationBarTitleText": "记一笔" }
+      "style": { "navigationBarTitleText": "记录" }
+    },
+    {
+      "path": "pages/course/course",
+      "style": { "navigationBarTitleText": "病程" }
     },
     {
       "path": "pages/pet/pet",

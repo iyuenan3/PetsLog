@@ -169,7 +169,7 @@ async function importData(fid) {
         med: r.med || null,
         hospital: r.hospital || '',
         cost: typeof r.cost === 'number' ? r.cost : null,
-        tag: r.tag || '',
+        tag: (r.tag || '').trim(), // trim 对齐 saveRecord/parseRecord（SPEC 落库 trim），免带空格 tag 让 course 精确匹配查空
         desc: r.desc || '',
         raw: r.raw || '',
         attachments: atts,
@@ -313,6 +313,33 @@ async function stats(fid) {
   return { ok: true, ...out }
 }
 
+// tag 轻量治理（ADR-019）：tag 收敛为「病程线」，清掉非病程 tag —— 与 event_type 重复的（驱虫 / 疫苗 / 记录体重）、
+// 可归就医桶的（体检）、已有专用字段的里程碑（到家↔home_date / 绝育↔neutered）、无意义的（未知）。
+// 只动 tag 字段置空，raw / desc / 记录本身一律不碰；幂等（清完再跑 0 命中）；可逆（data.json 保留原始 tag 为恢复源，故不清它）。
+// 安全：默认 dryRun 预览只计数不写，须显式传 { dryRun: false } 才真改（先验尺再动手）。
+const NON_COURSE_TAGS = ['驱虫', '疫苗', '体重', '记录体重', '体检', '到家', '绝育', '未知']
+async function cleanTags(fid, dryRun) {
+  const byTag = {}
+  const ids = []
+  // 先全量扫出命中再改：dryRun 不写、非 dryRun 也是 scan 完才 update，扫描期结果集不变，skip 分页稳定
+  for (let skip = 0; ; skip += 100) {
+    const rs = (await db.collection('records').where({ family_id: fid, tag: _.in(NON_COURSE_TAGS) }).field({ tag: true }).skip(skip).limit(100).get().catch(() => ({ data: [] }))).data
+    for (const r of rs) {
+      byTag[r.tag] = (byTag[r.tag] || 0) + 1
+      ids.push(r._id)
+    }
+    if (rs.length < 100) break
+  }
+  let cleared = 0
+  if (!dryRun) {
+    for (const id of ids) {
+      await db.collection('records').doc(id).update({ data: { tag: '' } }).catch(() => {})
+      cleared++
+    }
+  }
+  return { ok: true, dryRun: !!dryRun, matched: ids.length, byTag, cleared }
+}
+
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
   const action = (event && event.action) || ''
@@ -337,6 +364,10 @@ exports.main = async (event) => {
     }
     if (action === 'stats') {
       return await stats(fid)
+    }
+    if (action === 'clean_tags') {
+      // 默认预览（dryRun=true）；真改须显式传 { action:'clean_tags', family_name, dryRun:false }
+      return await cleanTags(fid, event.dryRun !== false)
     }
     return { ok: false, msg: 'unknown action: ' + action }
   } catch (e) {

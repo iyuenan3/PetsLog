@@ -3,6 +3,23 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## 安全审计 · 家庭多租户隔离回归 E2E · 2026-06-14
+- Audited: **13-agent workflow 审计 11 个云函数 + 前端的家庭多租户隔离**，四条不变式（① 鉴权闸触库前零例外 ② `family_id` 作用域闭合 ③ IDOR 按 id 直操作前校验 `doc.family_id` ④ openid 单一可信源 `getWXContext`，闸与查询同一变量）全绿，**0 可利用缺陷**；每条 finding 经对抗式复核（默认怀疑、按设计的安全写法判 false-positive）。
+- Verified: 系统性横向比对 9 份手工复制的 `assertMember` 副本语义一致（family 拆 `getMembership`+`assertAdmin`、importNotion 用更严的 `resolveFamily` 反查 admin 家庭），无漂移、无漏 where 条件、无吞错误返 falsy；跨函数契约 parse→save 由 `saveRecord` 用自己的 `event.family_id` 独立再过一次闸把关（攻击者篡改 save 的 family_id → `NOT_MEMBER`，落不进别家）。
+- Added: **`tests/isolation.e2e.test.js`（64 断言，9 组安全契约）**：可变 `CUR_OPENID` 模拟攻击者改包，串真实云函数验 A 鉴权闸跨家庭 8 函数全 `NOT_MEMBER` / B 空 family_id → `NO_FAMILY` / C IDOR 删改读别家文档被归属校验挡 / D parse→save 篡改链 / E importNotion 越权（`NOT_ADMIN`/`NOT_FOUND`/`AMBIGUOUS`）/ F 角色身份混淆 / G 邀请码加入 + 被踢后旧码 `BAD_CODE` / H 同名宠物不串档（`PET_UNKNOWN`）/ I 最后一人退出即解散且只清自己家。接入 `npm test`（9 套共 **234 断言**全绿）。
+- Added: **`tests/README.md`**：三层测试哲学（单函数集成 / 功能契约 E2E / 安全契约 E2E）+ `Module._load` mock 基建 + 各套覆盖表 + mock 内存 DB 能力边界（无 `_.lt`，故隔离测试邀请码用不限次）+ 真机层抓不到什么。
+- Hardened: **CONVENTIONS 新增「多租户隔离（红线）」节**：四条不变式写成契约 + 立 **assertMember 多副本同步红线**（非共享 lib，改任一份必须 N 份同步 + 跑隔离回归通过才提交，防单函数静默失守）。
+- Note: 本次为安全审计 + 测试 + 文档，无云函数 / 前端代码改动；3 处改动（isolation.e2e.test.js / tests/README.md / CONVENTIONS）待随 v0.4.5 批次 commit。
+
+## v0.4.5 · 2026-06-12 · 录入重做：结构化直填 + 确认卡片可编辑 + 点＋弹「记录」入口卡 + 时间精确到分（ADR-017/018）
+- Added: **结构化直填（不调 LLM，ADR-017）**：录入新增「结构化逐项填」一路，不过 parseRecord、不写 parse_log、不耗解析配额，前端拼同形 record 直接调 saveRecord（**saveRecord 本就是落库校验边界**，normalizeDate / numOrNull / event_type 枚举 / fuzzyMatchPet + PET_UNKNOWN 服务端原样兜底，故零新增云函数 / 集合 / 字段）。明确知道哪只宠 / 哪天 / 什么类型时可精确录入，离线或上游故障时也能录。
+- Added: **确认卡片改全字段可编辑（ADR-017）**：AI 解析结果卡片从只读变可编辑，三种 kind（record / reminder / med_stock）全字段 picker / selector / input 内联改 —— AI 错一个字段（如体重识别错）直接改卡片即可，不再「返回改原文重调一次 LLM」。一份 UI 两用：手动直填 + AI 结果内联修。宠物字段三态守 ADR-015（is_new 建档意图保留唯一建宠通道，其余 picker 选已有，record 落库前必须有 pet）；数字字段出站强制本地 numOrNull（input 给字符串，否则 saveRecord 的 `typeof==='number'` 兜底把 "4.2" 判空丢值）。
+- Changed: **点＋弹「记录」入口卡（as-built，多版线框图评审选定「A 三入口卡」；入口卡 / 录入键文案由原拟名「记一笔」统一改为「记录」，涉导航标题 / 入口卡 / 确认卡 / 首页空状态按钮 4 处）**：中央＋仍 navigateTo /pages/record，入口态呈暗背景遮罩 + 居中卡，自然语言 textarea 居中为主入口，下方「或换种方式」分隔线 + 结构化 / 语音两个次级入口（语音禁用占位 toast「敬请期待」，留下一轮）。**入口卡走普通文档流（非 `position:fixed` 浮层）**，原生 textarea 不踩同层渲染穿透坑；表单整页内联，废弃原底部弹层（`sheet-mask`）—— 同因规避原生 input/picker 进 fixed 浮层的层级穿透 / 上滑跳位真机风险。点暗处 / ✕ → navigateBack 关闭。
+- Changed: **records.time 精确到分 + created_at 由事件时间派生（ADR-018）**：time 升为 `'YYYY-MM-DD HH:mm'`（缺时刻保留纯日期），`normalizeDateTime`（saveRecord + parseRecord 两处同步）日期段定长零填充保字典序；created_at 由事件时间派生（`createdAtFromTime`）：有分用准点（东八区），仅日期用当日 **12:00**（延续历史导入约定，避免补录旧记录排到时间线顶）。结构化表单时间 = 日期 picker + 时刻 picker（mode=time，到分）；AI 进卡片时 `ensureEventClock` 补当前时刻。prompt 教 LLM 说了时刻才输出 HH:mm + 1 条 few-shot。库内 217 条历史（纯日期 + 中午派生）不受影响，展示零改（timeline `slice(5)` 天然带出到分、体重图轴标 `slice(2,10)` 天然停在日期）。
+- Tested: saveRecord 集成测试加 2 组（时间 / created_at 到分 + latest_weight_date 仍纯日期；仅日期 → created_at 落中午 12:00），saveRecord 套 27 → 32 断言；五套共 114 断言（npm test 全绿）。
+- Deployed: saveRecord / parseRecord 已 `wxcloud function:upload` 重新部署；前端产物 `dist/build/mp-weixin`（≈0.65MB）走体验版内测。AIREADME 同步：DECISIONS 加 ADR-017/018、SPEC 改 records.time / created_at 字段说明、DEPLOYMENT 加内测发布（体验版）+ 用户隐私保护指引清单。
+- Note: 前端改动（record.vue 等）+ 云函数源码改动尚未 commit，待内测真机回归通过 + commit 前对抗式评审后随 v0.4.5 一并提交。
+
 ## v0.4.4 · 2026-06-11 · LLM 上游切换：火山方舟 Coding Plan 直连（弃自建网关，ADR-016 反转 ADR-003）
 - Changed: parseRecord 上游从自建 newapi 网关中转改为**火山方舟 Coding Plan 直连**（OpenAI 兼容 `https://ark.cn-beijing.volces.com/api/coding/v3`，模型 `doubao-seed-2.0-pro`），消灭中转站单点（挂则 AI 录入整体不可用）。配置整套换名 `GATEWAY_*` → `ARK_*`，端点 / 模型进 config.local.js 可改（换后端 LLM 不动代码），唯一机密 ARK_API_KEY；**删除自签 root CA 信任逻辑**（方舟公网正规证书），「CA pinned 不可轮换」跨项目约束随之作废（CORE / RELATIONS / ARCHITECTURE / DEPLOYMENT / CLAUDE.md 同步清理）。
 - Fixed: dist/dev 与 dist/build 残留的旧 newapi config.local.js 副本（含退役 token + 自签 CA）覆盖清理。
@@ -23,7 +40,7 @@
 
 ## v0.4.1 · 2026-06-11 · 轮3 导入执行收口 + Notion 实时全量核对清洗 + 体重曲线横滑
 - Added: importNotion 增 4 个一次性运维动作：`import_foods`（首轮 import 在 foods 集合未建处崩的续传，带 FOODS_NOT_EMPTY 护栏）、`backfill_weight`（从 records 按事件日期回填 pets.latest_weight，导入绕过 saveRecord 回写所致）、`fix_times`（删无日期记录 + 导入记录 created_at 统一「事件日期 + 12:00」）、`stats`（只读体检：计数 + noon 校验 + 脏记录扫描，count 全兜底集合不存在）。主 import 同步：写 pets 自算 latest_weight、created_at 改 12:00 派生、写 foods 前 createCollection 兜底。
-- Changed: 体重曲线重做：等间距（每点 ≥56px）+ scroll-view 横滑（固定 y 轴不随滑动跑）+ 默认滚到最新（实测滚动偏移二次校验，绕开同值赋值不生效）+ 日期标签按间距挑点画（≥70px，带日防同月重复）。**canvas 物理宽夹紧 ≤4000px**：微信 canvas 2d 有单边上限（文档 1365×1365，实测 ~4096），乔治 27 个体重点 × dpr3 = 4440 已越线，不夹真机整块白屏（评审 HIGH）。
+- Changed: 体重曲线重做：等间距（每点 ≥56px）+ scroll-view 横滑（固定 y 轴不随滑动跑）+ 默认滚到最新（实测滚动偏移二次校验，绕开同值赋值不生效）+ 日期标签按间距挑点画（≥70px，带日防同月重复）。**canvas 物理宽夹紧 ≤4000px**：微信 canvas 2d 有单边上限（文档 1365×1365，实测 ~4096），某宠 27 个体重点 × dpr3 = 4440 已越线，不夹真机整块白屏（评审 HIGH）。
 - Fixed: **Notion 实时全量核对**（21 agent 经 Notion MCP 拉全部 240 页逐字段 diff data.json）：档案 / 记录字段 / 费用对账 / 主粮全一致；修 3 处：CSV 尾部空行混入的全空记录、2 条 Notion 源头漏填日期的体重记录（经用户确认删除）、created_at 全在 00:00 → 12:00（约定缺时间默认中午）。库内终态 9 宠 / 217 记录 / 12 主粮 / 46 附件，stats 全绿。
 - Fixed: 导入执行三连坑：importNotion 超时默认 3s 中途被杀（控制台调 60s）；**partial import 后再 clear 会把半写入记录引用的 staged 附件当旧文件删掉**（7 个附件重传，注意 `storage:upload -r` 传目录不能传完整键，否则 key 变 `key/文件名`）；foods 集合未建 import 崩在写 foods（集合不自动创建）。
 - Fixed: transform.py 日期必填护栏补齐健康 + 驱虫双循环（无日期行跳过并打印）；首页 openPet 跳转加 fail 弹窗（真机偶发不跳转可见原因）。

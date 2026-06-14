@@ -1,34 +1,36 @@
 <template>
   <view class="page">
-    <!-- 病程筛选条（简版）：有病程标签的记录才出现，见 ADR-012 双轴 -->
-    <scroll-view v-if="records.length && tags.length" scroll-x class="tl-filter" :show-scrollbar="false">
+    <!-- 病程入口条（ADR-019）：chip 全集由 list_tags 提供（分页全扫，含被挤出前 50 条的老病程，修「老病程无入口」bug）；
+         点 chip 跳病程完整视图（不带 pet → 跨宠时 course 内再下钻），与记录内联 🏷️ 同语义为「入口」非「本地过滤」 -->
+    <scroll-view v-if="courseTags.length" scroll-x class="tl-filter" :show-scrollbar="false">
       <view class="tl-filter__inner">
-        <text :class="['tl-filter__chip', activeTag === '' ? 'is-on' : '']" @click="setTag('')">全部</text>
         <text
-          v-for="t in tags"
+          v-for="t in courseTags"
           :key="t"
-          :class="['tl-filter__chip', activeTag === t ? 'is-on' : '']"
-          @click="setTag(t)"
+          class="tl-filter__chip"
+          hover-class="tl-filter__chip--press"
+          hover-stay-time="60"
+          @click="goCourse(t)"
         >🏷️ {{ t }}</text>
       </view>
     </scroll-view>
 
     <view v-if="records.length" class="tl-list">
-      <view v-for="r in shown" :key="r._id" class="tl-item" @click="openDetail(r)">
+      <view v-for="r in records" :key="r._id" class="tl-item" @click="openDetail(r)">
         <view class="tl-item__head">
           <view class="tl-dot" :class="eventClass(r.event_type)"></view>
           <text class="tl-item__pet">{{ r.pet || '未指定' }}</text>
           <text class="tl-chip" :class="eventClass(r.event_type)">{{ r.event_type }}</text>
           <text class="tl-item__time">{{ shortDate(r.time) }}</text>
         </view>
-        <text class="tl-item__quote">{{ r.raw }}</text>
+        <text v-if="r.raw || r.desc" class="tl-item__quote">{{ r.raw || r.desc }}</text>
         <view v-if="r.weight || r.med || r.hospital || r.cost != null || r.tag || r.att_count" class="tl-item__notes">
           <text v-if="r.weight" class="tl-note">⚖️ {{ r.weight }}kg</text>
           <text v-if="r.med" class="tl-note">💊 {{ r.med }}</text>
           <text v-if="r.hospital" class="tl-note">🏥 {{ r.hospital }}</text>
           <text v-if="r.cost != null" class="tl-note">💰 ¥{{ r.cost }}</text>
           <text v-if="r.att_count" class="tl-note">📎 {{ r.att_count }}</text>
-          <text v-if="r.tag" class="tl-note tl-note--tag" @click.stop="setTag(r.tag)">🏷️ {{ r.tag }}</text>
+          <text v-if="r.tag" class="tl-note tl-note--tag" @click.stop="goCourse(r.tag, r.pet)">🏷️ {{ r.tag }}</text>
         </view>
       </view>
     </view>
@@ -46,28 +48,16 @@ import { callFn } from '@/cloud'
 
 export default {
   data() {
-    return { records: [], activeTag: '' }
-  },
-  computed: {
-    // 去重病程标签（保留首次出现顺序，即时间倒序里最近的在前）
-    tags() {
-      const seen = []
-      for (const r of this.records) {
-        if (r.tag && !seen.includes(r.tag)) seen.push(r.tag)
-      }
-      return seen
-    },
-    // 按当前选中病程过滤；未选则全部
-    shown() {
-      return this.activeTag ? this.records.filter((r) => r.tag === this.activeTag) : this.records
-    },
+    return { records: [], courseTags: [] }
   },
   onShow() {
     this.load()
   },
   methods: {
-    setTag(t) {
-      this.activeTag = t
+    // 进病程完整视图（ADR-019）：带 pet 看该宠该病程从头到尾全部记录 + 概览（突破时间线 50 条截断）
+    goCourse(tag, pet) {
+      if (!tag) return
+      uni.navigateTo({ url: `/pages/course/course?tag=${encodeURIComponent(tag)}${pet ? '&pet=' + encodeURIComponent(pet) : ''}` })
     },
     // 进记录详情（看 / 补附件、删记录）；返回后 onShow 自动刷新
     openDetail(r) {
@@ -83,12 +73,13 @@ export default {
       // #ifdef MP-WEIXIN
       if (typeof wx === 'undefined' || !wx.cloud || !CLOUD_ENV) return
       try {
-        const res = await callFn('timeline', { action: 'list' })
-        if (res.result && res.result.ok) {
-          this.records = res.result.data || []
-          // 选中的病程若已不存在（记录被删 / 改名），重置回「全部」，避免空列表
-          if (this.activeTag && !this.records.some((r) => r.tag === this.activeTag)) this.activeTag = ''
-        }
+        // 并发：时间线记录（默认前 50 条）+ 病程 tag 全集（list_tags 全扫，不受 50 限，供入口条 chip）
+        const [list, tagsRes] = await Promise.all([
+          callFn('timeline', { action: 'list' }),
+          callFn('timeline', { action: 'list_tags' }),
+        ])
+        if (list.result && list.result.ok) this.records = list.result.data || []
+        if (tagsRes.result && tagsRes.result.ok) this.courseTags = tagsRes.result.tags || []
       } catch (e) {
         console.warn('timeline load failed', e)
       }
@@ -126,11 +117,10 @@ export default {
   font-size: var(--fs-cap);
   color: var(--c-text-2);
 }
-.tl-filter__chip.is-on {
+.tl-filter__chip--press {
   background: var(--c-primary-tint);
   border-color: var(--c-primary);
   color: var(--c-primary-deep);
-  font-weight: 600;
 }
 
 .tl-list {

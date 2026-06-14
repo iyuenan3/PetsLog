@@ -2,8 +2,8 @@
 <!-- 数据契约 / 数据字典：collection 字段定义是内部真相源。对外 API 见文末（当前 N/A）。实现→ARCHITECTURE，为何→DECISIONS。 -->
 
 > 数据库 = 微信云开发文档型。隔离键：业务数据按 `family_id`（见 ADR-008），`users` 按 `_openid`。
-> 标记：**[占位]** = 模型已定、建设排后（foods）。ADR-011/012/013 批次：轮1 字段已落地 v0.3.1，轮2 附件（attachments / att_count / storage_bytes / att_log）已落地 v0.3.2。
-> 字段值约定：日期一律 `'YYYY-MM-DD'` 字符串；金额 / 体重为 number；时间戳 `created_at/updated_at` 为毫秒 number。
+> 标记：**[占位]** = 模型已定、建设排后（foods）。ADR-011/012/013 批次：轮1 字段已落地 v0.3.1，轮2 附件（attachments / att_count / storage_bytes / att_log）已落地 v0.3.2。ADR-014（price_base / intro / foods）v0.4.0、ADR-015（avatar_emoji / new_pet / pet_unknown）v0.4.2、ADR-018（time 到分）已落地；**ADR-019（tag 收敛 + 病程视图）/ ADR-020（raw 服务端落库 + tag 候选 + 解析收紧）= 代码已落 + 云函数已部署，待真机验 + commit；clean_tags 治理待触发、ADR-020 评测先行（合成集）待建**。
+> 字段值约定：日期一律 `'YYYY-MM-DD'` 字符串（唯 records.time 可带时刻 `'YYYY-MM-DD HH:mm'`，ADR-018；meds / reminders / foods 等日期字段仍纯日期）；金额 / 体重为 number；时间戳 `created_at/updated_at` 为毫秒 number。
 
 ## pets（宠物档案 · family 隔离）
 | 字段 | 类型 | 说明 |
@@ -35,20 +35,20 @@
 |---|---|---|
 | family_id | string | 隔离键 |
 | pet | string | 宠物名（按名匹配，故改名要级联） |
-| time | string | 记录日期 'YYYY-MM-DD' |
+| time | string | 事件时间，精确到分 `'YYYY-MM-DD HH:mm'`；缺时刻则纯日期 `'YYYY-MM-DD'`（旧数据 / AI 未给时刻）。saveRecord + parseRecord 的 `normalizeDateTime` 归一，日期段定长零填充保字典序（兽医小结按 time 排）。见 ADR-018 |
 | event_type | enum | 症状 / 用药 / 疫苗 / 驱虫 / 体重 / 就医 / 其它（7 桶） |
 | weight | number \| null | 体重 kg |
 | med | string \| null | 用药（可多行：外用 / 口服 / 注射） |
-| raw | string | 原文 / 事件描述 |
+| raw | string | 用户输入的字面原文，**服务端逐字落库**（不经 LLM 回填，防原文失真）；与 desc（清洗描述）分立，见 ADR-020 |
 | hospital | string | 就诊医院（落库 trim） |
 | cost | number \| null | 费用（元）；三态可区分：null=未解析 / 0=免费 / 正数 |
-| tag | string | 病程标签（嗜酸性肉芽肿 / 尿闭 / 软骨病…，可空；与 event_type 双轴；落库 trim 防同名病程线散裂） |
+| tag | string | 病程标签 = **病程线**（同一慢病 / 疗程的主题词，如嗜酸性肉芽肿 / 尿闭 / 软骨病），可空；与 event_type 双轴**正交**（事件类别归 event_type、里程碑归专用字段，不重复打 tag）；落库 trim 防散裂。治理后非病程 tag（驱虫 / 疫苗 / 记录体重 / 体检 / 到家 / 绝育 / 未知，均为库内实际 tag 值）清空，见 ADR-019 |
 | desc | string | 干净事件描述（症状 / 处置，不含费用 / 医院 / 寒暄），parseRecord 抽取；给兽医小结拼接用，不暴露 raw 原话 |
 | attachments | array | `[{ fileID, thumb(缩略图 fileID，可空), type:'image'\|'pdf'\|'video', name, size(主文件真实体积), bytes(计配额体积=主+缩略，删除按它回收), uploaded_at }]`，单条 ≤9；由 attachment 云函数登记（服务端 HEAD 复核真实体积，客户端报的 size 不可信） |
 | att_count | number | 附件数（时间线 📎 角标） |
-| created_at | number | |
+| created_at | number | ms。**由事件时间 time 派生**（`createdAtFromTime`）：有分用准点（东八区），仅日期用当日 12:00（延续导入约定，避免补录旧记录排到时间线顶）。主时间线 / 体重图按此排序。见 ADR-018 |
 
-> 双轴：event_type 管「事件类型」（配色 / 分类），tag 管「病程线」（按 tag 筛 = 病程视图，先简版）。
+> 双轴：event_type 管「事件类型」（配色 / 分类），tag 管「病程线」。病程**完整视图**按 (宠, tag) 取记录（天然不跨宠混合），含概览聚合（起止 / 跨度 / 记录数 / 已记花费 / 体重趋势），见 ADR-019；简版 = 时间线按 tag 筛。
 > 批量录入：给全家做同一件事（驱虫 / 疫苗）= 录入时多选宠物 → 生成 N 条 records，仍 per-pet。
 
 ## meds（家庭药品库存 · family 隔离 · 本轮不动）
