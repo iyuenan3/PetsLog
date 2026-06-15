@@ -21,9 +21,9 @@
             <text v-if="r.repeat_days" class="rm-card__repeat">· {{ repeatText(r.repeat_days) }}</text>
           </view>
           <view class="rm-card__ops">
-            <text class="rm-op rm-op--done" hover-class="rm-op--press" hover-stay-time="60" @click="markDone(r)">✓ 完成</text>
-            <text class="rm-op rm-op--snooze" hover-class="rm-op--press" hover-stay-time="60" @click="snooze(r)">延后7天</text>
-            <text class="rm-op rm-op--del" hover-class="rm-op--press" hover-stay-time="60" @click="remove(r)">删除</text>
+            <text class="op op--success" hover-class="op--press" hover-stay-time="60" @click="markDone(r)">✓ 完成</text>
+            <text class="op op--secondary" hover-class="op--press" hover-stay-time="60" @click="snooze(r)">延后7天</text>
+            <text class="op op--danger" hover-class="op--press" hover-stay-time="60" @click="remove(r)">删除</text>
           </view>
         </view>
       </view>
@@ -49,9 +49,9 @@
           <text class="food-card__period">{{ foodPeriod(f) }}</text>
           <text v-if="f.note" class="food-card__note">{{ f.note }}</text>
           <view class="food-card__ops">
-            <text v-if="!f.current" class="food-op food-op--set" hover-class="food-op--press" hover-stay-time="60" @click="setCurrent(f)">设为在喂</text>
-            <text class="food-op food-op--edit" hover-class="food-op--press" hover-stay-time="60" @click="openFoodEdit(f)">编辑</text>
-            <text class="food-op food-op--del" hover-class="food-op--press" hover-stay-time="60" @click="removeFood(f)">删除</text>
+            <text v-if="!f.current" class="op op--success" hover-class="op--press" hover-stay-time="60" @click="setCurrent(f)">设为在喂</text>
+            <text class="op op--secondary" hover-class="op--press" hover-stay-time="60" @click="openFoodEdit(f)">编辑</text>
+            <text class="op op--danger" hover-class="op--press" hover-stay-time="60" @click="removeFood(f)">删除</text>
           </view>
         </view>
       </view>
@@ -490,7 +490,8 @@ export default {
   gap: 16rpx;
   margin-top: 24rpx;
 }
-.rm-op {
+/* 次级操作按钮（提醒卡 + 主粮卡共用，Round 2 合并 rm-op/food-op 为一套 .op） */
+.op {
   flex: 1;
   height: 72rpx;
   border-radius: var(--r-pill);
@@ -500,10 +501,10 @@ export default {
   align-items: center;
   justify-content: center;
 }
-.rm-op--done { background: var(--c-success-tint); color: var(--c-success); }
-.rm-op--snooze { background: var(--c-bg-sink); color: var(--c-text-2); }
-.rm-op--del { background: var(--c-danger-tint); color: var(--c-danger); }
-.rm-op--press { opacity: 0.6; }
+.op--success { background: var(--c-success-tint); color: var(--c-success); }
+.op--secondary { background: var(--c-bg-sink); color: var(--c-text-2); }
+.op--danger { background: var(--c-danger-tint); color: var(--c-danger); }
+.op--press { opacity: 0.6; }
 
 /* ===== 药品列表 ===== */
 .med-list {
@@ -664,20 +665,7 @@ export default {
   gap: 16rpx;
   margin-top: 22rpx;
 }
-.food-op {
-  flex: 1;
-  height: 68rpx;
-  border-radius: var(--r-pill);
-  font-size: var(--fs-cap);
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.food-op--set { background: var(--c-success-tint); color: var(--c-success); }
-.food-op--edit { background: var(--c-bg-sink); color: var(--c-text-2); }
-.food-op--del { background: var(--c-danger-tint); color: var(--c-danger); }
-.food-op--press { opacity: 0.6; }
+/* .food-op* 已并入 .op*（见上，Round 2） */
 
 /* 主粮编辑弹层 */
 .sheet-mask {
