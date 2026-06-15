@@ -30,7 +30,7 @@
           <text v-if="r.hospital" class="tl-note">🏥 {{ r.hospital }}</text>
           <text v-if="r.cost != null" class="tl-note">💰 ¥{{ r.cost }}</text>
           <text v-if="r.att_count" class="tl-note">📎 {{ r.att_count }}</text>
-          <text v-if="r.tag" class="tl-note tl-note--tag" @click.stop="goCourse(r.tag, r.pet)">🏷️ {{ r.tag }}</text>
+          <text v-if="r.tag" class="tl-note tl-note--tag" hover-class="tl-note--tag-press" hover-stay-time="60" @click.stop="goCourse(r.tag, r.pet)">🏷️ {{ r.tag }} ›</text>
         </view>
       </view>
     </view>
@@ -45,12 +45,14 @@
 <script>
 import { CLOUD_ENV } from '@/config'
 import { callFn } from '@/cloud'
+import { syncTab } from '@/tabSync'
 
 export default {
   data() {
     return { records: [], courseTags: [] }
   },
   onShow() {
+    syncTab(this, 1)
     this.load()
   },
   methods: {
@@ -183,10 +185,16 @@ export default {
   font-size: var(--fs-cap);
   color: var(--c-text-2);
 }
-/* 病程标签：可点击跳筛选，主色调区分 */
+/* 病程标签：可点击跳病程视图，主色调 + 边框 + › 提示「可点」，热区放大 */
 .tl-note--tag {
+  padding: 10rpx 20rpx;
   background: var(--c-primary-wash);
   color: var(--c-primary-deep);
+  border: 2rpx solid var(--c-primary-tint);
+  font-weight: 500;
+}
+.tl-note--tag-press {
+  background: var(--c-primary-tint);
 }
 
 /* 事件类型配色：点（带柔晕环）+ 标签 */

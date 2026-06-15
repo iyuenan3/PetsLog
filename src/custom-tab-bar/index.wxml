@@ -16,9 +16,9 @@
       <view class="tab__txt">{{item.text}}</view>
     </view>
 
-    <!-- 中央凸起录入键 -->
+    <!-- 中央凸起录入键：catchtap 直接绑 .fab，凸出部分也可点（配合 .tabbar 透明上延把热区纳入组件盒） -->
     <view class="tab tab--center" bindtap="goRecord">
-      <view class="fab" hover-class="fab--press" hover-stay-time="60">
+      <view class="fab" hover-class="fab--press" hover-stay-time="60" catchtap="goRecord">
         <view class="fab__plus">+</view>
       </view>
     </view>

@@ -5,6 +5,8 @@
   right: 0;
   bottom: 0;
   z-index: 100;
+  /* 透明上延：把凸起 FAB 的上半部分纳入组件可点盒（页面底部已留 ~160rpx > tabbar 高，覆盖的是预留空白非真实内容） */
+  padding-top: 44rpx;
 }
 .tabbar__inner {
   position: relative;

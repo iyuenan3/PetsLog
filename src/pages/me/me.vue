@@ -44,12 +44,14 @@
 
 <script>
 import { ensureFamily, getProfile, refreshFamilies, getActiveFamily } from '@/cloud'
+import { syncTab } from '@/tabSync'
 
 export default {
   data() {
-    return { profile: { nickname: '', avatar: '' }, fam: null, version: '0.4.4' }
+    return { profile: { nickname: '', avatar: '' }, fam: null, version: '0.4.5' }
   },
   onShow() {
+    syncTab(this, 3)
     this.load()
   },
   methods: {

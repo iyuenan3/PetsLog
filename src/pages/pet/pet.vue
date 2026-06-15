@@ -1134,12 +1134,18 @@ export default {
 }
 .edit-btn {
   margin-left: auto;
+  min-height: 60rpx;
+  padding: 0 24rpx;
+  display: inline-flex;
+  align-items: center;
   font-size: var(--fs-sub);
   color: var(--c-primary-deep);
   font-weight: 500;
+  background: var(--c-primary-wash);
+  border-radius: var(--r-pill);
 }
 .edit-btn--press {
-  opacity: 0.55;
+  background: var(--c-primary-tint);
 }
 
 .weight-wrap {

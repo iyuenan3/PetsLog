@@ -96,6 +96,7 @@ import { CLOUD_ENV } from '@/config'
 import { petAge } from '@/utils'
 import { callFn } from '@/cloud'
 import { paintPetCard, loadPetAvatar, CARD_W, CARD_H } from '@/petCard'
+import { syncTab } from '@/tabSync'
 
 export default {
   data() {
@@ -120,6 +121,7 @@ export default {
     this.swiperH = Math.round((cardWidth * CARD_H) / CARD_W) + 16
   },
   async onShow() {
+    syncTab(this, 0)
     await this.loadPets()
     this.ensureCards()
     this.loadDue()
@@ -482,7 +484,11 @@ export default {
   font-weight: 600;
 }
 .empty__alt {
-  margin-top: 28rpx;
+  margin-top: 32rpx;
+  min-height: 64rpx;
+  padding: 0 24rpx;
+  display: inline-flex;
+  align-items: center;
   font-size: var(--fs-sub);
   color: var(--c-primary);
   text-decoration: underline;

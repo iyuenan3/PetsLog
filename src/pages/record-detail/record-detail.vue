@@ -225,7 +225,7 @@ export default {
 
 .card {
   background: var(--c-card);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   padding: 12rpx 28rpx;
   margin-bottom: 24rpx;
   box-shadow: var(--sh-2);
@@ -294,8 +294,8 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.25);
-  color: #fff;
+  background: rgba(0, 0, 0, 0.32);
+  color: var(--c-text-inv);
   font-size: 52rpx;
 }
 .cell__pdf {

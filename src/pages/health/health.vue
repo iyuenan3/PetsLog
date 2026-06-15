@@ -10,7 +10,7 @@
     <!-- ===== 提醒 ===== -->
     <block v-if="tab === 'rem'">
       <view v-if="reminders.length" class="rm-list">
-        <view v-for="r in reminders" :key="r._id" class="rm-card" :class="{ 'rm-card--overdue': dayDiff(r.next_date) < 0 }">
+        <view v-for="r in reminders" :key="r._id" class="rm-card" :class="['rm-card--' + tagClass(r.type), { 'rm-card--overdue': dayDiff(r.next_date) < 0 }]">
           <view class="rm-card__head">
             <text class="chip-tag" :class="'chip-tag--' + tagClass(r.type)">{{ r.type }}</text>
             <text class="rm-card__title">{{ r.title || '(未命名提醒)' }}</text>
@@ -119,6 +119,7 @@
 <script>
 import { CLOUD_ENV } from '@/config'
 import { callFn } from '@/cloud'
+import { syncTab } from '@/tabSync'
 
 export default {
   data() {
@@ -136,6 +137,7 @@ export default {
     }
   },
   onShow() {
+    syncTab(this, 2)
     // 进入「健康」tab 时允许从首页横幅指定分段
     const want = uni.getStorageSync('health_seg')
     if (want === 'rem' || want === 'med' || want === 'food') {
@@ -381,12 +383,12 @@ export default {
   display: flex;
   background: var(--c-bg-sink);
   border-radius: var(--r-pill);
-  padding: 6rpx;
+  padding: 8rpx;
   margin: 24rpx var(--pad-page) 8rpx;
 }
 .seg__item {
   flex: 1;
-  height: 68rpx;
+  height: 76rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -418,15 +420,21 @@ export default {
   box-shadow: var(--sh-2);
   overflow: hidden;
 }
-.rm-card--overdue::before {
+/* 左侧类型彩条（对齐主粮卡 + 时间线点的视觉语言）；逾期时统一压成 danger（须在类型色之后，同特异性后者胜） */
+.rm-card::before {
   content: '';
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
   width: 8rpx;
-  background: var(--c-danger);
+  background: var(--c-rt-other);
 }
+.rm-card--med::before { background: var(--c-rt-med); }
+.rm-card--vaccine::before { background: var(--c-rt-vaccine); }
+.rm-card--deworm::before { background: var(--c-rt-deworm); }
+.rm-card--other::before { background: var(--c-rt-other); }
+.rm-card--overdue::before { background: var(--c-danger); }
 .rm-card__head {
   display: flex;
   align-items: center;

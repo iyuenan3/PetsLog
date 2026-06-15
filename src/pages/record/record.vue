@@ -614,11 +614,11 @@ export default {
   box-shadow: var(--sh-1);
 }
 .rec__input--focus {
-  border-color: var(--c-primary-tint);
-  background: var(--c-card-cream);
+  border-color: var(--c-primary-soft);
+  background: var(--c-primary-wash);
 }
 .rec__ph {
-  color: var(--c-text-3);
+  color: var(--c-text-2);
 }
 .rec__examples {
   margin-top: 24rpx;
@@ -766,7 +766,7 @@ export default {
   font-weight: 500;
 }
 .new-badge--warn {
-  color: #d65a4a;
+  color: var(--c-danger);
 }
 .chips {
   flex: 1;
@@ -931,13 +931,13 @@ export default {
   position: absolute;
   top: 0;
   right: 0;
-  width: 44rpx;
-  height: 44rpx;
-  line-height: 44rpx;
+  width: 60rpx;
+  height: 60rpx;
+  line-height: 60rpx;
   text-align: center;
   background: rgba(58, 51, 48, 0.55);
-  color: #fff;
-  font-size: var(--fs-tiny);
+  color: var(--c-text-inv);
+  font-size: var(--fs-cap);
   border-radius: 0 0 0 var(--r-sm);
 }
 .att-cell--add {
