@@ -135,7 +135,7 @@
   - **pets 加 `intro`（简介，自由文本）**：导出的「简介」列实为指向 Notion 页的链接（无文本），故 intro 为**新建自由文本字段、导入留空**，供用户后续填写。导出的「品种常见病」（品种科普长文）非本宠真实数据，不入库。
   - **foods 模块建设**（从 ADR-013 deferred 占位转正）：新增 foods 集合 + foods 云函数（list / add / update / delete，family 隔离，assertMember）+ UI 台账（增删改查、当前主粮高亮、设新「当前」自动取消旧「当前」）。字段沿用 ADR-013：`{family_id, name, start_date, end_date, current, note}`。导入 12 条历史（日期区间 → start/end，最近一条 current=true）。
   - **绝育导入文本识别**：导出无绝育字段 → 从病史 + 备注识别「已绝育 / 绝育」关键词预填 `neutered=true`，其余 false，用户档案页可改（模型字段 neutered 已存在，不改 schema）。
-- Alternatives（否决）: 初始 + 当前都静态存（当前身价是派生值，存了会随后续记录过时，违背单一真相源）；简介导入「品种常见病」（品种通用科普非本宠数据，且长）；foods 塞 records（家庭级非 per-pet，概念不符，ADR-013 已否）；绝育留全 false 手填（多多等病史已明示，识别预填省手工且可改）。
+- Alternatives（否决）: 初始 + 当前都静态存（当前身价是派生值，存了会随后续记录过时，违背单一真相源）；简介导入「品种常见病」（品种通用科普非本宠数据，且长）；foods 塞 records（家庭级非 per-pet，概念不符，ADR-013 已否）；绝育留全 false 手填（部分宠物病史已明示，识别预填省手工且可改）。
 - Tradeoff: ① 身价 / 简介使 pets 字段继续渐增，但都可选默认空；② 当前身价派生需前端聚合该宠 records.cost（档案页已加载记录算体重曲线，顺带求和，成本低）；③ foods 是本项目第 4 个业务集合 + 第 10 个云函数，UI 加一处台账，范围可控；④ 绝育文本识别有边界（关键词漏判 / 误判），用户可手改兜底。完整字段见 SPEC 数据字典。
 
 ## ADR-015 · 录入防错别字（意图驱动建档 + 服务端模糊兜底）+ 头像 emoji 自定义 + 手动建宠入口 · 2026-06-11
@@ -145,7 +145,7 @@
   - **错别字三层防线**：① LLM prompt 强化归一规则 + 错别字 few-shot（主力）；② parseRecord 服务端模糊匹配兜底（编辑距离 ≤1 或包含关系、按 Unicode code point 算防 emoji 名代理对误判、**唯一候选才 snap**，歧义不猜；snap 结果展示在确认卡片上，用户可见可复核）；③ 都不中且非新增意图 → parse 标 `pet_unknown`、saveRecord 拒以 `PET_UNKNOWN`（不写任何数据，附名单 + suggest），确认卡片列出家庭宠物 chips 让用户点选（用户选定方案）。**saveRecord 落库层不做静默 snap**（评审硬化：落库时名字不在库属异常态〔名单已变 / 绕过 UI〕，静默改派 = 把医疗记录写进别的宠物档案）；**reminder 通道同享防线**（提醒错别字同样 PET_UNKNOWN + 卡片选宠，否则提醒挂幽灵名永远关联不上）；**0 宠家庭首录视同新增**（无可匹配对象 = 无错别字风险，不放行则首录死端；确认卡片显示「🆕 将建档」，点确认即同意建档）。
   - **头像 emoji 自定义**：pets 加 `avatar_emoji`（自选 emoji，编辑表单 emoji 网格 + 照片上传并存）；显示优先级 **照片 > 自选 emoji > 物种默认 emoji**（用户选定方案）。
   - **手动建宠入口**：宠物网格末尾「＋ 添加宠物」卡片 → pet.vue 创建模式（`?mode=new` 复用编辑表单，pets add 落库）。
-- Alternatives（否决）: 落库前总弹宠物选择器（多数输入名字正确，平添一步）；无匹配自动选最相似（歧义场景如「小七/小葵」错一字会静默归错宠，医疗数据不可猜）；拼音相似度库（云函数加依赖重，编辑距离 + 包含已覆盖主案，LLM 兜同音）；头像只换默认 emoji 集不让选（不解决同物种多宠区分）。
+- Alternatives（否决）: 落库前总弹宠物选择器（多数输入名字正确，平添一步）；无匹配自动选最相似（歧义场景如近形名错一字会静默归错宠，医疗数据不可猜）；拼音相似度库（云函数加依赖重，编辑距离 + 包含已覆盖主案，LLM 兜同音）；头像只换默认 emoji 集不让选（不解决同物种多宠区分）。
 - Tradeoff: ① 服务端两份模糊匹配函数复制（云函数目录隔离，无共享包），改动须同步两处；② 双字名编辑距离 1 容易歧义（小X 系列互距 1）→ 歧义保守交用户选，宁多点一下不归错档；③ avatar_emoji 再加一列，可选默认空。接口变更见 SPEC（parse 输出 new_pet/pet_unknown、saveRecord PET_UNKNOWN、pets.avatar_emoji）。
 
 ## ADR-016 · LLM 上游改火山方舟 Coding Plan 直连，弃自建网关中转（反转 ADR-003）· 2026-06-11
@@ -203,3 +203,26 @@
   - **暂不做**：二次自纠 / 双调用（latency 4s→8s，留 eval 看缺口再定，阶段2）；线上脱敏 raw 语料（待合成集失真到不够用时另立 ADR + 知情同意）；置信度评分 / pet 拼音排序（阶段3）。温度保持 0（抽取任务确定性优先，非待调项）。
 - Alternatives（否决）: 继续让 LLM 回填 raw（原文失真 + 多一处失败面）；先调 prompt 后补评测（无尺，改完无从判断，违「先有尺再下结论」）；整条 all-or-nothing 判分（太粗无法定位，desc 措辞差异污染）；喂静态历史 tag 全集（含非病程噪声 + 跨家庭污染）；eval 只测 LLM 裸输出（pet 最终正确性由后处理链决定，裸输出不代表用户所见）；硬约束 tag 改可选 chips（破自然语言录入体验）。
 - Tradeoff: ① raw 服务端覆盖后，LLM 输出的 raw 字段废弃（保留兼容，落库以服务端为准）；② 输入加 tag 候选 + 物种使 prompt 略长（精选不堆量，token / 延迟轻增）；③ 评测集为合成口语，与真实用户措辞有 gap（缓解：内测真实失败例脱敏后逐步并入同一格式 —— 但须先过本 ADR Constraint 的「脱敏 raw 入语料 = ADR + 知情同意」闸门，通过后方可并入，本轮不并；并入时须冻结当时 today 以免相对日期评分逐日漂移）；④ LLM 层评测需本地方舟 key（读 gitignore 的 config.local.js，绝不硬编码、不进无密钥 CI）；⑤ 两份 normalize / normalizeDate / normalizeDateTime / fuzzyMatch 改动仍须 parseRecord / saveRecord 同步（ADR-015/018 既有）。
+
+## ADR-021 · 宠物档案卡（可分享图片，海报风）· 2026-06-14
+- Problem: 宠物详情页 pet.vue 已是完整功能档案（信息行 + 体重曲线 + 编辑），且已有「生成给兽医的小结」走离屏 canvas 出图存相册。但这两者都对内 / 对医生：详情页是滚动长页不便分享，兽医小结是临床数据朴素无情感。缺一张主人愿意对外晒的「毛孩子档案卡」，情感与社交向（发朋友圈 / 小红书，呼应 ROADMAP 推广），把一只宠物的身份浓缩成一张好看的图。
+- Constraint: 守红线，猫狗 only；卡是对外分享物，绝不含费用 / 就诊医院 / 病史 / 病程 / 用药等医疗与花费信息（延续兽医小结「绝不外露 raw / 费用」纪律，但更严：连病史 chronic 也不上，纯萌宠 + 轻健康）；数据全用宠物档案现成字段 + 前端派生（年龄←birthday、陪伴天数←home_date），零新增云函数 / 集合 / 字段；canvas 守 MEMORY 的物理宽夹紧（dpr 缩放 + 尺寸 ≤4096 防真机白屏）；走温暖治愈设计令牌（珊瑚 #F2825C / 暖米 #FAF6F0）。
+- Decision（锁定，用户确认「可分享图片 + 萌宠介绍 + 轻健康 + 海报风」）:
+  - 形态 = 可分享图片卡（不是详情页重做、不是网格卡）：pet.vue 顶部「📋 生成给兽医的小结」旁加「🪪 生成档案卡」，点击离屏 canvas 渲染 → canvasToTempFilePath → 浮层展示（长按转发 / 保存）+ saveImageToPhotosAlbum，复用 exportVet 的整套管线（createSelectorQuery 取 node + dpr 缩放 + 重试 + 相册权限 deny→openSetting 兜底 + truncate/wrapByWidth 工具）。
+  - 版式 = 竖版海报（固定 320×440 逻辑，dpr3 物理 960×1320 < 4096）：暖米珊瑚渐变背景 + 角落爪印 → 大圆头像 → 名字 → 品种·物种 → 三胶囊徽章（年龄 / 最新体重 / 陪伴 XXX 天）→ 简介引用句 → 底部水印「🐾 PetsLog · 温暖记录」。
+  - 内容口径 = 萌宠介绍 + 轻健康：头像 / 名 / 物种 / 品种 / 年龄 / 最新体重 / 陪伴天数 / 简介 intro；明确排除 费用 / 医院 / 病史 / 病程 / 用药。
+  - 头像照片入 canvas（兽医小结无此步，本卡新增的唯一复杂度）：pet.avatar 是 cloud:// fileID，用 `wx.cloud.downloadFile({fileID})` 直接取本地 tempFilePath（免 getTempFileURL + 免 downloadFile 域名白名单）→ `canvas.createImage` → 圆形裁剪 aspectFill drawImage。下载 / 解码任一失败回退到 自选 emoji / 物种默认 🐱🐶（与详情页头像同优先级），卡永不画崩。
+  - 缺字段优雅降级：胶囊按可用项动态拼（体重未记 / 到家未填则该胶囊不出，按实际数量居中），无简介则省引用句，卡永远体面、不留「未填」字样。
+- Alternatives（否决）: 详情页 pet.vue 头部直接重做成卡片观感（用户要的是可对外分享的产物，不是内部视觉打磨）；复用 exportVet 出图（那是 MAX=10 临床数据版式 + 含费用语义的近期记录，口径与对外分享相悖，是重写非复用）；卡带当前身价 / 趣味花费（间接外露累计花费，用户否决，守花费红线）；动态卡高随内容（海报固定版式留白更体面，省一处几何估算）；用 image + CSS 截图（小程序无 DOM 截图，canvas 是唯一稳路且已有管线）。
+- Tradeoff: ① 新增离屏 canvas + 一组 export/render/paint/save 方法 + 一颗按钮 + 一个结果浮层，集中在 pet.vue（与 exportVet 并列，复用其工具函数）；② 头像照片异步加载引入一次 wx.cloud.downloadFile，失败回退 emoji（已兜底，最坏是卡上无照片用 emoji，不阻断出卡）；③ 卡仅萌宠 + 轻健康，主人若想晒病程 / 花费需另途径（本就不该对外，非缺陷）；④ 固定 320×440 在超长品种名 / 简介时靠 truncate + 换行夹住（与兽医小结同款工具，够用）。
+
+## ADR-022 · 首页宠物档案卡轮播（复用 ADR-021 档案卡 + paintCard 改版 + 抽共享渲染模块）· 2026-06-15
+- Problem: ADR-021 的档案卡是宠物详情页 pet.vue 里「按需点按生成 → 浮层 → 存相册」的对外分享物，藏得深、单宠才看得到。首页（宠物 tab `pages/index/index`）现状是 2 列宠物网格（小头像 + 名 + 一行 meta），信息密度低、缺情感焦点。用户要把首页主视图改成「左右滑的档案卡轮播」，一屏一宠，把已做好的档案卡直接搬上首页当门面。同时档案卡初版（ADR-021）太空旷、背景平、胶囊朴素、右下角大爪印突兀，需先做好看再上首页。
+- Constraint: 守 ADR-021 全部红线（猫狗 only、对外分享物绝不含费用 / 医院 / 病史 / 病程 / 用药、零新增云函数 / 集合 / 字段、canvas 物理宽夹紧 ≤4096、温暖治愈令牌）；首页轮播的卡必须与详情页可分享的卡**逐像素同款**（WYSIWYG，所见即所分享），不能两处各画一版（否则设计漂移，违 ADR-021「一处版式」精神）；首页无浮层，但有离屏 canvas，须避免 [[reference-wechat-mp-native-overlay]] 的 canvas 穿透（放 left:-9999px、首页本无浮层故无冲突）；多宠（家庭上限 ~9）渲染 N 张卡不能每次进 tab 全量重渲（性能 / 体验）。
+- Decision（锁定，用户确认「直接用档案卡 + 按推荐 A 版改好看 + 整页轮播替换网格」）:
+  - **抽共享渲染模块 `src/utils/petCard.js`**（根治两处漂移）：导出 `paintPetCard(ctx, W, H, pet, avatarImg)` + `loadPetAvatar(canvas, fileID)` + `CARD_W/CARD_H` 常量。pet.vue 的 renderCard 与 index.vue 的轮播渲染都调它，paintCard / loadAvatarImage / companionDays / roundRect 从 pet.vue 迁入模块（pet.vue 保留 vet 小结仍用的 ageText / truncate / wrapByWidth）。一处改版，两处同款。
+  - **paintCard 改版（A·精致留白）**：头像加暖色径向光晕 halo + 放大（r52→58）；物种行改成圆角小 chip（🐱 品种）替原灰文字；三胶囊加图标（🎂 年龄 / ⚖️ 体重 / 🏡 陪伴）+ 圆角加大；去掉突兀大爪印，换轻 ✨ + 小爪点缀（低透明散布）；简介前加装饰引号 “；竖向节奏收紧。年龄胶囊值做**自适应字号**（默认完整「2岁3个月」，measureText 超格宽则逐级降字号到下限，不用省略号 / 不截断），解决长龄溢出。
+  - **首页轮播（index.vue 重做主视图，替换 2 列网格）**：保留问候 + 到期提醒横幅，其下用 `<swiper>` previous/next-margin 露邻卡（轮播图观感）+ 当前卡 active 放大、邻卡缩小变暗；每张 `<swiper-item>` 显示 `<image>`（该宠档案卡的 canvasToTempFilePath 产物）；末张 = 「＋ 添加宠物」卡（普通 view，非 canvas）；下方一排指示点。点卡 → 该宠详情页（openPet 不变）。空状态（无宠）沿用原 empty。
+  - **轮播卡渲染 = 一块离屏 canvas 顺序出图 + 签名缓存**：页内单个离屏 `#petCardCanvas`（left:-9999px），onShow 取 pets 后对每只宠按签名（avatar|name|species|breed|birthday|weight|home_date|intro 拼串）判脏，仅脏 / 缺图的宠重渲：顺序 await（loadPetAvatar → paintPetCard → canvasToTempFilePath）逐张填进 `cardImgs[petId]`，未出图先占位骨架。temp 路径会话内有效，缓存进页面 data，再次进 tab 命中缓存零重渲（只新增 / 改动过的宠重画）。
+- Alternatives（否决）: 首页用 live DOM view 重画一版卡（违 WYSIWYG，与 canvas 分享版双维护必漂移，用户明确「直接用那个」）；每次 onShow 全量重渲所有卡（多宠卡顿，签名缓存几乎零成本就免了）；轮播放 N 个 canvas 各自渲（原生 canvas 多实例重 + 穿透风险，改用「1 canvas 顺序出图 → N 个 image」）；档案卡仍只留详情页、首页另做卡（用户要的就是把档案卡搬上首页当门面）；改版另开 ADR-021-bis（A 版是 ADR-021 版式的视觉细化、口径 / 红线 / 管线全不变，并入本 ADR 的「改版」子项即可）。
+- Tradeoff: ① 抽 petCard.js 是一次性重构，pet.vue 迁出 4 个方法、改 renderCard 两行调用（vet 小结路径不动）；② 首页首次进入要顺序渲 N 张卡（含照片头像的 wx.cloud.downloadFile），有 ~秒级铺图过程，用骨架占位缓冲，缓存后续命中即时；③ 轮播卡是 image 快照非实时 DOM，宠物字段改动后靠签名失配触发重渲（已覆盖 8 个关键字段，漏签名字段会显示旧卡到下次匹配 —— 现有字段够用，新增展示字段记得补进签名）；④ swiper 固定高按屏宽 × 440/320 派生，超窄 / 超宽屏靠比例自适应；⑤ 档案卡版式此后以本 ADR 的 A 版为准（ADR-021 的「角落爪印 / 灰文字物种行 / 无图标胶囊」描述被本 ADR 改版取代，红线与内容口径不变）。

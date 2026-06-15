@@ -3,6 +3,13 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## 宠物档案卡 + 首页轮播门面 · 2026-06-15
+- Added: **宠物档案卡（ADR-021）**：pet.vue 顶部「🪪 档案卡」一键生成温暖治愈风海报图（头像 / 名 / 物种品种 / 年龄 / 最新体重 / 陪伴天数 / 简介），离屏 canvas 出图 → 浮层（长按转发）+ 存相册，复用兽医小结导出管线；头像照片走 `wx.cloud.downloadFile` → `canvas.createImage` 圆形 aspectFill，失败回退 emoji；萌宠 + 轻健康，绝不含费用 / 医院 / 病史 / 病程 / 用药。（修了体重曲线 `canvas type=2d` 穿透档案卡浮层 → `overlayOpen` 计算属性 + v-if 摘 canvas、关后重绘。）
+- Changed: **档案卡改版 A·精致留白（ADR-022）**：头像加暖色径向光晕 + 放大（r52→58），物种行改圆角小 chip（🐱 品种），三胶囊加图标（🎂/⚖️/🏡）+ 圆角加大，去突兀大爪印换轻 ✨ + 小爪点缀，简介前加装饰引号，年龄胶囊值**自适应字号**（完整「2岁3个月」放不下逐级降字号、不省略 / 不截断）。
+- Added: **首页（宠物 tab）轮播门面（ADR-022）**：主视图从 2 列宠物网格重做成档案卡左右滑轮播（`<swiper>` 邻卡露边 + 当前卡放大、邻卡缩小变暗 + 指示点 + 末张「＋ 添加宠物」+ 点卡进详情）；一块离屏 `#petCardCanvas` 顺序出图 → 各宠 `<image>`，按 8 字段签名缓存（仅脏 / 缺图重渲，再次进 tab 命中缓存零重画），出图前骨架占位。
+- Refactored: **抽共享渲染模块 `src/petCard.js`**（`paintPetCard` / `loadPetAvatar` / `CARD_W/CARD_H`）：详情页分享卡与首页轮播卡共用同一份绘制，**逐像素同款、所见即所分享**，根治两处设计漂移；pet.vue 迁出 paintCard / loadAvatarImage / companionDays / roundRect（vet 小结仍用的 ageText / truncate / wrapByWidth 保留）。
+- Verified: `npm run build:mp-weixin` 通过（重构无语法错）；档案卡 A 版经 SVG 镜像 → headless Chrome 截图自验版式（占位「示例猫」）。**待真机验轮播交互 + commit。**
+
 ## 安全审计 · 家庭多租户隔离回归 E2E · 2026-06-14
 - Audited: **13-agent workflow 审计 11 个云函数 + 前端的家庭多租户隔离**，四条不变式（① 鉴权闸触库前零例外 ② `family_id` 作用域闭合 ③ IDOR 按 id 直操作前校验 `doc.family_id` ④ openid 单一可信源 `getWXContext`，闸与查询同一变量）全绿，**0 可利用缺陷**；每条 finding 经对抗式复核（默认怀疑、按设计的安全写法判 false-positive）。
 - Verified: 系统性横向比对 9 份手工复制的 `assertMember` 副本语义一致（family 拆 `getMembership`+`assertAdmin`、importNotion 用更严的 `resolveFamily` 反查 admin 家庭），无漂移、无漏 where 条件、无吞错误返 falsy；跨函数契约 parse→save 由 `saveRecord` 用自己的 `event.family_id` 独立再过一次闸把关（攻击者篡改 save 的 family_id → `NOT_MEMBER`，落不进别家）。

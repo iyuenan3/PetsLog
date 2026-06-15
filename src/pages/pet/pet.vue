@@ -10,8 +10,11 @@
       <text class="profile-head__meta">{{ ageText(pet.birthday) || '年龄未知' }} · {{ pet.species === 'dog' ? '狗' : '猫' }}</text>
     </view>
 
-    <!-- 生成给兽医的小结 -->
-    <button v-if="!creating" class="btn-vet" hover-class="btn-vet--press" hover-stay-time="80" :loading="exporting" @click="exportVet">📋 生成给兽医的小结</button>
+    <!-- 导出：兽医小结 / 档案卡 -->
+    <view v-if="!creating" class="export-row">
+      <button class="btn-vet" hover-class="btn-vet--press" hover-stay-time="80" :loading="exporting" @click="exportVet">📋 兽医小结</button>
+      <button class="btn-vet" hover-class="btn-vet--press" hover-stay-time="80" :loading="cardExporting" @click="exportCard">🪪 档案卡</button>
+    </view>
 
     <!-- 体重曲线 -->
     <view class="card-block" v-if="!creating">
@@ -21,7 +24,7 @@
       </view>
       <!-- 横向平移：canvas 固定视口宽，手指在画布上拖动重绘（不用 scroll-view 套 canvas：
            同层渲染失败时触摸被原生组件吞掉、滑动手势到不了 scroll-view，模拟器/真机表现不一） -->
-      <view v-if="series.length" class="weight-wrap">
+      <view v-if="series.length && !overlayOpen" class="weight-wrap">
         <view class="weight-yaxis">
           <text class="weight-yaxis__t">{{ wMax }}</text>
           <text class="weight-yaxis__t">{{ wMin }}</text>
@@ -30,7 +33,7 @@
           <canvas type="2d" id="weightChart" class="weight-chart" @touchstart="chartTouchStart" @touchmove.stop="chartTouchMove" @touchend="chartTouchEnd"></canvas>
         </view>
       </view>
-      <text v-if="series.length && canScroll" class="weight-hint">← 按住曲线左右拖动看更早记录</text>
+      <text v-if="series.length && canScroll && !overlayOpen" class="weight-hint">← 按住曲线左右拖动看更早记录</text>
       <view v-else-if="!series.length" class="chart-empty">
         <text class="chart-empty__icon">⚖️</text>
         <text class="chart-empty__title">还没有体重数据</text>
@@ -131,8 +134,21 @@
       </view>
     </view>
 
+    <!-- 档案卡：生成结果浮层（复用兽医小结浮层样式） -->
+    <view v-if="cardImg" class="vet-mask" @click="cardImg = ''">
+      <view class="vet-box" @click.stop>
+        <image :src="cardImg" mode="widthFix" class="vet-img" show-menu-by-longpress></image>
+        <text class="vet-tip">长按图片可转发 / 保存</text>
+        <view class="vet-actions">
+          <button class="btn-ghost" hover-class="btn-ghost--press" hover-stay-time="60" @click="cardImg = ''">关闭</button>
+          <button class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" @click="saveCardImg">保存到相册</button>
+        </view>
+      </view>
+    </view>
+
     <!-- 离屏导出画布（移出可视区，仅用于生成图片） -->
     <canvas type="2d" id="vetCanvas" :style="{ width: cw + 'px', height: ch + 'px', position: 'fixed', left: '-9999px', top: '0' }"></canvas>
+    <canvas type="2d" id="cardCanvas" :style="{ width: cardW + 'px', height: cardH + 'px', position: 'fixed', left: '-9999px', top: '0' }"></canvas>
   </view>
 
   <view v-else class="page-empty"><text>加载中…</text></view>
@@ -141,6 +157,7 @@
 <script>
 import { CLOUD_ENV } from '@/config'
 import { petAge } from '@/utils'
+import { paintPetCard, loadPetAvatar, CARD_W, CARD_H } from '@/petCard'
 import { callFn, uploadAvatar } from '@/cloud'
 
 export default {
@@ -168,6 +185,11 @@ export default {
       vetImg: '',
       cw: 340,
       ch: 480,
+      // 宠物档案卡（ADR-021）：海报风可分享图片，固定 320×440 逻辑（dpr3 物理 < 4096）
+      cardImg: '',
+      cardExporting: false,
+      cardW: CARD_W,
+      cardH: CARD_H,
     }
   },
   onLoad(opts) {
@@ -212,6 +234,17 @@ export default {
     },
     wMin() {
       return this.series.length ? this.yMin.toFixed(1) : ''
+    },
+    // 浮层（兽医小结 / 档案卡）打开时须摘掉体重曲线原生 canvas：type=2d canvas 不受普通 view 的 z-index 约束，
+    // 会穿透盖在浮层之上（真机实证：曲线橙线 + 日期标签压在档案卡上）。见 MEMORY 原生组件浮层穿透。
+    overlayOpen() {
+      return !!this.cardImg || !!this.vetImg
+    },
+  },
+  watch: {
+    // 浮层关闭后体重曲线 canvas 重新挂载（v-if 销毁过节点），需重绘否则空白
+    overlayOpen(open) {
+      if (!open) this.$nextTick(() => this.layoutAndDraw())
     },
   },
   methods: {
@@ -922,6 +955,85 @@ export default {
       })
       // #endif
     },
+
+    // ===== 宠物档案卡（ADR-021）：海报风可分享图片，复用兽医小结的离屏 canvas → 出图 → 存相册 管线 =====
+    async exportCard() {
+      if (this.cardExporting) return
+      this.cardExporting = true
+      uni.showLoading({ title: '生成中…' })
+      try {
+        await this.$nextTick()
+        setTimeout(() => this.renderCard(), 30)
+      } catch (e) {
+        uni.hideLoading()
+        this.cardExporting = false
+        uni.showToast({ title: '生成失败', icon: 'none' })
+      }
+    },
+    renderCard() {
+      // #ifdef MP-WEIXIN
+      uni
+        .createSelectorQuery()
+        .in(this)
+        .select('#cardCanvas')
+        .fields({ node: true, size: true })
+        .exec(async (res) => {
+          if (!res || !res[0] || !res[0].node) {
+            setTimeout(() => this.renderCard(), 50)
+            return
+          }
+          const canvas = res[0].node
+          const ctx = canvas.getContext('2d')
+          const dpr = uni.getSystemInfoSync().pixelRatio || 2
+          const W = this.cardW
+          const H = this.cardH
+          canvas.width = W * dpr
+          canvas.height = H * dpr
+          ctx.scale(dpr, dpr)
+          // 头像照片先异步加载（cloud:// → 本地路径 → createImage），失败回退 emoji，再整张绘制
+          // 渲染下沉到共享模块 @/petCard（与首页轮播同款，ADR-022），杜绝两处设计漂移
+          const avatarImg = await loadPetAvatar(canvas, this.pet && this.pet.avatar)
+          paintPetCard(ctx, W, H, this.pet || {}, avatarImg)
+          wx.canvasToTempFilePath({
+            canvas,
+            success: (r) => {
+              uni.hideLoading()
+              this.cardExporting = false
+              this.cardImg = r.tempFilePath
+            },
+            fail: () => {
+              uni.hideLoading()
+              this.cardExporting = false
+              uni.showToast({ title: '生成失败', icon: 'none' })
+            },
+          })
+        })
+      // #endif
+    },
+    saveCardImg() {
+      // #ifdef MP-WEIXIN
+      if (!this.cardImg) return
+      uni.saveImageToPhotosAlbum({
+        filePath: this.cardImg,
+        success: () => uni.showToast({ title: '已保存到相册', icon: 'success' }),
+        fail: (err) => {
+          const m = String((err && err.errMsg) || '')
+          if (m.includes('auth deny') || m.includes('authorize') || m.includes('auth')) {
+            uni.showModal({
+              title: '需要相册权限',
+              content: '请在设置里开启「保存到相册」权限后重试',
+              confirmText: '去设置',
+              success: (r) => {
+                if (r.confirm) uni.openSetting()
+              },
+            })
+          } else {
+            uni.showToast({ title: '保存失败', icon: 'none' })
+          }
+        },
+      })
+      // #endif
+    },
   },
 }
 </script>
@@ -971,6 +1083,16 @@ export default {
   color: var(--c-text-2);
 }
 
+/* 导出按钮行：兽医小结 / 档案卡 并排 */
+.export-row {
+  display: flex;
+  gap: 16rpx;
+  margin: 0 var(--pad-page) 24rpx;
+}
+.export-row .btn-vet {
+  flex: 1;
+  margin: 0;
+}
 /* 生成给兽医按钮（描边主色） */
 .btn-vet {
   margin: 0 var(--pad-page) 24rpx;
