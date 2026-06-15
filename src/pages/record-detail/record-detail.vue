@@ -356,9 +356,11 @@ export default {
   background: var(--c-danger-tint);
 }
 
+/* 本页极简空状态：显式 row 覆盖全局 .empty 的 flex-direction:column（Round 2 全局化后的守护） */
 .empty {
   padding: 200rpx 0;
   display: flex;
+  flex-direction: row;
   justify-content: center;
 }
 .empty__title {

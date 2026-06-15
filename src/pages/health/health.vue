@@ -749,63 +749,7 @@ export default {
   display: flex;
   gap: 20rpx;
 }
-.btn-ghost {
-  flex: 1;
-  height: 92rpx;
-  line-height: 92rpx;
-  border-radius: var(--r-pill);
-  background: var(--c-bg-sink);
-  color: var(--c-text-2);
-  font-size: var(--fs-body);
-  font-weight: 500;
-}
-.btn-ghost--press {
-  background: var(--c-divider);
-}
-.btn-primary {
-  flex: 1;
-  height: 92rpx;
-  line-height: 92rpx;
-  border-radius: var(--r-pill);
-  background: var(--c-primary-grad);
-  color: var(--c-text-inv);
-  font-size: var(--fs-body);
-  font-weight: 600;
-  box-shadow: var(--sh-primary);
-}
-.btn-primary--press {
-  transform: scale(0.97);
-}
+/* .btn-primary / .btn-ghost (+--press) 已抽到 App.vue 全局（Round 2 去重） */
 
-/* 空状态 */
-.empty {
-  padding: 140rpx var(--pad-page);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.empty__art {
-  width: 200rpx;
-  height: 200rpx;
-  border-radius: var(--r-pill);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 110rpx;
-  background: radial-gradient(circle at 50% 40%, #fff3ec 0%, var(--c-primary-wash) 70%, var(--c-bg) 100%);
-}
-.empty__title {
-  margin-top: 32rpx;
-  font-size: var(--fs-h2);
-  font-weight: 600;
-  color: var(--c-text);
-}
-.empty__desc {
-  margin-top: 12rpx;
-  font-size: var(--fs-sub);
-  color: var(--c-text-2);
-  text-align: center;
-  line-height: 1.6;
-  padding: 0 20rpx;
-}
+/* 空状态：.empty/.empty__art/.empty__title/.empty__desc 已抽到 App.vue 全局（Round 2） */
 </style>

@@ -955,32 +955,5 @@ export default {
   display: flex;
   gap: 20rpx;
 }
-.btn-ghost {
-  flex: 1;
-  height: 92rpx;
-  line-height: 92rpx;
-  border-radius: var(--r-pill);
-  background: var(--c-bg-sink);
-  color: var(--c-text-2);
-  font-size: var(--fs-body);
-  font-weight: 500;
-}
-.btn-ghost--press {
-  background: var(--c-divider);
-}
-.btn-primary {
-  flex: 1;
-  height: 92rpx;
-  line-height: 92rpx;
-  border-radius: var(--r-pill);
-  background: var(--c-primary-grad);
-  color: var(--c-text-inv);
-  font-size: var(--fs-body);
-  font-weight: 600;
-  box-shadow: var(--sh-primary);
-}
-.btn-primary--press {
-  transform: scale(0.97);
-  box-shadow: var(--sh-press);
-}
+/* .btn-primary / .btn-ghost (+--press) 已抽到 App.vue 全局（Round 2 去重） */
 </style>

@@ -113,6 +113,76 @@ button::after {
   border: none;
 }
 
+/* ============================================================
+   全局按钮系统（Round 2）：成对操作按钮统一一套，各页 class="btn-primary/btn-ghost"。
+   原本 health/pet/record 各复制一份（逐字相同），抽到此处去重；family 的独立版式保留本地。
+   均为 flex:1，用在底部/弹层的成对按钮行（主操作 + 次操作）。
+   ============================================================ */
+.btn-primary {
+  flex: 1;
+  height: 92rpx;
+  line-height: 92rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-primary-grad);
+  color: var(--c-text-inv);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  box-shadow: var(--sh-primary);
+}
+.btn-primary--press {
+  transform: scale(0.97);
+  box-shadow: var(--sh-press);
+}
+.btn-ghost {
+  flex: 1;
+  height: 92rpx;
+  line-height: 92rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-bg-sink);
+  color: var(--c-text-2);
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+.btn-ghost--press {
+  background: var(--c-divider);
+}
+
+/* ============================================================
+   全局空状态（Round 2）：index/timeline/health 原各复制一份（art/title/desc 逐字相同、
+   仅 padding 漂移 120/140/160），抽到此处并把 padding 归一 140。
+   record-detail 的极简空状态在本页另有 .empty/.empty__title 覆盖，不受影响。
+   ============================================================ */
+.empty {
+  padding: 140rpx var(--pad-page);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.empty__art {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: var(--r-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 110rpx;
+  background: radial-gradient(circle at 50% 40%, #fff3ec 0%, var(--c-primary-wash) 70%, var(--c-bg) 100%);
+}
+.empty__title {
+  margin-top: 32rpx;
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  color: var(--c-text);
+}
+.empty__desc {
+  margin-top: 12rpx;
+  padding: 0 20rpx;
+  font-size: var(--fs-sub);
+  color: var(--c-text-2);
+  text-align: center;
+  line-height: 1.6;
+}
+
 /* 极轻呼吸：用于逾期 / 到期提示元素，温柔不焦虑 */
 @keyframes breathe {
   0%,

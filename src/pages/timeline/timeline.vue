@@ -214,34 +214,5 @@ export default {
 .tl-chip.ev-clinic { color: var(--c-rt-other); background: var(--c-rt-other-bg); }
 .tl-chip.ev-other { color: var(--c-text-2); background: var(--c-bg-sink); }
 
-/* 空状态 */
-.empty {
-  padding: 160rpx var(--pad-page);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.empty__art {
-  width: 200rpx;
-  height: 200rpx;
-  border-radius: var(--r-pill);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 110rpx;
-  background: radial-gradient(circle at 50% 40%, #fff3ec 0%, var(--c-primary-wash) 70%, var(--c-bg) 100%);
-}
-.empty__title {
-  margin-top: 32rpx;
-  font-size: var(--fs-h2);
-  font-weight: 600;
-  color: var(--c-text);
-}
-.empty__desc {
-  margin-top: 12rpx;
-  font-size: var(--fs-sub);
-  color: var(--c-text-2);
-  text-align: center;
-  line-height: 1.6;
-}
+/* 空状态：.empty/.empty__art/.empty__title/.empty__desc 已抽到 App.vue 全局（Round 2） */
 </style>
