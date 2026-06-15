@@ -13,8 +13,9 @@
 - 录入重做（v0.4.5）：结构化直填（不调 LLM，前端拼同形 record 直走 saveRecord 落库校验边界）+ 确认卡片改全字段可编辑（AI 错字段内联改不重调）+ 点＋弹「记录」三入口卡（自然语言主入口 / 结构化 / 语音占位）+ records.time 精确到分、created_at 由事件时间派生（仅日期落中午 12:00），见 ADR-017/018。
 - 病程视图 + tag 治理 + 解析 I/O 精准化（ADR-019/020）+ 多租户隔离审计回归（13-agent 审 11 云函数四不变式全绿 0 缺陷 + isolation.e2e 64 断言 + assertMember 多副本同步红线）+ 录入重做 v0.4.5 **已一并 commit + push（5b3a9de → origin/main，9 套 234 断言全绿）**。
 - 档案卡 + 首页轮播门面（ADR-021/022）：档案卡海报图（pet.vue 复用兽医小结离屏 canvas 管线，修了体重曲线 canvas 穿透浮层）+ 改版 A·精致留白（头像光晕/物种 chip/图标胶囊/自适应年龄字号）+ 渲染抽共享模块 `src/petCard.js`（详情页分享卡 ↔ 首页轮播卡逐像素同款）+ 首页（宠物 tab）主视图重做成档案卡左右滑轮播（替换 2 列网格，一块离屏 canvas 顺序出图 + 签名缓存），**已真机验 + commit+push（7079d64）**。clean_tags 数据治理（ADR-019）**已执行**：dryRun 107 → 真改 cleared:107 → 复扫 matched:0（驱虫 52 / 记录体重 23 / 疫苗 9 / 到家 / 绝育各 7 / 体检 6 / 未知 3，真病程线零波及，幂等收口）。
+- UI 打磨 Round 1 + 底部 tab 选中态修复（commit 84950a4）：tab 选中态原靠 custom-tab-bar 自身路由推算（uni-app 下卡默认 0、只「宠物」高亮）→ 改各 tab 页 onShow `this.$scope.getTabBar().setData`（`src/tabSync.js`）；点击命中（中央＋凸出热区 / 附件✕ / 编辑按钮 / 病程标签等）+ 视觉打磨（输入框 focus / 提醒卡类型彩条 / 卡圆角统一 / 个别硬编码色归令牌）。
 - 三阶段演进：v1 Cursor（已下线）→ v2 OpenClaw（未上生产）→ v3 本仓库。详见 `AIREADME/CORE`。
-- 下一步：病程视图 / 解析准确率真机回归剩项 → 加体验成员发码邀友；后续 ADR-020 Phase 2 解析评测 + pet.vue 该宠病程入口 + 提醒真推送（订阅消息）+ 语音录入。见 `AIREADME/ROADMAP`。
+- 下一步：病程视图 / 解析准确率真机回归剩项 → 加体验成员发码邀友；后续 ADR-020 Phase 2 解析评测 + pet.vue 该宠病程入口 + 提醒真推送（订阅消息）+ 语音录入 + Round 2 UI（canvas 色令牌化 / 跨页按钮统一 / 间距归一 / 组件统一）。见 `AIREADME/ROADMAP`。
 - **本仓库已开源**（MIT · github.com/iyuenan3/petslog）：仅放架构 / 产品设计 / prompt；完整商业代码 / key / 部署配置不入库。
 
 ## 加载路由（任务 → AIREADME/）
