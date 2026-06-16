@@ -75,7 +75,7 @@
 
       <!-- 空状态 -->
       <view v-else class="empty">
-        <view class="empty__art">🐾</view>
+        <view class="empty__art"><image class="empty__art-img" src="/static/icon/paw.png" mode="aspectFit" /></view>
         <text class="empty__title">还没有毛孩子</text>
         <text class="empty__desc">点 ＋ 说一句，比如「新来的橘猫示例 3.2kg」，我会自动建档</text>
         <button class="empty__cta" hover-class="empty__cta--press" hover-stay-time="60" @click="goRecord">＋ 记录</button>

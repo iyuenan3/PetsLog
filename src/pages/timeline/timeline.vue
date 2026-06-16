@@ -36,7 +36,7 @@
       </view>
     </view>
     <view v-else class="empty">
-      <view class="empty__art">📖</view>
+      <view class="empty__art"><image class="empty__art-img" src="/static/icon/clipboard.png" mode="aspectFit" /></view>
       <text class="empty__title">还没有健康记录</text>
       <text class="empty__desc">点底部 ＋ 说句话，AI 会自动把记录归档到这里</text>
     </view>

@@ -12,7 +12,7 @@
       data-page="{{item.page}}"
       bindtap="switchTo"
     >
-      <view class="tab__ico">{{item.ico}}</view>
+      <image class="tab__ico" src="{{item.ico}}" mode="aspectFit" />
       <view class="tab__txt">{{item.text}}</view>
     </view>
 
@@ -34,7 +34,7 @@
       data-page="{{item.page}}"
       bindtap="switchTo"
     >
-      <view class="tab__ico">{{item.ico}}</view>
+      <image class="tab__ico" src="{{item.ico}}" mode="aspectFit" />
       <view class="tab__txt">{{item.text}}</view>
     </view>
   </view>

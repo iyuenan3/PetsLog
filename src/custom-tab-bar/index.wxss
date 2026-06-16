@@ -24,20 +24,15 @@
   align-items: center;
   justify-content: center;
 }
+/* 图标为彩色 PNG，选中态仅文字变色（图标恒定，不做暗化/缩放/换图） */
 .tab__ico {
-  font-size: 40rpx;
-  line-height: 1;
-  opacity: 0.5;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  width: 48rpx;
+  height: 48rpx;
 }
 .tab__txt {
   margin-top: 4rpx;
   font-size: 20rpx;
   color: var(--c-text-3, #b5aba2);
-}
-.tab--on .tab__ico {
-  opacity: 1;
-  transform: translateY(-2rpx) scale(1.1);
 }
 .tab--on .tab__txt {
   color: var(--c-primary, #f2825c);

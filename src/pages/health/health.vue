@@ -28,7 +28,7 @@
         </view>
       </view>
       <view v-else class="empty">
-        <view class="empty__art">⏰</view>
+        <view class="empty__art"><image class="empty__art-img" src="/static/icon/bell.png" mode="aspectFit" /></view>
         <text class="empty__title">暂无提醒，一切安好</text>
         <text class="empty__desc">点底部 ＋ 说一句「下月15号给示例狗打疫苗」「每月给猫驱虫」，AI 会自动设上</text>
       </view>
@@ -56,7 +56,7 @@
         </view>
       </view>
       <view v-else class="empty">
-        <view class="empty__art">🍚</view>
+        <view class="empty__art"><image class="empty__art-img" src="/static/icon/bowl.png" mode="aspectFit" /></view>
         <text class="empty__title">还没有主粮记录</text>
         <text class="empty__desc">点右上「＋ 添加」记下喂过的主粮和时段，给换粮决策留个账</text>
       </view>
@@ -95,7 +95,7 @@
     <block v-else>
       <view v-if="meds.length" class="med-list">
         <view v-for="m in meds" :key="m._id" class="med-card">
-          <view class="med-card__icon">💊</view>
+          <view class="med-card__icon"><image class="med-card__icon-img" src="/static/icon/pill.png" mode="aspectFit" /></view>
           <view class="med-card__body">
             <view class="med-card__top">
               <text class="med-card__name">{{ m.name }}</text>
@@ -108,7 +108,7 @@
         </view>
       </view>
       <view v-else class="empty">
-        <view class="empty__art">💊</view>
+        <view class="empty__art"><image class="empty__art-img" src="/static/icon/pill.png" mode="aspectFit" /></view>
         <text class="empty__title">药箱还空着</text>
         <text class="empty__desc">点底部 ＋ 说一句「买了盒驱虫药，2 支，明年3月过期」，自动入库</text>
       </view>
@@ -531,7 +531,10 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 48rpx;
+}
+.med-card__icon-img {
+  width: 56rpx;
+  height: 56rpx;
 }
 .med-card__body {
   flex: 1;

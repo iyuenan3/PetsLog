@@ -47,11 +47,11 @@
       </view>
       <view class="alt-entries">
         <view class="alt-entry" hover-class="alt-entry--press" hover-stay-time="60" @click="openManual">
-          <text class="alt-entry__ico">⌨️</text>
+          <image class="alt-entry__ico" src="/static/icon/keyboard.png" mode="aspectFit" />
           <text class="alt-entry__name">结构化逐项</text>
         </view>
         <view class="alt-entry alt-entry--soon" hover-class="alt-entry--press" hover-stay-time="60" @click="voiceSoon">
-          <text class="alt-entry__ico">🎤</text>
+          <image class="alt-entry__ico" src="/static/icon/mic.png" mode="aspectFit" />
           <text class="alt-entry__name">语音</text>
           <text class="alt-entry__soon">敬请期待</text>
         </view>
@@ -62,9 +62,9 @@
     <view v-else class="form">
         <!-- 手动直填可切类型（AI 解析态 kind 由解析决定，不显示切换） -->
         <view v-if="manual" class="kind-switch">
-          <text :class="['kind-switch__item', parsed.kind === 'record' ? 'kind-switch__item--active' : '']" @click="setManualKind('record')">🩺 记录</text>
-          <text :class="['kind-switch__item', parsed.kind === 'reminder' ? 'kind-switch__item--active' : '']" @click="setManualKind('reminder')">🔔 提醒</text>
-          <text :class="['kind-switch__item', parsed.kind === 'med_stock' ? 'kind-switch__item--active' : '']" @click="setManualKind('med_stock')">💊 入库</text>
+          <view :class="['kind-switch__item', parsed.kind === 'record' ? 'kind-switch__item--active' : '']" @click="setManualKind('record')"><image class="kind-switch__ico" src="/static/icon/stetho.png" mode="aspectFit" /><text>记录</text></view>
+          <view :class="['kind-switch__item', parsed.kind === 'reminder' ? 'kind-switch__item--active' : '']" @click="setManualKind('reminder')"><image class="kind-switch__ico" src="/static/icon/bell.png" mode="aspectFit" /><text>提醒</text></view>
+          <view :class="['kind-switch__item', parsed.kind === 'med_stock' ? 'kind-switch__item--active' : '']" @click="setManualKind('med_stock')"><image class="kind-switch__ico" src="/static/icon/pill.png" mode="aspectFit" /><text>入库</text></view>
         </view>
 
         <!-- 药品入库（可编辑，见 ADR-017） -->
@@ -759,8 +759,8 @@ export default {
   transform: scale(0.97);
 }
 .alt-entry__ico {
-  font-size: 40rpx;
-  line-height: 1.15;
+  width: 48rpx;
+  height: 48rpx;
 }
 .alt-entry__name {
   font-size: var(--fs-sub);
@@ -872,11 +872,17 @@ export default {
 .kind-switch__item {
   flex: 1;
   height: 68rpx;
-  line-height: 68rpx;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
   border-radius: var(--r-pill);
   font-size: var(--fs-sub);
   color: var(--c-text-2);
+}
+.kind-switch__ico {
+  width: 34rpx;
+  height: 34rpx;
 }
 .kind-switch__item--active {
   background: var(--c-card);

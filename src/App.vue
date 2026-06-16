@@ -168,6 +168,11 @@ button::after {
   font-size: 110rpx;
   background: radial-gradient(circle at 50% 40%, #fff3ec 0%, var(--c-primary-wash) 70%, var(--c-bg) 100%);
 }
+/* 空状态用 PNG 图标（替代部分 emoji）：放进 .empty__art 光晕圆内居中 */
+.empty__art-img {
+  width: 124rpx;
+  height: 124rpx;
+}
 .empty__title {
   margin-top: 32rpx;
   font-size: var(--fs-h2);

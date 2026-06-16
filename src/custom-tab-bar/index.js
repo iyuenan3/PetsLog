@@ -5,12 +5,12 @@ Component({
   data: {
     selected: 0,
     left: [
-      { idx: 0, page: '/pages/index/index', text: '宠物', ico: '🐾' },
-      { idx: 1, page: '/pages/timeline/timeline', text: '时间线', ico: '📋' },
+      { idx: 0, page: '/pages/index/index', text: '宠物', ico: '/static/icon/paw.png' },
+      { idx: 1, page: '/pages/timeline/timeline', text: '时间线', ico: '/static/icon/clipboard.png' },
     ],
     right: [
-      { idx: 2, page: '/pages/health/health', text: '健康', ico: '💊' },
-      { idx: 3, page: '/pages/me/me', text: '我的', ico: '👤' },
+      { idx: 2, page: '/pages/health/health', text: '健康', ico: '/static/icon/pill.png' },
+      { idx: 3, page: '/pages/me/me', text: '我的', ico: '/static/icon/person.png' },
     ],
   },
   lifetimes: {
