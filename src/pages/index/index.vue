@@ -41,9 +41,10 @@
             ></image>
             <!-- 出图前骨架占位（带头像 + 名，不空白） -->
             <view v-else class="card-skel">
-              <view class="card-skel__avatar" :class="p.species === 'dog' ? 'is-dog' : 'is-cat'">
+              <view class="card-skel__avatar">
                 <image v-if="p.avatar" :src="p.avatar" class="card-skel__avatar-img" mode="aspectFill"></image>
-                <text v-else>{{ p.avatar_emoji || speciesEmoji(p.species) }}</text>
+                <text v-else-if="p.avatar_emoji">{{ p.avatar_emoji }}</text>
+                <image v-else :src="spAvatar(p.species)" class="card-skel__avatar-img" mode="aspectFill"></image>
               </view>
               <text class="card-skel__name">{{ p.name }}</text>
               <text class="card-skel__tip">档案卡生成中…</text>
@@ -96,6 +97,7 @@ import { CLOUD_ENV } from '@/config'
 import { petAge } from '@/utils'
 import { callFn } from '@/cloud'
 import { paintPetCard, loadPetAvatar, CARD_W, CARD_H } from '@/petCard'
+import { avatarStatic } from '@/species'
 import { syncTab } from '@/tabSync'
 
 export default {
@@ -127,8 +129,8 @@ export default {
     this.loadDue()
   },
   methods: {
-    speciesEmoji(s) {
-      return s === 'dog' ? '🐶' : '🐱'
+    spAvatar(s) {
+      return avatarStatic(s) // 骨架占位也用物种静态图（ADR-023，图已就位），与档案卡 / 详情页头部一致
     },
     ageText(b) {
       return petAge(b)
@@ -191,7 +193,7 @@ export default {
             canvas.height = CARD_H * dpr
             ctx.scale(dpr, dpr)
             // 头像照片异步加载（失败回退 emoji），再整张绘制（与详情页同款，@/petCard）
-            const avatarImg = await loadPetAvatar(canvas, p.avatar)
+            const avatarImg = await loadPetAvatar(canvas, p)
             paintPetCard(ctx, CARD_W, CARD_H, p, avatarImg)
             wx.canvasToTempFilePath({
               canvas,
@@ -364,9 +366,6 @@ export default {
   font-size: 84rpx;
   background: radial-gradient(circle at 50% 38%, #fff3ec 0%, var(--c-primary-tint) 100%);
   box-shadow: inset 0 0 0 4rpx #fff, 0 6rpx 16rpx rgba(242, 130, 92, 0.18);
-}
-.card-skel__avatar.is-dog {
-  background: radial-gradient(circle at 50% 38%, #fff0e6 0%, #fad9c2 100%);
 }
 .card-skel__avatar-img {
   width: 100%;

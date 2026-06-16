@@ -179,6 +179,53 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(r.ok === false && recs().length === 0, '非成员应拒')
   })
 
+  // 10. 养护(ADR-024): event_type=养护 入第 8 桶 + params 落库
+  await run('养护: 第8桶 + params 落库', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例龟'])
+    const r = await fn.main({ family_id: 'F1', record: { pet: '示例龟', time: '2026-06-11', event_type: '养护', desc: '环境', params: { temp: 28, humidity: 60 } } })
+    assert(r.ok === true && recs().length === 1, '养护记录落库')
+    assert(recs()[0].event_type === '养护', 'event_type=养护 不被改其它')
+    assert(recs()[0].params && recs()[0].params.temp === 28 && recs()[0].params.humidity === 60, 'params 正确落库')
+  })
+
+  // 11. params sanitize: 非法值 / 超界键剔除,非对象不写
+  await run('params sanitize: 剔非法 + 缺省不写', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例鱼'])
+    const longKey = 'k'.repeat(20)
+    const r = await fn.main({ family_id: 'F1', record: { pet: '示例鱼', event_type: '养护', desc: 'x', params: { ph: 7.2, bad: {}, [longKey]: 1, note: 'ok', huge: 'h'.repeat(40) } } })
+    assert(r.ok === true, '落库成功')
+    const p = recs()[0].params
+    assert(p && p.ph === 7.2 && p.note === 'ok', '合法 number / 短串保留')
+    assert(!('bad' in p) && !(longKey in p) && !('huge' in p), '对象值 / 超长键 / 超长串剔除')
+    // 非养护 + 无 params → 不落 params 字段
+    const r2 = await fn.main({ family_id: 'F1', record: { pet: '示例鱼', event_type: '症状', desc: 'y' } })
+    assert(r2.ok === true && !('params' in recs()[1]), '无 params 不落字段')
+  })
+
+  // 11b. params event_type 门控(review #9): 非养护记录即便带合法 params 也不落（防串到症状/就医记录）
+  await run('params 门控: 非养护带 params 不落', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u')
+    const r = await fn.main({ family_id: 'F1', record: { pet: '示例鱼', event_type: '症状', desc: '吐', params: { ph: 7.2 } } })
+    assert(r.ok === true && !('params' in recs()[0]), '症状记录的 params 被门控丢弃')
+  })
+
+  // 11c. sanitize 键数 ≤8 截断边界(review #9): 传 10 键只留 8
+  await run('params sanitize: 键数 ≤8 截断', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u')
+    const big = {}
+    for (let i = 0; i < 10; i++) big['k' + i] = i + 1
+    const r = await fn.main({ family_id: 'F1', record: { pet: '示例鱼', event_type: '养护', desc: 'x', params: big } })
+    assert(r.ok === true && Object.keys(recs()[0].params).length === 8, '只保留前 8 键')
+  })
+
+  // 12. reminder 养护类型(ADR-024): 不被落「其它」
+  await run('reminder: 养护类型保留', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例龟'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'reminder', pet: '示例龟', rem_type: '养护', rem_title: '换 UVB 灯管', rem_date: '2026-12-01', rem_repeat_days: 182 } })
+    assert(r.ok === true, '提醒落库')
+    assert((DB_INST.data.reminders || [])[0].type === '养护', 'rem_type=养护 保留')
+  })
+
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
 })()

@@ -2,8 +2,34 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
-// 事件类型受控枚举（7 桶，见 ADR-013）。前端配色 / 分类依赖，非法值落「其它」。
-const EVENT_TYPES = ['症状', '用药', '疫苗', '驱虫', '体重', '就医', '其它']
+// 事件类型受控枚举（8 桶，见 ADR-013 + ADR-024 加「养护」）。前端配色 / 分类依赖，非法值落「其它」。
+const EVENT_TYPES = ['症状', '用药', '疫苗', '驱虫', '体重', '就医', '养护', '其它']
+
+// 养护参数 sanitize（ADR-024）：只接收对象、键数 ≤8、键名 ≤16 字、值为 number 或 ≤32 字串；越界 / 非法丢弃。
+// schemaless（物种参数集差异大），仅防垃圾入库；前端 speciesProfile 驱动正确键，服务端不强校键名。
+function sanitizeParams(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  const out = {}
+  let n = 0
+  for (const k of Object.keys(v)) {
+    if (n >= 8) break
+    if (typeof k !== 'string' || k.length === 0 || k.length > 16) continue
+    let val = v[k]
+    if (typeof val === 'number') {
+      if (!Number.isFinite(val)) continue
+    } else if (typeof val === 'string') {
+      val = val.trim()
+      if (val === '' || val.length > 32) continue
+    } else continue
+    out[k] = val
+    n++
+  }
+  return n ? out : undefined
+}
+
+// 物种枚举白名单（ADR-023 物种扩展 A 档）：自动建宠时归一，非法 / 旧值落 other。前端 src/species.js 持同序副本，改须同步。
+const SPECIES_KEYS = ['cat', 'dog', 'rabbit', 'rodent', 'bird', 'reptile', 'fish', 'other']
+const normSpecies = (s) => (SPECIES_KEYS.includes(s) ? s : 'other')
 
 // 日期归一：保证落库日期恒为定长零填充 'YYYY-MM-DD'，否则字典序排序（兽医小结按 time、提醒按 next_date）会失真。
 // 已是 'YYYY-MM-DD' 原样；'2026-6-9' / '2026/6/9' 补零归一；解析不出回退 fallback。防 LLM 偶发非零填充。
@@ -131,7 +157,7 @@ exports.main = async (event) => {
   if (r.kind === 'reminder') {
     if (!r.rem_title && !r.pet) return { ok: false, code: 'EMPTY_REMINDER', msg: '提醒内容缺失' }
     await db.createCollection('reminders').catch(() => {}) // 幂等兜底
-    const TYPES = ['用药', '疫苗', '驱虫', '其它']
+    const TYPES = ['用药', '疫苗', '驱虫', '养护', '其它'] // ADR-024 加「养护」（爬宠 / 鱼提醒分类）
     const remRes = await db.collection('reminders').add({
       data: {
         family_id: familyId,
@@ -167,6 +193,7 @@ exports.main = async (event) => {
   }
 
   const eventTime = normalizeDateTime(r.time, '') // 事件时间，精确到分（旧 / AI 未给时为纯日期）
+  const params = sanitizeParams(r.params) // 养护参数（ADR-024）：爬宠温湿度 / 鱼水质等，缺省不写
   const doc = {
     family_id: familyId,
     pet: resolvedPet,
@@ -183,6 +210,7 @@ exports.main = async (event) => {
     att_count: 0,
     created_at: createdAtFromTime(eventTime), // 由事件时间派生（精确到分；缺时中午），主时间线按此排
   }
+  if (params && doc.event_type === '养护') doc.params = params // 养护参数仅落「养护」记录（event_type 门控，防 params 串到非养护记录）
   const addRes = await db.collection('records').add({ data: doc })
 
   // 宠物 upsert（按家庭）：已有的若带体重则更新最新体重；建档只剩「new_pet 显式意图 / 0 宠首录」两条路（上方守卫保证）
@@ -202,7 +230,7 @@ exports.main = async (event) => {
         data: {
           family_id: familyId,
           name: doc.pet,
-          species: r.species === 'dog' ? 'dog' : 'cat',
+          species: normSpecies(r.species),
           breed: '',
           birthday: '',
           neutered: false,

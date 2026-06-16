@@ -3,6 +3,10 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
+// 物种枚举白名单（ADR-023）：命中取值，非法 / 旧值落 other（导入样本全猫狗，归一无副作用）。前端 src/species.js 持同序副本。
+const SPECIES_KEYS = ['cat', 'dog', 'rabbit', 'rodent', 'bird', 'reptile', 'fish', 'other']
+const normSpecies = (s) => (SPECIES_KEYS.includes(s) ? s : 'other')
+
 // 一次性历史数据导入（轮3，见 ADR-012/013/014）。action: clear | import
 // 安全：按家庭名 + 调用者管理员身份解析 family_id（只动你 admin 的家庭）；data.json 与本函数一起部署到私有云端（gitignore 不入公开仓）。
 // 附件：照片/PDF 已由 wxcloud storage:upload 预传到 COS key att/<recordId>/<name>；本函数探针拿 cloud:// 前缀拼成 fileID 并逐个验证。
@@ -134,7 +138,7 @@ async function importData(fid) {
       data: {
         family_id: fid,
         name: p.name,
-        species: p.species === 'dog' ? 'dog' : 'cat',
+        species: normSpecies(p.species),
         breed: p.breed || '',
         birthday: p.birthday || '',
         home_date: p.home_date || '',

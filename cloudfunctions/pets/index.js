@@ -12,6 +12,11 @@ async function assertMember(openid, familyId) {
 // 宠物档案 CRUD（按家庭隔离）。action: list | get | add | update | delete
 const EDITABLE = ['name', 'species', 'breed', 'birthday', 'neutered', 'allergy', 'chronic', 'latest_weight', 'home_date', 'note', 'intro', 'price_base', 'avatar', 'avatar_emoji']
 
+// 物种枚举白名单（ADR-023 物种扩展 A 档）：命中取其值，非法 / 旧值落 other。
+// 这一处 = 解除「仅猫狗」的落库真相源（原为 species==='dog'?'dog':'cat' 二元钳制）。前端 src/species.js 持同序副本，改须同步。
+const SPECIES_KEYS = ['cat', 'dog', 'rabbit', 'rodent', 'bird', 'reptile', 'fish', 'other']
+const normSpecies = (s) => (SPECIES_KEYS.includes(s) ? s : 'other')
+
 // 数字容错：number 原样；'2000'/'¥2,000' 取数；空 / 无数字 → null
 function numOrNull(v) {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null
@@ -56,7 +61,7 @@ exports.main = async (event) => {
       data: {
         family_id: familyId,
         name,
-        species: p.species === 'dog' ? 'dog' : 'cat',
+        species: normSpecies(p.species),
         breed: p.breed || '',
         birthday: p.birthday || '',
         neutered: !!p.neutered,
@@ -85,7 +90,7 @@ exports.main = async (event) => {
     const patch = {}
     for (const k of EDITABLE) {
       if (!(k in p)) continue
-      if (k === 'species') patch.species = p.species === 'dog' ? 'dog' : 'cat'
+      if (k === 'species') patch.species = normSpecies(p.species)
       else if (k === 'neutered') patch.neutered = !!p.neutered
       else if (k === 'latest_weight') {
         if (typeof p.latest_weight === 'number') patch.latest_weight = p.latest_weight

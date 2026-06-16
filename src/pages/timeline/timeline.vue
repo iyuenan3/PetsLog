@@ -24,8 +24,9 @@
           <text class="tl-item__time">{{ shortDate(r.time) }}</text>
         </view>
         <text v-if="r.raw || r.desc" class="tl-item__quote">{{ r.raw || r.desc }}</text>
-        <view v-if="r.weight || r.med || r.hospital || r.cost != null || r.tag || r.att_count" class="tl-item__notes">
+        <view v-if="r.weight || r.med || r.hospital || r.cost != null || r.tag || r.att_count || r.params" class="tl-item__notes">
           <text v-if="r.weight" class="tl-note">⚖️ {{ r.weight }}kg</text>
+          <text v-for="pp in fmtParams(r.params)" :key="pp.key" class="tl-note">📊 {{ pp.label }} {{ pp.value }}{{ pp.unit }}</text>
           <text v-if="r.med" class="tl-note">💊 {{ r.med }}</text>
           <text v-if="r.hospital" class="tl-note">🏥 {{ r.hospital }}</text>
           <text v-if="r.cost != null" class="tl-note">💰 ¥{{ r.cost }}</text>
@@ -45,6 +46,7 @@
 <script>
 import { CLOUD_ENV } from '@/config'
 import { callFn } from '@/cloud'
+import { formatParams } from '@/speciesProfile'
 import { syncTab } from '@/tabSync'
 
 export default {
@@ -66,7 +68,10 @@ export default {
       uni.navigateTo({ url: `/pages/record-detail/record-detail?id=${r._id}` })
     },
     eventClass(t) {
-      return { 症状: 'ev-symptom', 用药: 'ev-med', 疫苗: 'ev-vaccine', 驱虫: 'ev-deworm', 体重: 'ev-weight', 就医: 'ev-clinic' }[t] || 'ev-other'
+      return { 症状: 'ev-symptom', 用药: 'ev-med', 疫苗: 'ev-vaccine', 驱虫: 'ev-deworm', 体重: 'ev-weight', 就医: 'ev-clinic', 养护: 'ev-care' }[t] || 'ev-other'
+    },
+    fmtParams(params) {
+      return formatParams(params)
     },
     shortDate(d) {
       return d ? String(d).slice(5) : ''
@@ -204,6 +209,7 @@ export default {
 .tl-dot.ev-deworm { background: var(--c-rt-deworm); box-shadow: 0 0 0 6rpx var(--c-rt-deworm-bg); }
 .tl-dot.ev-weight { background: var(--c-success); box-shadow: 0 0 0 6rpx var(--c-success-tint); }
 .tl-dot.ev-clinic { background: var(--c-rt-other); box-shadow: 0 0 0 6rpx var(--c-rt-other-bg); }
+.tl-dot.ev-care { background: #4fa89b; box-shadow: 0 0 0 6rpx rgba(79, 168, 155, 0.16); }
 .tl-dot.ev-other { background: var(--c-text-3); box-shadow: 0 0 0 6rpx var(--c-bg-sink); }
 
 .tl-chip.ev-symptom { color: var(--c-danger); background: var(--c-danger-tint); }
@@ -212,6 +218,7 @@ export default {
 .tl-chip.ev-deworm { color: var(--c-rt-deworm); background: var(--c-rt-deworm-bg); }
 .tl-chip.ev-weight { color: var(--c-success); background: var(--c-success-tint); }
 .tl-chip.ev-clinic { color: var(--c-rt-other); background: var(--c-rt-other-bg); }
+.tl-chip.ev-care { color: #3c8579; background: rgba(79, 168, 155, 0.14); }
 .tl-chip.ev-other { color: var(--c-text-2); background: var(--c-bg-sink); }
 
 /* 空状态：.empty/.empty__art/.empty__title/.empty__desc 已抽到 App.vue 全局（Round 2） */

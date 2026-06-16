@@ -14,6 +14,7 @@
         <view class="row" v-if="rec.desc"><text class="row__label">描述</text><text class="row__value">{{ rec.desc }}</text></view>
         <view class="row" v-if="rec.tag"><text class="row__label">病程</text><text class="row__value">{{ rec.tag }}</text></view>
         <view class="row" v-if="rec.weight"><text class="row__label">体重</text><text class="row__value">{{ rec.weight }}kg</text></view>
+        <view class="row" v-for="pp in fmtParams(rec.params)" :key="pp.key"><text class="row__label">{{ pp.label }}</text><text class="row__value">{{ pp.value }}{{ pp.unit }}</text></view>
         <view class="row" v-if="rec.med"><text class="row__label">用药</text><text class="row__value">{{ rec.med }}</text></view>
         <view class="row" v-if="rec.hospital"><text class="row__label">医院</text><text class="row__value">{{ rec.hospital }}</text></view>
         <view class="row" v-if="rec.cost != null"><text class="row__label">费用</text><text class="row__value">¥{{ rec.cost }}</text></view>
@@ -63,6 +64,7 @@
 <script>
 import { callFn } from '@/cloud'
 import { pickAttachments, uploadAndRegister, previewAttachment, fmtSize, ATT_MAX_PER_RECORD } from '@/attachments'
+import { formatParams } from '@/speciesProfile'
 
 export default {
   data() {
@@ -88,7 +90,10 @@ export default {
   methods: {
     fmtSize,
     eventClass(t) {
-      return { 症状: 'ev-symptom', 用药: 'ev-med', 疫苗: 'ev-vaccine', 驱虫: 'ev-deworm', 体重: 'ev-weight', 就医: 'ev-clinic' }[t] || 'ev-other'
+      return { 症状: 'ev-symptom', 用药: 'ev-med', 疫苗: 'ev-vaccine', 驱虫: 'ev-deworm', 体重: 'ev-weight', 就医: 'ev-clinic', 养护: 'ev-care' }[t] || 'ev-other'
+    },
+    fmtParams(params) {
+      return formatParams(params)
     },
     async load() {
       if (!this.id) {
@@ -375,6 +380,7 @@ export default {
 .head__dot.ev-deworm { background: var(--c-rt-deworm); }
 .head__dot.ev-weight { background: var(--c-success); }
 .head__dot.ev-clinic { background: var(--c-rt-other); }
+.head__dot.ev-care { background: #4fa89b; }
 .head__dot.ev-other { background: var(--c-text-3); }
 .head__chip.ev-symptom { color: var(--c-danger); background: var(--c-danger-tint); }
 .head__chip.ev-med { color: var(--c-rt-med); background: var(--c-rt-med-bg); }
@@ -382,5 +388,6 @@ export default {
 .head__chip.ev-deworm { color: var(--c-rt-deworm); background: var(--c-rt-deworm-bg); }
 .head__chip.ev-weight { color: var(--c-success); background: var(--c-success-tint); }
 .head__chip.ev-clinic { color: var(--c-rt-other); background: var(--c-rt-other-bg); }
+.head__chip.ev-care { color: #3c8579; background: rgba(79, 168, 155, 0.14); }
 .head__chip.ev-other { color: var(--c-text-2); background: var(--c-bg-sink); }
 </style>

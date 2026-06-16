@@ -3,6 +3,12 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## 物种扩展 A 档 + B 档 B2 + 默认头像 · 2026-06-16
+- Changed: **解除「仅猫狗」红线 → 8 类物种枚举（ADR-023）**：cat / dog / rabbit / rodent / bird / reptile / fish / other（非法 / 旧值落 other）。落库总闸 `pets/index.js` 二元钳制 `species==='dog'?'dog':'cat'` 改 `normSpecies` 白名单（saveRecord / importNotion / parseRecord/index.js 同步，含修了 record.vue / pet.vue 几处漏网钳制）；前端抽 `src/species.js` 单一真相源（SPECIES / normSpecies / speciesLabel / speciesEmoji / avatarStatic）。猫狗为主 + 常见宠物（A 档：一套统一记录模型，不为物种分叉医疗）。
+- Added: **8 物种默认头像（ADR-023）**：扁平 kawaii 矢量图标风（Seedream doubao-seedream-5-0 生成，正面坐姿团子 + 侧面金鱼 + 爪印），放 `src/static/avatar/<species>.png`（256² PNG）；头像优先级 **照片 > 自选 emoji > 物种静态图 > emoji 兜底**（pet.vue 头部三级降级 + petCard.js `loadSpeciesDefault` + index.vue 骨架）。
+- Added: **B 档 B2 养护数据维度（ADR-024）**：「养护」= event_type 第 8 桶；养护参数落 `records.params`（schemaless 对象，saveRecord `sanitizeParams` 兜垃圾 + event_type=养护 门控）；爬宠温湿度 / 鱼水质（pH / 氨 / 亚硝酸盐 / 水温）；`src/speciesProfile.js` 每物种 profile 驱动物种感知录入（event_type / 提醒分类按物种收敛 + 养护参数表单 + curSpecies 推导）；timeline / record-detail 渲染参数 chip + 养护配色 ev-care。**Q2 锁定纯用户自定义周期，绝不内置疫苗 / 驱虫周期建议值（守医疗红线）**。
+- Tested: `tests/pets` 加物种白名单覆盖、`tests/saveRecord` 加养护 / params 门控 / 键数截断、`tests/parseRecord.prompt` 加物种 / 养护断言；11 套全绿。`build:mp-weixin` 通过。两轮对抗式 review（上轮 12 条 + 提交前全量）修复落地。**待真机验 + commit。**
+
 ## 宠物档案卡 + 首页轮播门面 · 2026-06-15
 - Added: **宠物档案卡（ADR-021）**：pet.vue 顶部「🪪 档案卡」一键生成温暖治愈风海报图（头像 / 名 / 物种品种 / 年龄 / 最新体重 / 陪伴天数 / 简介），离屏 canvas 出图 → 浮层（长按转发）+ 存相册，复用兽医小结导出管线；头像照片走 `wx.cloud.downloadFile` → `canvas.createImage` 圆形 aspectFill，失败回退 emoji；萌宠 + 轻健康，绝不含费用 / 医院 / 病史 / 病程 / 用药。（修了体重曲线 `canvas type=2d` 穿透档案卡浮层 → `overlayOpen` 计算属性 + v-if 摘 canvas、关后重绘。）
 - Changed: **档案卡改版 A·精致留白（ADR-022）**：头像加暖色径向光晕 + 放大（r52→58），物种行改圆角小 chip（🐱 品种），三胶囊加图标（🎂/⚖️/🏡）+ 圆角加大，去突兀大爪印换轻 ✨ + 小爪点缀，简介前加装饰引号，年龄胶囊值**自适应字号**（完整「2岁3个月」放不下逐级降字号、不省略 / 不截断）。

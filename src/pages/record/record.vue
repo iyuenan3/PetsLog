@@ -105,7 +105,7 @@
               <text v-else class="field-row__value field-row__value--empty">不指定</text>
             </view>
             <view class="field-row"><text class="field-row__label">类型</text>
-              <picker class="field-row__pick" mode="selector" :range="REM_TYPES" :value="remTypeIdx" @change="onPickRemType($event)">
+              <picker class="field-row__pick" mode="selector" :range="remTypes" :value="remTypeIdx" @change="onPickRemType($event)">
                 <view class="pickbox"><text class="pickbox__v">{{ parsed.rem_type || '其它' }}</text><text class="pickbox__c">▾</text></view>
               </picker>
             </view>
@@ -134,8 +134,7 @@
               <view class="field-row"><text class="field-row__label">宠物</text><input class="field-row__input" v-model="parsed.pet" placeholder="新宠物名" placeholder-class="ph" /><text class="new-badge"> 🆕 将建档</text></view>
               <view class="field-row"><text class="field-row__label">种类</text>
                 <view class="chips">
-                  <text :class="['chip', parsed.species === 'cat' ? 'chip--active' : '']" @click="setSpecies('cat')">🐱 猫</text>
-                  <text :class="['chip', parsed.species === 'dog' ? 'chip--active' : '']" @click="setSpecies('dog')">🐶 狗</text>
+                  <text v-for="s in speciesList" :key="s.key" :class="['chip', parsed.species === s.key ? 'chip--active' : '']" @click="setSpecies(s.key)">{{ s.emoji }} {{ s.label }}</text>
                 </view>
               </view>
             </template>
@@ -165,9 +164,14 @@
               </view>
             </view>
             <view class="field-row"><text class="field-row__label">类型</text>
-              <picker class="field-row__pick" mode="selector" :range="EVENT_TYPES" :value="evtIdx" @change="onPickEvt($event)">
+              <picker class="field-row__pick" mode="selector" :range="eventTypes" :value="evtIdx" @change="onPickEvt($event)">
                 <view class="pickbox"><text class="pickbox__v">{{ parsed.event_type || '其它' }}</text><text class="pickbox__c">▾</text></view>
               </picker>
+            </view>
+            <!-- 养护参数（ADR-024）：event_type=养护 且该物种有结构化参数（爬宠温湿度 / 鱼水质）时展开 -->
+            <view v-for="f in husbandryFields" :key="f.key" class="field-row">
+              <text class="field-row__label">{{ f.label }}</text>
+              <input class="field-row__input" type="digit" v-model="parsed.params[f.key]" :placeholder="'选填' + (f.unit ? '，单位 ' + f.unit : '')" placeholder-class="ph" />
             </view>
             <view class="field-row"><text class="field-row__label">体重</text><input class="field-row__input" type="digit" v-model="parsed.weight" placeholder="选填，单位 kg" placeholder-class="ph" /></view>
             <view class="field-row"><text class="field-row__label">描述</text><input class="field-row__input" v-model="parsed.desc" placeholder="症状 / 事件描述" placeholder-class="ph" /></view>
@@ -213,6 +217,8 @@
 import { CLOUD_ENV } from '@/config'
 import { callFn } from '@/cloud'
 import { pickAttachments, uploadAndRegister, ATT_MAX_PER_RECORD } from '@/attachments'
+import { SPECIES } from '@/species'
+import { eventTypesFor, reminderTypesFor, husbandryFor } from '@/speciesProfile'
 
 export default {
   data() {
@@ -224,12 +230,11 @@ export default {
       parsed: null, // 结构化结果（AI 解析 or 手动直填），待用户确认 / 编辑
       manual: false, // 手动直填态（ADR-017）：可切 kind、隐藏「原文」、标题改「手动…」
       petOptions: [], // 家庭已有宠物名单（AI 走 parseRecord 带回，手动走 pets list），picker / 错别字点选用
+      petsList: [], // 家庭宠物全量（含 species），选已有宠时按名查物种以驱动 event_type / 养护表单（ADR-024）
+      speciesList: SPECIES, // 建档物种 chip（ADR-023 多物种）
       atts: [], // 待上传附件（本地临时文件，确认归档后才上传，取消不留孤儿）
       attMax: ATT_MAX_PER_RECORD,
       examples: ['示例猫今天吐了，体重 4.2kg', '下月 15 号给示例狗打疫苗', '买了盒驱虫药 2 支，明年 3 月过期'],
-      // 受控枚举（与 saveRecord 落库校验对齐）；可编辑卡片的 picker range
-      EVENT_TYPES: ['症状', '用药', '疫苗', '驱虫', '体重', '就医', '其它'],
-      REM_TYPES: ['用药', '疫苗', '驱虫', '其它'],
       REPEAT_OPTS: [
         { label: '不重复', days: 0 },
         { label: '每天', days: 1 },
@@ -243,18 +248,41 @@ export default {
     }
   },
   computed: {
+    // 当前记录的物种（ADR-024）：parsed.species 是单一真相（建档 chip 选 / 选已有宠时 onPickPet 同步 / AI 由 LLM 给）
+    curSpecies() {
+      return (this.parsed && this.parsed.species) || 'other'
+    },
+    // 物种感知的 event_type 候选（ADR-024 B 档）：按物种收敛，含「养护」（爬宠 / 鱼）。
+    // 并入「当前值」（若不在物种候选内）：避免切物种后 picker 高亮回退到末项而 parsed.event_type 字面不变 →
+    // 显示 / 高亮 / 落库三者错配 + 不点 picker 直接提交会静默把原值改派成「其它」（守本项目「落库不静默改派」原则）。
+    eventTypes() {
+      const base = eventTypesFor(this.curSpecies)
+      const cur = this.parsed && this.parsed.event_type
+      return cur && !base.includes(cur) ? [...base, cur] : base
+    },
+    // 物种感知的提醒分类候选（ADR-024，仅分类无周期值）；同样并入当前值防错配。
+    remTypes() {
+      const base = reminderTypesFor(this.curSpecies)
+      const cur = this.parsed && this.parsed.rem_type
+      return cur && !base.includes(cur) ? [...base, cur] : base
+    },
+    // 养护参数输入字段（ADR-024）：仅 event_type=养护 且该物种有结构化参数（爬宠 / 鱼）时非空
+    husbandryFields() {
+      if (!this.parsed || this.parsed.event_type !== '养护') return []
+      return husbandryFor(this.curSpecies)
+    },
     // picker 高亮项下标（parsed 为空时回 0；值不在枚举里回兜底项）
     petIdx() {
       const i = this.petOptions.indexOf(this.parsed && this.parsed.pet)
       return i < 0 ? 0 : i
     },
     evtIdx() {
-      const i = this.EVENT_TYPES.indexOf(this.parsed && this.parsed.event_type)
-      return i < 0 ? this.EVENT_TYPES.length - 1 : i
+      const i = this.eventTypes.indexOf(this.parsed && this.parsed.event_type)
+      return i < 0 ? this.eventTypes.length - 1 : i
     },
     remTypeIdx() {
-      const i = this.REM_TYPES.indexOf(this.parsed && this.parsed.rem_type)
-      return i < 0 ? this.REM_TYPES.length - 1 : i
+      const i = this.remTypes.indexOf(this.parsed && this.parsed.rem_type)
+      return i < 0 ? this.remTypes.length - 1 : i
     },
     repeatLabels() {
       return this.REPEAT_OPTS.map((o) => o.label)
@@ -324,7 +352,10 @@ export default {
         }
         this.atts = [] // 新一次解析，清掉上一轮残留的待传附件
         this.petOptions = r.pets || []
+        // 名→物种映射（ADR-023/024）：AI 流确认卡里重选已有宠时 syncSpeciesByName 据此跟随物种（否则 petsList 空、species 停在 AI 值）
+        this.petsList = Object.entries(r.petSpecies || {}).map(([name, species]) => ({ name, species }))
         this.parsed = r.parsed
+        if (this.parsed && this.parsed.params == null) this.parsed.params = {} // 养护参数绑定前确保对象（AI 非养护时 params=null）
         this.ensureEventClock() // 事件时间精确到分（ADR-018）：AI 只给日期时补当前时刻，卡片显示=落库时间
       } catch (e) {
         uni.showModal({
@@ -338,12 +369,15 @@ export default {
       }
     },
     setSpecies(s) {
-      if (this.parsed) this.parsed.species = s
+      if (!this.parsed) return
+      if (this.parsed.species !== s) this.parsed.params = {} // 物种变 → 旧物种养护参数作废，防跨物种脏 params（ADR-024 review）
+      this.parsed.species = s
     },
     pickPet(name) {
       if (!this.parsed) return
       this.parsed.pet = name
       this.parsed.pet_unknown = false
+      this.syncSpeciesByName(name) // 跟随所选宠物物种（ADR-024）
     },
     // ===== 入口卡（ADR-017）=====
     onScrimTap() {
@@ -399,6 +433,7 @@ export default {
       return {
         kind: 'record', valid: true, pet: '', new_pet: false, is_new: false, pet_unknown: false, species: 'cat',
         time: this.nowDateTime(), event_type: '其它', weight: null, med: '', hospital: '', cost: null, tag: '', desc: '', raw: '',
+        params: {}, // 养护参数（ADR-024），event_type=养护 时按物种填
         rem_type: '其它', rem_title: '', rem_date: '', rem_repeat_days: 0,
         med_name: '', med_effect: '', med_quantity: 1, med_expire: '',
       }
@@ -409,12 +444,14 @@ export default {
         uni.showToast({ title: '请先配置云环境(CLOUD_ENV)', icon: 'none' })
         return
       }
-      // 手动不经 parseRecord，单独拉宠物名单供 picker（callFn 自动注入 family_id）
+      // 手动不经 parseRecord，单独拉宠物全量供 picker + 物种映射（callFn 自动注入 family_id）
       try {
         const res = await callFn('pets', { action: 'list' })
         const r = res.result || {}
-        this.petOptions = (r.ok && Array.isArray(r.data) ? r.data : []).map((p) => p.name).filter(Boolean)
+        this.petsList = r.ok && Array.isArray(r.data) ? r.data : []
+        this.petOptions = this.petsList.map((p) => p.name).filter(Boolean)
       } catch (e) {
+        this.petsList = []
         this.petOptions = []
       }
       this.atts = []
@@ -429,14 +466,26 @@ export default {
       if (n != null && this.parsed) {
         this.parsed.pet = n
         this.parsed.pet_unknown = false
+        this.syncSpeciesByName(n) // 选已有宠 → 跟随其物种（驱动 event_type / 养护表单，ADR-024）
+      }
+    },
+    // 按宠物名从 petsList 同步 parsed.species（选已有宠时；petsList 空 / 查不到则不动，保留原值）
+    syncSpeciesByName(name) {
+      const hit = this.petsList.find((p) => p.name === name)
+      if (hit && hit.species && this.parsed) {
+        if (this.parsed.species !== hit.species) this.parsed.params = {} // 物种变 → 养护参数作废（ADR-024 review）
+        this.parsed.species = hit.species
       }
     },
     onPickEvt(e) {
-      const v = this.EVENT_TYPES[Number(e.detail.value)]
-      if (v && this.parsed) this.parsed.event_type = v
+      const v = this.eventTypes[Number(e.detail.value)]
+      if (v && this.parsed) {
+        this.parsed.event_type = v
+        if (v === '养护' && (!this.parsed.params || typeof this.parsed.params !== 'object')) this.parsed.params = {} // 养护参数绑定前确保对象存在
+      }
     },
     onPickRemType(e) {
-      const v = this.REM_TYPES[Number(e.detail.value)]
+      const v = this.remTypes[Number(e.detail.value)]
       if (v && this.parsed) this.parsed.rem_type = v
     },
     onPickRepeat(e) {
@@ -454,7 +503,7 @@ export default {
       const p = this.parsed
       const base = {
         kind: p.kind, valid: true, pet: (p.pet || '').trim(), new_pet: !!p.new_pet, is_new: !!p.is_new,
-        pet_unknown: !!p.pet_unknown, species: p.species === 'dog' ? 'dog' : 'cat', raw: p.raw || '',
+        pet_unknown: !!p.pet_unknown, species: p.species || 'other', raw: p.raw || '', // 物种透传（ADR-023，saveRecord normSpecies 白名单校验）
       }
       if (p.kind === 'med_stock') {
         return { ...base, med_name: (p.med_name || '').trim(), med_effect: (p.med_effect || '').trim(), med_quantity: this.numOrNull(p.med_quantity) || 1, med_expire: p.med_expire || '' }
@@ -462,10 +511,27 @@ export default {
       if (p.kind === 'reminder') {
         return { ...base, rem_type: p.rem_type || '其它', rem_title: (p.rem_title || '').trim(), rem_date: p.rem_date || '', rem_repeat_days: this.numOrNull(p.rem_repeat_days) || 0 }
       }
-      return {
+      const rec = {
         ...base, time: p.time || this.nowDateTime(), event_type: p.event_type || '其它', weight: this.numOrNull(p.weight),
         med: (p.med || '').trim(), hospital: (p.hospital || '').trim(), cost: this.numOrNull(p.cost), tag: (p.tag || '').trim(), desc: (p.desc || '').trim(),
       }
+      // 养护参数（ADR-024）：有结构化 schema 的物种按 husbandryFor 键收集（数字归一）；无 schema 物种透传 LLM 抽取，saveRecord 再 sanitize
+      if (rec.event_type === '养护') {
+        const fields = husbandryFor(p.species)
+        let params
+        if (fields.length) {
+          params = {}
+          for (const f of fields) {
+            const v = this.numOrNull(p.params && p.params[f.key])
+            if (v != null) params[f.key] = v
+          }
+          if (!Object.keys(params).length) params = undefined
+        } else if (p.params && typeof p.params === 'object') {
+          params = p.params
+        }
+        if (params) rec.params = params
+      }
+      return rec
     },
     cancelParse() {
       this.parsed = null
@@ -771,10 +837,12 @@ export default {
 .chips {
   flex: 1;
   display: flex;
+  flex-wrap: wrap;
   gap: 16rpx;
   justify-content: flex-end;
 }
 .chip {
+  flex: none; /* 物种 chip 扩 8 后防被压缩（ADR-023/024），配合 .chips flex-wrap 自动换行 */
   height: 64rpx;
   padding: 0 28rpx;
   border-radius: var(--r-pill);

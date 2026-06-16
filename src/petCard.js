@@ -1,9 +1,10 @@
-// 宠物档案卡的共享 canvas 渲染（ADR-021 海报卡 + ADR-022 A 版改版）。
+// 宠物档案卡的共享 canvas 渲染（ADR-021 海报卡 + ADR-022 A 版改版 + ADR-023 多物种默认头像）。
 // 详情页 pet.vue（按需出图分享）与首页 index.vue（轮播门面）共用同一份 paintPetCard，
 // 保证「所见即所分享」WYSIWYG、杜绝两处各画一版的设计漂移。
-// 守红线：猫狗 only；对外分享物绝不含费用 / 医院 / 病史 / 病程 / 用药（纯萌宠 + 轻健康）。
+// 守红线：对外分享物绝不含费用 / 医院 / 病史 / 病程 / 用药（纯萌宠 + 轻健康）。
 
 import { petAge } from '@/utils'
+import { speciesEmoji, speciesLabel, avatarStatic } from '@/species'
 
 // 卡片逻辑尺寸（竖版海报）；dpr3 物理 960×1440 < 4096，不触发真机白屏。
 export const CARD_W = 320
@@ -67,25 +68,47 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath()
 }
 
-// 头像照片（pet.avatar = cloud:// fileID）下载到本地 → canvas.createImage；
-// 任一步失败 resolve(null)（paintPetCard 回退 emoji / 物种默认，卡不画崩）。
-export function loadPetAvatar(canvas, fileID) {
+// 物种默认头像静态图 → canvas.createImage（ADR-023）；图未就位 onerror → resolve(null)（回退 emoji）。
+function loadSpeciesDefault(canvas, species, resolve) {
+  // #ifdef MP-WEIXIN
+  const img = canvas.createImage()
+  img.onload = () => resolve(img)
+  img.onerror = () => resolve(null)
+  img.src = avatarStatic(species)
+  return
+  // #endif
+  // eslint-disable-next-line no-unreachable
+  resolve(null)
+}
+
+// 头像加载（ADR-021 + ADR-023）：传整只 pet，守优先级 照片 > 自选 emoji > 物种静态图 > emoji 兜底。
+// 有照片 fileID → cloud:// 下载到本地 → createImage；无照片 / 下载失败 → 回退：
+//   有自选 emoji → resolve(null)（让 paintPetCard 画 emoji，不画静态图）；否则 → 物种默认静态图；再失败 resolve(null)。
+export function loadPetAvatar(canvas, pet) {
+  const p = pet || {}
+  const fileID = p.avatar
+  const species = p.species
+  // 无照片 / 下载失败的回退：有自选 emoji 跳过静态图（emoji 优先级高于静态图），否则加载物种静态图
+  const fallback = (resolve) => (p.avatar_emoji ? resolve(null) : loadSpeciesDefault(canvas, species, resolve))
   return new Promise((resolve) => {
     // #ifdef MP-WEIXIN
-    if (!fileID || typeof wx === 'undefined' || !wx.cloud) return resolve(null)
-    wx.cloud.downloadFile({
-      fileID,
-      success: (d) => {
-        const path = d && d.tempFilePath
-        if (!path) return resolve(null)
-        const img = canvas.createImage()
-        img.onload = () => resolve(img)
-        img.onerror = () => resolve(null)
-        img.src = path
-      },
-      fail: () => resolve(null),
-    })
-    return
+    if (typeof wx === 'undefined') return resolve(null)
+    if (fileID && wx.cloud) {
+      wx.cloud.downloadFile({
+        fileID,
+        success: (d) => {
+          const path = d && d.tempFilePath
+          if (!path) return fallback(resolve)
+          const img = canvas.createImage()
+          img.onload = () => resolve(img)
+          img.onerror = () => fallback(resolve)
+          img.src = path
+        },
+        fail: () => fallback(resolve),
+      })
+      return
+    }
+    return fallback(resolve)
     // #endif
     // eslint-disable-next-line no-unreachable
     resolve(null)
@@ -159,7 +182,7 @@ export function paintPetCard(ctx, W, H, pet, avatarImg) {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.font = '60px sans-serif'
-    ctx.fillText(p.avatar_emoji || (p.species === 'dog' ? '🐶' : '🐱'), cx, acy + 2)
+    ctx.fillText(p.avatar_emoji || speciesEmoji(p.species), cx, acy + 2)
   }
   ctx.restore()
   ctx.beginPath()
@@ -175,9 +198,9 @@ export function paintPetCard(ctx, W, H, pet, avatarImg) {
   ctx.font = '700 27px sans-serif'
   ctx.fillText(truncate(ctx, p.name || '未命名', W - 56), cx, 220)
 
-  // 物种 chip：🐱 品种（无品种则物种名），暖色圆角小标签。
-  const spe = p.species === 'dog' ? '🐶' : '🐱'
-  const spt = p.breed ? `${spe} ${p.breed}` : `${spe} ${p.species === 'dog' ? '狗' : '猫'}`
+  // 物种 chip：emoji 品种（无品种则物种名），暖色圆角小标签。
+  const spe = speciesEmoji(p.species)
+  const spt = p.breed ? `${spe} ${p.breed}` : `${spe} ${speciesLabel(p.species)}`
   ctx.font = '600 12.5px sans-serif'
   const chipTxt = truncate(ctx, spt, W - 90)
   const chipW = ctx.measureText(chipTxt).width + 28

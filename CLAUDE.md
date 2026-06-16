@@ -15,8 +15,10 @@
 - 档案卡 + 首页轮播门面（ADR-021/022）：档案卡海报图（pet.vue 复用兽医小结离屏 canvas 管线，修了体重曲线 canvas 穿透浮层）+ 改版 A·精致留白（头像光晕/物种 chip/图标胶囊/自适应年龄字号）+ 渲染抽共享模块 `src/petCard.js`（详情页分享卡 ↔ 首页轮播卡逐像素同款）+ 首页（宠物 tab）主视图重做成档案卡左右滑轮播（替换 2 列网格，一块离屏 canvas 顺序出图 + 签名缓存），**已真机验 + commit+push（7079d64）**。clean_tags 数据治理（ADR-019）**已执行**：dryRun 107 → 真改 cleared:107 → 复扫 matched:0（驱虫 52 / 记录体重 23 / 疫苗 9 / 到家 / 绝育各 7 / 体检 6 / 未知 3，真病程线零波及，幂等收口）。
 - UI 打磨 Round 1 + 底部 tab 选中态修复（commit 84950a4）：tab 选中态原靠 custom-tab-bar 自身路由推算（uni-app 下卡默认 0、只「宠物」高亮）→ 改各 tab 页 onShow `this.$scope.getTabBar().setData`（`src/tabSync.js`）；点击命中（中央＋凸出热区 / 附件✕ / 编辑按钮 / 病程标签等）+ 视觉打磨（输入框 focus / 提醒卡类型彩条 / 卡圆角统一 / 个别硬编码色归令牌）。
 - UI Round 2 已收尾（commit eef9afd + b742f84）：`.btn-primary/.btn-ghost`(+press) + 空状态 `.empty*` + health 次级按钮 `.op` 抽 App.vue 全局去重（删 ~130 行重复、各类组件单一真相源）。主动弃 canvas 色令牌化（canvas 读不了 CSS 变量）/ 间距全量归一（位移肉眼难辨），后续按需定点打磨。
+- 物种扩展 A 档（ADR-023，代码已落、未 commit、待真机验 + 头像图待接）：解除「仅猫狗」红线 → 8 类固定枚举（猫 / 狗 / 兔 / 小宠 / 鸟 / 爬宠 / 鱼 / 其他）+ other 兜底。落库开闸 = `pets/index.js` 二元钳制改枚举白名单（saveRecord/importNotion/parseRecord 同步，含修了 parseRecord/index.js + record.vue + pet.vue 几处漏网钳制）；前端抽 `src/species.js` 单一真相源（label/emoji/默认头像路径）；pet.vue 物种 chip 扩 8 + 头部头像三级降级（照片 > emoji > 物种静态图 > emoji 兜底）；parseRecord prompt 扩物种枚举 + 默认 other + 非猫狗 few-shot；petCard / 兽医小结物种显示走 species.js。**默认头像静态图（豆包 / Seedream 出图，风格定后放 `src/static/avatar/<species>.png` 即生效，未就位自动回退 emoji；Seedream API 已验证可用，size 下限 ~1920²）**。
+- 物种扩展 B 档 = B2 全量含养护数据（ADR-024，代码已落、未 commit、待真机验）：用户选 B2 + **周期纯用户自定义（不内置疫苗 / 驱虫周期建议值，规避医疗红线）**。新增 `src/speciesProfile.js`（每物种 event_type / 提醒分类 / 养护参数配置表 + PARAM_META/formatParams）；**「养护」= event_type 第 8 桶**；养护参数落 `records.params`（schemaless 对象，saveRecord sanitize；爬宠 温/湿，鱼 pH/氨/亚硝酸盐/水温）；录入页物种感知（event_type/提醒分类按物种收敛 + 养护展开参数表单 + curSpecies 推导）；timeline/record-detail 渲染参数 chip + 养护配色（ev-care）。每物种深度医疗知识库仍未做（B2 之外，按需另起）。**A+B 两档：11 套测试全绿（saveRecord 加养护/params/reminder 3 例）+ build 通过 + PII 复扫空**。
 - 三阶段演进：v1 Cursor（已下线）→ v2 OpenClaw（未上生产）→ v3 本仓库。详见 `AIREADME/CORE`。
-- 下一步：病程视图 / 解析准确率真机回归剩项 → 加体验成员发码邀友；后续 ADR-020 Phase 2 解析评测 + pet.vue 该宠病程入口 + 提醒真推送（订阅消息）+ 语音录入；UI 按需定点打磨（Round 1/2 已收尾）。见 `AIREADME/ROADMAP`。
+- 下一步：即梦出 8 张物种头像 → 接入 `src/static/avatar/` + 多物种 / 养护录入真机验 → commit ADR-023+024；病程视图 / 解析准确率真机回归剩项 → 加体验成员发码邀友；后续 ADR-020 Phase 2 解析评测 + pet.vue 该宠病程入口 + 提醒真推送（订阅消息）+ 语音录入；UI 按需定点打磨（Round 1/2 已收尾）。见 `AIREADME/ROADMAP`。
 - **本仓库已开源**（MIT · github.com/iyuenan3/petslog）：仅放架构 / 产品设计 / prompt；完整商业代码 / key / 部署配置不入库。
 
 ## 加载路由（任务 → AIREADME/）
@@ -28,7 +30,7 @@
 
 ## 红线（详见 AIREADME/CORE「绝不」）
 - 不碰医疗诊断 / 处方（严守工具属性）。
-- **宠物口径仅猫狗**：产品 / 文档对外一律以猫狗为准，不纳入其它宠物类型。
+- **宠物口径 = 猫狗为主 + 常见宠物（A 档，ADR-023）**：猫狗保留完整医疗语义，兔 / 小宠 / 鸟 / 爬宠 / 鱼 / 其他走统一记录模型；每物种定制医疗（B 档）见 ROADMAP。原「仅猫狗」红线已由 ADR-023 解除。
 - LLM key 不进前端（走云函数环境变量）。
 - **LLM API Key 不入库**：ARK_API_KEY 走 config.local.js / 云函数环境变量，绝不进公开仓库。
 

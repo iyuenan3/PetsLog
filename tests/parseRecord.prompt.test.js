@@ -50,5 +50,35 @@ run('few-shot 自洽: 每条 assistant 输出是合法 JSON', () => {
   assert(ok, 'few-shot assistant 内容应全部是可解析 JSON')
 })
 
+// ADR-023/024：多物种 + 养护
+run('多物种: 非猫狗物种带 (species) 标注 + 枚举全 8 类在 SYSTEM', () => {
+  const m = buildMessages('示例龟今天缸温28', [{ name: '示例龟', species: 'reptile' }], [], '2026-01-01')
+  assert(last(m).includes('示例龟(reptile)'), 'petList 应带非猫狗物种标注')
+  for (const s of ['cat', 'dog', 'rabbit', 'rodent', 'bird', 'reptile', 'fish', 'other']) {
+    assert(SYSTEM.includes(s), `species 枚举应含 ${s}`)
+  }
+  assert(SYSTEM.includes('判断不了填 "other"'), 'species 默认应为 other（非 cat）')
+})
+
+run('多物种: 非法物种归一 other（annSpecies 白名单）', () => {
+  const m = buildMessages('x', [{ name: '怪', species: 'snake' }], [], '2026-01-01')
+  assert(last(m).includes('怪(other)'), '非法 species 应标注归一为 other')
+})
+
+run('养护: event_type 含养护桶 + params 字段说明在 SYSTEM', () => {
+  assert(SYSTEM.includes('养护'), 'event_type 应含养护桶')
+  assert(/params[^。]*养护/.test(SYSTEM) || SYSTEM.includes('params'), 'SYSTEM 应有 params 养护参数说明')
+})
+
+run('养护 few-shot: 存在一条 event_type=养护 且带 params 的合法示例', () => {
+  const m = buildMessages('x', [], [], '2026-01-01')
+  const careEx = m.find((msg) => msg.role === 'assistant' && /"event_type"\s*:\s*"养护"/.test(msg.content))
+  assert(!!careEx, '应有一条养护 few-shot')
+  if (careEx) {
+    const o = JSON.parse(careEx.content)
+    assert(o.params && typeof o.params === 'object', '养护 few-shot 应带 params 对象')
+  }
+})
+
 console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
 process.exit(fail ? 1 : 0)

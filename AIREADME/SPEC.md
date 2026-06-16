@@ -10,7 +10,7 @@
 |---|---|---|
 | family_id | string | 家庭隔离键 |
 | name | string | 名字，family 内唯一；改名级联 records / reminders 的 pet |
-| species | 'cat' \| 'dog' | 仅猫狗（红线） |
+| species | enum | 8 类固定枚举：cat / dog / rabbit / rodent / bird / reptile / fish / other（非法 / 旧值落 other）。猫狗为主 + 常见宠物（A 档），原「仅猫狗」红线已解除，见 ADR-023。仅作展示 + 选默认头像，不驱动隔离 / 落库校验 |
 | breed | string | 品种 |
 | birthday | string | 生日 'YYYY-MM-DD' |
 | neutered | boolean | 绝育 |
@@ -36,7 +36,7 @@
 | family_id | string | 隔离键 |
 | pet | string | 宠物名（按名匹配，故改名要级联） |
 | time | string | 事件时间，精确到分 `'YYYY-MM-DD HH:mm'`；缺时刻则纯日期 `'YYYY-MM-DD'`（旧数据 / AI 未给时刻）。saveRecord + parseRecord 的 `normalizeDateTime` 归一，日期段定长零填充保字典序（兽医小结按 time 排）。见 ADR-018 |
-| event_type | enum | 症状 / 用药 / 疫苗 / 驱虫 / 体重 / 就医 / 其它（7 桶） |
+| event_type | enum | 症状 / 用药 / 疫苗 / 驱虫 / 体重 / 就医 / 养护 / 其它（8 桶）。「养护」= 环境 / 饲养记录（爬宠温湿度 / 鱼水质等），其参数落 params，见 ADR-024 |
 | weight | number \| null | 体重 kg |
 | med | string \| null | 用药（可多行：外用 / 口服 / 注射） |
 | raw | string | 用户输入的字面原文，**服务端逐字落库**（不经 LLM 回填，防原文失真）；与 desc（清洗描述）分立，见 ADR-020 |
@@ -44,6 +44,7 @@
 | cost | number \| null | 费用（元）；三态可区分：null=未解析 / 0=免费 / 正数 |
 | tag | string | 病程标签 = **病程线**（同一慢病 / 疗程的主题词，如嗜酸性肉芽肿 / 尿闭 / 软骨病），可空；与 event_type 双轴**正交**（事件类别归 event_type、里程碑归专用字段，不重复打 tag）；落库 trim 防散裂。治理后非病程 tag（驱虫 / 疫苗 / 记录体重 / 体检 / 到家 / 绝育 / 未知，均为库内实际 tag 值）清空，见 ADR-019 |
 | desc | string | 干净事件描述（症状 / 处置，不含费用 / 医院 / 寒暄），parseRecord 抽取；给兽医小结拼接用，不暴露 raw 原话 |
+| params | object \| null | 养护参数（ADR-024），schemaless `{key: number\|string}`（如爬宠 `{temp,humidity}` / 鱼 `{ph,ammonia,nitrite,temp}`）。**仅 event_type=养护 记录有**（saveRecord event_type 门控）；saveRecord `sanitizeParams` 兜垃圾（键数 ≤8 / 键名 ≤16 字 / 值 number 或 ≤32 字串）；缺省不落字段。不进兽医小结 / 档案卡 / 病程聚合 |
 | attachments | array | `[{ fileID, thumb(缩略图 fileID，可空), type:'image'\|'pdf'\|'video', name, size(主文件真实体积), bytes(计配额体积=主+缩略，删除按它回收), uploaded_at }]`，单条 ≤9；由 attachment 云函数登记（服务端 HEAD 复核真实体积，客户端报的 size 不可信） |
 | att_count | number | 附件数（时间线 📎 角标） |
 | created_at | number | ms。**由事件时间 time 派生**（`createdAtFromTime`）：有分用准点（东八区），仅日期用当日 12:00（延续导入约定，避免补录旧记录排到时间线顶）。主时间线 / 体重图按此排序。见 ADR-018 |
@@ -61,12 +62,12 @@
 | expire_date | string | 过期日 'YYYY-MM-DD' |
 | created_at | number | |
 
-## reminders（用药 / 疫苗 / 驱虫提醒 · family 隔离 · 本轮不动）
+## reminders（用药 / 疫苗 / 驱虫 / 养护提醒 · family 隔离）
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | family_id | string | 隔离键 |
 | pet | string | 宠物名（可空） |
-| type | enum | 用药 / 疫苗 / 驱虫 / 其它 |
+| type | enum | 用药 / 疫苗 / 驱虫 / 养护 / 其它（养护 = 爬宠 / 鱼等的提醒分类，ADR-024；周期值纯用户自定义不内置） |
 | title | string | 事项 |
 | next_date | string | 下次到期 'YYYY-MM-DD' |
 | repeat_days | number | 周期天数，0 = 一次性 |

@@ -201,7 +201,7 @@ export default {
       return n < 0 ? 'rm-card__due--overdue' : n === 0 ? 'rm-card__due--today' : 'rm-card__due--future'
     },
     tagClass(t) {
-      return { 疫苗: 'vaccine', 驱虫: 'deworm', 用药: 'med' }[t] || 'other'
+      return { 疫苗: 'vaccine', 驱虫: 'deworm', 用药: 'med', 养护: 'care' }[t] || 'other'
     },
     repeatText(x) {
       if (!x) return '不重复'
@@ -434,6 +434,7 @@ export default {
 .rm-card--vaccine::before { background: var(--c-rt-vaccine); }
 .rm-card--deworm::before { background: var(--c-rt-deworm); }
 .rm-card--other::before { background: var(--c-rt-other); }
+.rm-card--care::before { background: #4fa89b; }
 .rm-card--overdue::before { background: var(--c-danger); }
 .rm-card__head {
   display: flex;
@@ -454,6 +455,7 @@ export default {
 .chip-tag--vaccine { color: var(--c-rt-vaccine); background: var(--c-rt-vaccine-bg); }
 .chip-tag--deworm { color: var(--c-rt-deworm); background: var(--c-rt-deworm-bg); }
 .chip-tag--other { color: var(--c-rt-other); background: var(--c-rt-other-bg); }
+.chip-tag--care { color: #3c8579; background: rgba(79, 168, 155, 0.14); }
 .rm-card__title {
   font-size: var(--fs-h2);
   font-weight: 600;

@@ -86,7 +86,20 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(typeof v === 'string' && v.length <= 8, '超长截断 ≤8')
   })
 
-  // 5. 隔离: 非成员拒
+  // 5. 物种枚举白名单(ADR-023): 新物种原样保留 + 非法落 other（add + update 两路，守落库总闸不回归二元钳制）
+  await run('物种枚举: 新物种保留 + 非法落 other', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u')
+    const a = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例龟', species: 'reptile' } })
+    assert(pets().find((p) => p._id === a.id).species === 'reptile', 'add reptile 原样保留（不被钳回 cat）')
+    const b = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例怪', species: 'snake' } })
+    assert(pets().find((p) => p._id === b.id).species === 'other', 'add 非法 species 落 other')
+    await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { species: 'bird' } })
+    assert(pets().find((p) => p._id === a.id).species === 'bird', 'update 改物种保留')
+    await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { species: 'xyz' } })
+    assert(pets().find((p) => p._id === a.id).species === 'other', 'update 非法 species 落 other')
+  })
+
+  // 6. 隔离: 非成员拒
   await run('隔离: 非成员拒', async () => {
     CUR_OPENID = 'uB'; seed('F1', 'uA')
     const r = await fn.main({ family_id: 'F1', action: 'add', pet: { name: 'X' } })

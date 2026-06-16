@@ -2,12 +2,14 @@
   <view class="page" v-if="pet">
     <!-- 头部（创建模式只显示表单） -->
     <view class="profile-head" v-if="!creating">
-      <view class="profile-head__avatar" :class="pet.species === 'dog' ? 'is-dog' : 'is-cat'">
+      <view class="profile-head__avatar">
         <image v-if="pet.avatar" :src="pet.avatar" class="profile-head__avatar-img" mode="aspectFill"></image>
-        <text v-else>{{ pet.avatar_emoji || (pet.species === 'dog' ? '🐶' : '🐱') }}</text>
+        <text v-else-if="pet.avatar_emoji">{{ pet.avatar_emoji }}</text>
+        <image v-else-if="!defAvatarErr" :src="spAvatar(pet.species)" class="profile-head__avatar-img" mode="aspectFill" @error="defAvatarErr = true"></image>
+        <text v-else>{{ spEmoji(pet.species) }}</text>
       </view>
       <text class="profile-head__name">{{ pet.name }}</text>
-      <text class="profile-head__meta">{{ ageText(pet.birthday) || '年龄未知' }} · {{ pet.species === 'dog' ? '狗' : '猫' }}</text>
+      <text class="profile-head__meta">{{ ageText(pet.birthday) || '年龄未知' }} · {{ spLabel(pet.species) }}</text>
     </view>
 
     <!-- 导出：兽医小结 / 档案卡 -->
@@ -91,8 +93,13 @@
         <view class="form-row">
           <text class="form-row__label">种类</text>
           <view class="chips">
-            <text :class="['chip', form.species === 'cat' ? 'chip--active' : '']" @click="pickSpecies('cat')">🐱 猫</text>
-            <text :class="['chip', form.species === 'dog' ? 'chip--active' : '']" @click="pickSpecies('dog')">🐶 狗</text>
+            <text
+              v-for="s in speciesList"
+              :key="s.key"
+              :class="['chip', form.species === s.key ? 'chip--active' : '']"
+              @click="pickSpecies(s.key)"
+              >{{ s.emoji }} {{ s.label }}</text
+            >
           </view>
         </view>
         <view class="form-row"><text class="form-row__label">品种</text><input class="form-input" v-model="form.breed" placeholder="如 布偶 / 金毛" placeholder-class="form-ph" /></view>
@@ -158,6 +165,7 @@
 import { CLOUD_ENV } from '@/config'
 import { petAge } from '@/utils'
 import { paintPetCard, loadPetAvatar, CARD_W, CARD_H } from '@/petCard'
+import { SPECIES, speciesLabel, speciesEmoji, avatarStatic } from '@/species'
 import { callFn, uploadAvatar } from '@/cloud'
 
 export default {
@@ -166,8 +174,10 @@ export default {
       id: '',
       pet: null,
       creating: false, // 创建模式（?mode=new，ADR-015 手动建宠入口）
-      // emoji 头像候选（猫狗口径 + 通用爪印）
-      emojiOptions: ['🐱', '😺', '😸', '😻', '🐈', '🐈‍⬛', '🐯', '🦁', '🐶', '🐕', '🦮', '🐩', '🐕‍🦺', '🦊', '🐺', '🐾'],
+      defAvatarErr: false, // 物种默认头像静态图加载失败（图未就位）→ 回退 emoji（ADR-023）
+      speciesList: SPECIES, // 物种选择 chip（ADR-023 多物种）
+      // emoji 头像候选（多物种，ADR-023）
+      emojiOptions: ['🐱', '😺', '😸', '🐈', '🐈‍⬛', '🐶', '🐕', '🦮', '🐩', '🐰', '🐹', '🐭', '🐦', '🦜', '🐢', '🦎', '🐠', '🐟', '🐾'],
       series: [],
       // 体重曲线拖动平移：canvas 固定视口宽，虚拟内容宽 _contentW，_offsetX 为当前平移量（默认最右=最新）。
       // _offsetX/_ctx 等用下划线普通属性存（不进 data，拖动重绘不触发 setData）
@@ -560,7 +570,7 @@ export default {
       const p = this.pet
       this.form = {
         name: p.name || '',
-        species: p.species === 'dog' ? 'dog' : 'cat',
+        species: p.species || 'cat', // 物种透传（ADR-023 多物种），editable chip 选；pets 云函数 normSpecies 兜底
         breed: p.breed || '',
         birthday: p.birthday || '',
         neutered: !!p.neutered,
@@ -604,6 +614,16 @@ export default {
     },
     pickSpecies(s) {
       this.form.species = s
+    },
+    // 物种展示助手（ADR-023）：委托 src/species.js 单一真相源
+    spLabel(s) {
+      return speciesLabel(s)
+    },
+    spEmoji(s) {
+      return speciesEmoji(s)
+    },
+    spAvatar(s) {
+      return avatarStatic(s)
     },
     onBirthday(e) {
       this.form.birthday = e.detail.value
@@ -787,10 +807,10 @@ export default {
       ctx.fillText('PetsLog · 健康小结', padX, 26)
       ctx.fillStyle = '#ffffff'
       ctx.font = '700 20px sans-serif'
-      ctx.fillText(`${p.species === 'dog' ? '🐶' : '🐱'} ${p.name}`, padX, 54)
+      ctx.fillText(`${this.spEmoji(p.species)} ${p.name}`, padX, 54)
       ctx.fillStyle = 'rgba(255,255,255,0.9)'
       ctx.font = '12px sans-serif'
-      const sub = `${this.ageText(p.birthday) || '年龄未知'} · ${p.species === 'dog' ? '狗' : '猫'}${p.breed ? ' · ' + p.breed : ''}`
+      const sub = `${this.ageText(p.birthday) || '年龄未知'} · ${this.spLabel(p.species)}${p.breed ? ' · ' + p.breed : ''}`
       ctx.fillText(this.truncate(ctx, sub, W - padX * 2), padX, 76)
 
       // 基础信息
@@ -992,7 +1012,7 @@ export default {
           ctx.scale(dpr, dpr)
           // 头像照片先异步加载（cloud:// → 本地路径 → createImage），失败回退 emoji，再整张绘制
           // 渲染下沉到共享模块 @/petCard（与首页轮播同款，ADR-022），杜绝两处设计漂移
-          const avatarImg = await loadPetAvatar(canvas, this.pet && this.pet.avatar)
+          const avatarImg = await loadPetAvatar(canvas, this.pet)
           paintPetCard(ctx, W, H, this.pet || {}, avatarImg)
           wx.canvasToTempFilePath({
             canvas,
@@ -1062,9 +1082,6 @@ export default {
   font-size: 104rpx;
   background: radial-gradient(circle at 50% 38%, #fff3ec 0%, var(--c-primary-tint) 100%);
   box-shadow: inset 0 0 0 3rpx rgba(242, 130, 92, 0.14), 0 10rpx 28rpx rgba(242, 130, 92, 0.22);
-}
-.profile-head__avatar.is-dog {
-  background: radial-gradient(circle at 50% 38%, #fff0e6 0%, #fad9c2 100%);
 }
 .profile-head__avatar-img {
   width: 100%;
@@ -1338,10 +1355,12 @@ export default {
 .chips {
   flex: 1;
   display: flex;
+  flex-wrap: wrap;
   gap: 16rpx;
   justify-content: flex-end;
 }
 .chip {
+  flex: none; /* 物种 chip 扩 8 后防被压缩（ADR-023/024），配合 .chips flex-wrap 自动换行 */
   height: 64rpx;
   padding: 0 28rpx;
   border-radius: var(--r-pill);

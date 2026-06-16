@@ -99,8 +99,10 @@ exports.main = async (event) => {
   // 记一条解析流水用于限流（落库在 saveRecord，二次确认后）
   await db.collection('parse_log').add({ data: { family_id: familyId, day: today, at: Date.now() } })
 
-  // pets 名单随返回带回：pet_unknown 时前端直接渲染选择 chips，免再发一次 list 请求
-  return { ok: true, parsed, pets: petNames }
+  // pets 名单随返回带回：pet_unknown 时前端直接渲染选择 chips，免再发一次 list 请求。
+  // petSpecies 名→物种映射（ADR-023/024）：确认卡片重选已有宠时前端据此同步 species，驱动物种感知的 event_type / 养护表单。
+  const petSpecies = pets.reduce((m, p) => ((m[p.name] = p.species), m), {})
+  return { ok: true, parsed, pets: petNames, petSpecies }
 }
 
 function callGateway(text, pets, tags, today) {
@@ -184,6 +186,10 @@ function fuzzyMatchPet(name, names) {
   return cands.size === 1 ? [...cands][0] : null
 }
 
+// 物种枚举白名单（ADR-023）：命中取值，非法 / 旧值落 other（前端 src/species.js 持同序副本）。
+const SPECIES_KEYS = ['cat', 'dog', 'rabbit', 'rodent', 'bird', 'reptile', 'fish', 'other']
+const normSpecies = (s) => (SPECIES_KEYS.includes(s) ? s : 'other')
+
 function normalize(o, raw, today) {
   const kind = ['med_stock', 'reminder'].includes(o.kind) ? o.kind : 'record'
   return {
@@ -191,7 +197,7 @@ function normalize(o, raw, today) {
     valid: o.valid !== false,
     pet: String(o.pet || '').trim(), // trim 与 saveRecord 对齐，否则尾空格让精确名误判 pet_unknown；String 防 LLM 输出数字名
     new_pet: o.new_pet === true, // 显式新增宠物意图（ADR-015），缺省 false
-    species: o.species === 'dog' ? 'dog' : 'cat',
+    species: normSpecies(o.species), // ADR-023 多物种白名单（原 dog?'dog':'cat' 二元钳制会把 rabbit 等强改回 cat）
     time: normalizeDateTime(o.time, today), // 事件时间，精确到分（缺时分则纯日期，前端补默认）
     event_type: o.event_type || '其它',
     weight: typeof o.weight === 'number' ? o.weight : null,
@@ -202,6 +208,8 @@ function normalize(o, raw, today) {
     tag: (o.tag || '').trim(),
     // 干净的事件描述（不含费用 / 医院），给兽医小结拼接用，不暴露 raw 原话（见用户决策）
     desc: (o.desc || '').trim(),
+    // 养护参数（ADR-024）：仅养护记录有，透传 LLM 抽取的对象（saveRecord 落库前再 sanitize）；非对象置 null
+    params: o.params && typeof o.params === 'object' && !Array.isArray(o.params) ? o.params : null,
     med_name: o.med_name || '',
     med_effect: o.med_effect || '',
     med_quantity: typeof o.med_quantity === 'number' ? o.med_quantity : Number(o.med_quantity) || 1,
