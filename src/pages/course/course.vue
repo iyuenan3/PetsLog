@@ -1,7 +1,7 @@
 <template>
   <!-- 病程完整视图（ADR-019）：按 (宠, tag) 看一个病程从头到尾的全部记录 + 概览聚合，突破时间线 50 条截断。
        入口：时间线记录的 🏷️ 病程标签点进（带 pet 单宠）。 -->
-  <view class="page course">
+  <view class="course">
     <view v-if="loading" class="course__loading"><text>加载中…</text></view>
 
     <block v-else>
@@ -33,7 +33,7 @@
         <canvas type="2d" id="cvWeight" class="cv-chart__canvas"></canvas>
       </view>
 
-      <!-- 病程记录竖向时间轴（复用全局 tl- 卡片样式） -->
+      <!-- 病程记录竖向时间轴（复用 App.vue 全局 .tl-item 卡片样式，与主时间线同一真相源） -->
       <view v-if="records.length" class="tl-list course__list">
         <view v-for="r in records" :key="r._id" class="tl-item" hover-class="tl-item--press" hover-stay-time="60" @click="openDetail(r)">
           <view class="tl-item__head">

@@ -58,7 +58,7 @@
         <view class="row"><text class="row__k">最新体重</text><text class="row__v">{{ pet.latest_weight ? pet.latest_weight + 'kg' : '未记' }}</text></view>
         <view class="row"><text class="row__k">到家日期</text><text class="row__v">{{ pet.home_date || '未填' }}</text></view>
         <view class="row"><text class="row__k">初始身价</text><text class="row__v">{{ pet.price_base != null ? '¥' + pet.price_base : '未填' }}</text></view>
-        <view class="row" v-if="hasPrice"><text class="row__k">当前身价</text><text class="row__v">¥{{ priceNow }}<text class="row__sub"> (含累计花费 ¥{{ costSum }})</text></text></view>
+        <view class="row" v-if="hasPrice"><text class="row__k">当前身价</text><text class="row__v">¥{{ priceShow }}<text class="row__sub"> (含累计花费 ¥{{ costSum }})</text></text></view>
         <view class="row"><text class="row__k">简介</text><text class="row__v">{{ pet.intro || '无' }}</text></view>
         <view class="row"><text class="row__k">备注</text><text class="row__v">{{ pet.note || '无' }}</text></view>
       </view>
@@ -185,6 +185,7 @@ export default {
       yMin: 0,
       yMax: 0,
       costSum: 0, // 该宠累计花费 = records.cost 之和；当前身价 = price_base + costSum（派生不落库）
+      priceShow: 0, // 当前身价 count-up 显示值（从 0 缓动滚到 priceNow，纯展示）
       editing: false,
       saving: false,
       form: {},
@@ -228,6 +229,13 @@ export default {
       return
     }
     this.load()
+  },
+  onUnload() {
+    // 清 count-up 定时器，避免页面卸载后继续 setData 告警
+    if (this._priceTimer) {
+      clearTimeout(this._priceTimer)
+      this._priceTimer = null
+    }
   },
   computed: {
     // 当前身价 = 初始身价 + 累计花费（派生，不落库，见 ADR-014）
@@ -275,6 +283,9 @@ export default {
         if (res.result && res.result.ok) {
           this.pet = res.result.data
           uni.setNavigationBarTitle({ title: this.pet.name || '宠物档案' })
+          // 身价显示先落到当前可知值（priceNow=base，此刻 costSum 仍 0）：
+          // ① 避免 loadWeight 返回前静止显示 ¥0；② loadWeight 失败/弱网时身价行不回退成 ¥0（priceShow 始终以 priceNow 兜底）。
+          this.priceShow = this.priceNow
           this.loadWeight()
         }
       } catch (e) {
@@ -294,11 +305,42 @@ export default {
             .sort((a, b) => a.at - b.at || String(a.date).localeCompare(String(b.date)))
           // 累计花费：该宠 records.cost 求和（cost 三态，仅累计数值；到家身价已在导入时置 None 不计）
           this.costSum = recs.reduce((s, r) => s + (typeof r.cost === 'number' ? r.cost : 0), 0)
+          this.animatePrice() // 当前身价 count-up（costSum 就绪后，priceNow 才有终值）
           this.$nextTick(() => this.layoutAndDraw())
         }
       } catch (e) {
         console.warn('weight load failed', e)
       }
+    },
+    // 当前身价 count-up：从当前显示值缓动(easeOutCubic)滚到 priceNow，~700ms。
+    // load() 已把 priceShow 落到 base，loadWeight 拿到累计花费后这里再滚 base→当前身价（不从 0 起跳，避免回跳/¥0）。
+    // mp 无 requestAnimationFrame，用递归 setTimeout 逐帧；_priceTimer 走下划线普通属性（不进 data，重进页先清防叠）。
+    animatePrice() {
+      const from = this.priceShow
+      const to = this.priceNow
+      if (this._priceTimer) {
+        clearTimeout(this._priceTimer)
+        this._priceTimer = null
+      }
+      // 终点非正、或不高于起点（无累计花费）：直接落位不滚
+      if (!to || to <= 0 || to <= from) {
+        this.priceShow = to > 0 ? to : 0
+        return
+      }
+      const dur = 700
+      const start = Date.now()
+      const tick = () => {
+        const t = Math.min(1, (Date.now() - start) / dur)
+        const eased = 1 - Math.pow(1 - t, 3)
+        this.priceShow = Math.round(from + (to - from) * eased)
+        if (t < 1) {
+          this._priceTimer = setTimeout(tick, 16)
+        } else {
+          this.priceShow = to
+          this._priceTimer = null
+        }
+      }
+      tick()
     },
     // 先量视口宽算布局，再画。布局：等间距（每点 ≥56px），点多 → 虚拟内容变宽 → 拖动平移看更早
     layoutAndDraw(retry) {

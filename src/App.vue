@@ -186,7 +186,12 @@ button::after {
   to { opacity: 1; transform: translateY(0); }
 }
 .rise-in {
-  animation: rise-in 0.34s ease-out both;
+  /* backwards（非 both）：delay 段保留 from 隐藏态防闪现，播完释放 transform，
+     让卡片的 hover-class 按下缩放（.tl-item--press）能接管 transform，否则被 fill 占住按不动。
+     to 即元素自然态（translateY(0)/opacity(1)），不保留 forwards 也无跳变。
+     波及面：本类同时用于 health 的 rm/food/med 卡，三者均无 base transform/非 1 opacity，
+     backwards 释放回自然态逐像素一致、无跳变（已核对）。 */
+  animation: rise-in 0.34s ease-out backwards;
 }
 @keyframes float-soft {
   0%, 100% { transform: translateY(0); }
@@ -217,4 +222,106 @@ button::after {
     transform: scale(1.012);
   }
 }
+
+/* ============ 时间线卡片（.tl-list / .tl-item 及子类 + 事件配色）：全局单一真相源 ============
+   timeline（主时间线）与 course（病程详情记录列表）共用。
+   必须放 App.vue：uni-app mp-weixin 下页面 <style> 各自编译进各自 .wxss、不跨页，
+   只有 App.vue → app.wxss 才全局；放页内则另一页拿不到（course 曾因此裸奔）。 */
+.tl-list {
+  padding: 24rpx var(--pad-page) 40rpx;
+}
+.tl-item {
+  background: var(--c-card);
+  border-radius: var(--r-md);
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+  box-shadow: var(--sh-2);
+  /* 按下反馈过渡 */
+  transition: transform 0.14s ease, opacity 0.14s ease;
+}
+/* 按下态：轻缩 + 微降透明，松手回弹。transform 由 .rise-in 改 backwards 释放后能正常接管。 */
+.tl-item--press {
+  transform: scale(0.97);
+  opacity: 0.94;
+}
+.tl-item__head {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin-bottom: 14rpx;
+}
+.tl-dot {
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: var(--r-pill);
+  flex: none;
+}
+.tl-item__pet {
+  font-size: var(--fs-sub);
+  font-weight: 600;
+  color: var(--c-text);
+}
+.tl-chip {
+  height: 40rpx;
+  padding: 0 18rpx;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-tiny);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+.tl-item__time {
+  margin-left: auto;
+  font-size: var(--fs-tiny);
+  color: var(--c-text-3);
+}
+.tl-item__quote {
+  display: block;
+  font-size: var(--fs-body);
+  color: var(--c-text);
+  line-height: 1.55;
+}
+.tl-item__notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+.tl-note {
+  padding: 8rpx 18rpx;
+  background: var(--c-bg-sink);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-cap);
+  color: var(--c-text-2);
+}
+/* 病程标签：可点击跳病程视图，主色调 + 边框 + › 提示「可点」，热区放大 */
+.tl-note--tag {
+  padding: 10rpx 20rpx;
+  background: var(--c-primary-wash);
+  color: var(--c-primary-deep);
+  border: 2rpx solid var(--c-primary-tint);
+  font-weight: 500;
+}
+.tl-note--tag-press {
+  background: var(--c-primary-tint);
+}
+
+/* 事件类型配色：点（带柔晕环）+ 标签 */
+.tl-dot.ev-symptom { background: var(--c-danger); box-shadow: 0 0 0 6rpx var(--c-danger-tint); }
+.tl-dot.ev-med { background: var(--c-rt-med); box-shadow: 0 0 0 6rpx var(--c-rt-med-bg); }
+.tl-dot.ev-vaccine { background: var(--c-rt-vaccine); box-shadow: 0 0 0 6rpx var(--c-rt-vaccine-bg); }
+.tl-dot.ev-deworm { background: var(--c-rt-deworm); box-shadow: 0 0 0 6rpx var(--c-rt-deworm-bg); }
+.tl-dot.ev-weight { background: var(--c-success); box-shadow: 0 0 0 6rpx var(--c-success-tint); }
+.tl-dot.ev-clinic { background: var(--c-rt-other); box-shadow: 0 0 0 6rpx var(--c-rt-other-bg); }
+.tl-dot.ev-care { background: #4fa89b; box-shadow: 0 0 0 6rpx rgba(79, 168, 155, 0.16); }
+.tl-dot.ev-other { background: var(--c-text-3); box-shadow: 0 0 0 6rpx var(--c-bg-sink); }
+
+.tl-chip.ev-symptom { color: var(--c-danger); background: var(--c-danger-tint); }
+.tl-chip.ev-med { color: var(--c-rt-med); background: var(--c-rt-med-bg); }
+.tl-chip.ev-vaccine { color: var(--c-rt-vaccine); background: var(--c-rt-vaccine-bg); }
+.tl-chip.ev-deworm { color: var(--c-rt-deworm); background: var(--c-rt-deworm-bg); }
+.tl-chip.ev-weight { color: var(--c-success); background: var(--c-success-tint); }
+.tl-chip.ev-clinic { color: var(--c-rt-other); background: var(--c-rt-other-bg); }
+.tl-chip.ev-care { color: #3c8579; background: rgba(79, 168, 155, 0.14); }
+.tl-chip.ev-other { color: var(--c-text-2); background: var(--c-bg-sink); }
 </style>

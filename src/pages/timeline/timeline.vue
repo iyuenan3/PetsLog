@@ -16,7 +16,7 @@
     </scroll-view>
 
     <view v-if="records.length" class="tl-list">
-      <view v-for="(r, i) in records" :key="r._id" class="tl-item rise-in" :style="{ 'animation-delay': Math.min(i % pageSize, 10) * 36 + 'ms' }" @click="openDetail(r)">
+      <view v-for="(r, i) in records" :key="r._id" class="tl-item rise-in" hover-class="tl-item--press" hover-stay-time="60" :style="{ 'animation-delay': Math.min(i % pageSize, 10) * 36 + 'ms' }" @click="openDetail(r)">
         <view class="tl-item__head">
           <view class="tl-dot" :class="eventClass(r.event_type)"></view>
           <text class="tl-item__pet">{{ r.pet || '未指定' }}</text>
@@ -34,7 +34,11 @@
           <text v-if="r.tag" class="tl-note tl-note--tag" hover-class="tl-note--tag-press" hover-stay-time="60" @click.stop="goCourse(r.tag, r.pet)">🏷️ {{ r.tag }} ›</text>
         </view>
       </view>
-      <view v-if="loadingMore" class="tl-more">加载中…</view>
+      <view v-if="loadingMore" class="tl-more tl-more--load">
+        <text class="tl-load-dot"></text>
+        <text class="tl-load-dot"></text>
+        <text class="tl-load-dot"></text>
+      </view>
       <view v-else-if="!hasMore && records.length >= pageSize" class="tl-more tl-more--end">· 没有更多了 ·</view>
     </view>
     <view v-else class="empty">
@@ -144,6 +148,30 @@ export default {
 .tl-more--end {
   letter-spacing: 2rpx;
 }
+/* 上拉加载三点跳动（替代纯文字「加载中…」）：轮流上跳 + 透明度，轻而明确 */
+.tl-more--load {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+}
+.tl-load-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: var(--c-text-3);
+  animation: tl-dot-bounce 1s ease-in-out infinite;
+}
+.tl-load-dot:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.tl-load-dot:nth-child(3) {
+  animation-delay: 0.32s;
+}
+@keyframes tl-dot-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-8rpx); opacity: 1; }
+}
 /* 病程筛选条 */
 .tl-filter {
   white-space: nowrap;
@@ -172,96 +200,9 @@ export default {
   color: var(--c-primary-deep);
 }
 
-.tl-list {
-  padding: 24rpx var(--pad-page) 40rpx;
-}
-.tl-item {
-  background: var(--c-card);
-  border-radius: var(--r-md);
-  padding: 28rpx;
-  margin-bottom: 20rpx;
-  box-shadow: var(--sh-2);
-}
-.tl-item__head {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  margin-bottom: 14rpx;
-}
-.tl-dot {
-  width: 18rpx;
-  height: 18rpx;
-  border-radius: var(--r-pill);
-  flex: none;
-}
-.tl-item__pet {
-  font-size: var(--fs-sub);
-  font-weight: 600;
-  color: var(--c-text);
-}
-.tl-chip {
-  height: 40rpx;
-  padding: 0 18rpx;
-  border-radius: var(--r-pill);
-  font-size: var(--fs-tiny);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-}
-.tl-item__time {
-  margin-left: auto;
-  font-size: var(--fs-tiny);
-  color: var(--c-text-3);
-}
-.tl-item__quote {
-  display: block;
-  font-size: var(--fs-body);
-  color: var(--c-text);
-  line-height: 1.55;
-}
-.tl-item__notes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  margin-top: 16rpx;
-}
-.tl-note {
-  padding: 8rpx 18rpx;
-  background: var(--c-bg-sink);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-cap);
-  color: var(--c-text-2);
-}
-/* 病程标签：可点击跳病程视图，主色调 + 边框 + › 提示「可点」，热区放大 */
-.tl-note--tag {
-  padding: 10rpx 20rpx;
-  background: var(--c-primary-wash);
-  color: var(--c-primary-deep);
-  border: 2rpx solid var(--c-primary-tint);
-  font-weight: 500;
-}
-.tl-note--tag-press {
-  background: var(--c-primary-tint);
-}
-
-/* 事件类型配色：点（带柔晕环）+ 标签 */
-.tl-dot.ev-symptom { background: var(--c-danger); box-shadow: 0 0 0 6rpx var(--c-danger-tint); }
-.tl-dot.ev-med { background: var(--c-rt-med); box-shadow: 0 0 0 6rpx var(--c-rt-med-bg); }
-.tl-dot.ev-vaccine { background: var(--c-rt-vaccine); box-shadow: 0 0 0 6rpx var(--c-rt-vaccine-bg); }
-.tl-dot.ev-deworm { background: var(--c-rt-deworm); box-shadow: 0 0 0 6rpx var(--c-rt-deworm-bg); }
-.tl-dot.ev-weight { background: var(--c-success); box-shadow: 0 0 0 6rpx var(--c-success-tint); }
-.tl-dot.ev-clinic { background: var(--c-rt-other); box-shadow: 0 0 0 6rpx var(--c-rt-other-bg); }
-.tl-dot.ev-care { background: #4fa89b; box-shadow: 0 0 0 6rpx rgba(79, 168, 155, 0.16); }
-.tl-dot.ev-other { background: var(--c-text-3); box-shadow: 0 0 0 6rpx var(--c-bg-sink); }
-
-.tl-chip.ev-symptom { color: var(--c-danger); background: var(--c-danger-tint); }
-.tl-chip.ev-med { color: var(--c-rt-med); background: var(--c-rt-med-bg); }
-.tl-chip.ev-vaccine { color: var(--c-rt-vaccine); background: var(--c-rt-vaccine-bg); }
-.tl-chip.ev-deworm { color: var(--c-rt-deworm); background: var(--c-rt-deworm-bg); }
-.tl-chip.ev-weight { color: var(--c-success); background: var(--c-success-tint); }
-.tl-chip.ev-clinic { color: var(--c-rt-other); background: var(--c-rt-other-bg); }
-.tl-chip.ev-care { color: #3c8579; background: rgba(79, 168, 155, 0.14); }
-.tl-chip.ev-other { color: var(--c-text-2); background: var(--c-bg-sink); }
-
-/* 空状态：.empty/.empty__art/.empty__title/.empty__desc 已抽到 App.vue 全局（Round 2） */
+/* .tl-list / .tl-item 及全部子类（__head/__pet/__quote/__notes/__note/__time、tl-dot、tl-chip、.tl-item--press）
+   与事件配色 ev-* 已抽到 App.vue 全局 <style>（timeline + course 病程列表共用单一真相源）。
+   原因：uni-app mp-weixin 下页面 <style> 各自编译进各自 .wxss、不跨页，course 复用必须靠 App.vue 全局。
+   本页只保留自己独有的 .page / .tl-filter* / .tl-more* / .tl-load-dot。
+   空状态 .empty* 也在 App.vue 全局（Round 2）。 */
 </style>
