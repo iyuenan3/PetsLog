@@ -636,6 +636,11 @@ export default {
   box-shadow: var(--sh-3);
   padding: 24rpx var(--pad-page) 32rpx;
   box-sizing: border-box;
+  animation: card-rise 0.3s ease-out both;
+}
+@keyframes card-rise {
+  from { opacity: 0; transform: translateY(48rpx); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .card__head {
   display: flex;

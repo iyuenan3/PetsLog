@@ -118,6 +118,50 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(r.ok === false, '缺 tag 应拒')
   })
 
+  // ── list 主时间线分页（修 backlog「50 条无翻页」）──
+  await run('list: 默认页 30 + hasMore=true（>30 条）', async () => {
+    CUR = 'u'
+    const recs = []
+    for (let i = 0; i < 35; i++) recs.push({ pet: '示例猫', time: '2026-01-01' })
+    seed('F1', 'u', recs)
+    const r = await fn.main({ family_id: 'F1', action: 'list' })
+    assert(r.ok === true && r.data.length === 30, '默认应回 30 条，实际 ' + (r.data || []).length)
+    assert(r.hasMore === true, '>30 条 hasMore 应 true')
+  })
+
+  await run('list: skip 续页取余 + 两页合并不重不漏', async () => {
+    CUR = 'u'
+    const recs = []
+    for (let i = 0; i < 35; i++) recs.push({ pet: 'p', time: 't' })
+    seed('F1', 'u', recs)
+    const p1 = await fn.main({ family_id: 'F1', action: 'list', limit: 30, skip: 0 })
+    const p2 = await fn.main({ family_id: 'F1', action: 'list', limit: 30, skip: 30 })
+    assert(p1.data.length === 30 && p2.data.length === 5, 'p1=30 p2=5，实际 ' + p1.data.length + '/' + p2.data.length)
+    assert(p2.hasMore === false, '取完 hasMore=false')
+    const ids = new Set(p1.data.concat(p2.data).map((r) => r._id))
+    assert(ids.size === 35, '两页合并 35 个唯一 _id（不重不漏），实际 ' + ids.size)
+  })
+
+  await run('list: 显式 limit:1000 不被钳到 100（loadWeight 全量身价/体重，评审 must-fix 守卫）', async () => {
+    CUR = 'u'
+    const recs = []
+    for (let i = 0; i < 150; i++) recs.push({ pet: '示例猫', time: '2026-01-01', cost: 10, weight: 4 })
+    seed('F1', 'u', recs)
+    const r = await fn.main({ family_id: 'F1', action: 'list', limit: 1000, pet: '示例猫' })
+    assert(r.ok === true && r.data.length === 150, '应回全部 150 条（绝不钳 100），实际 ' + (r.data || []).length)
+  })
+
+  await run('list: family 隔离不读别家', async () => {
+    CUR = 'u'
+    DB_INST.data.family_members = [{ family_id: 'F1', openid: 'u', role: 'admin' }]
+    DB_INST.data.records = [
+      { _id: 'a', family_id: 'F1', pet: '示例猫', time: '2026-01-01' },
+      { _id: 'b', family_id: 'F2', pet: '别家猫', time: '2026-01-01' },
+    ]
+    const r = await fn.main({ family_id: 'F1', action: 'list' })
+    assert(r.data.length === 1 && r.data[0].family_id === 'F1', '只读 F1，实际 ' + JSON.stringify((r.data || []).map((x) => x.family_id)))
+  })
+
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
 })()

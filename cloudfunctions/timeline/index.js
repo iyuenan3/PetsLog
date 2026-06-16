@@ -86,8 +86,14 @@ exports.main = async (event) => {
   if (event && event.orderField === 'time') {
     q = q.orderBy('time', 'desc').orderBy('created_at', 'desc')
   } else {
-    q = q.orderBy('created_at', 'desc')
+    q = q.orderBy('created_at', 'desc').orderBy('_id', 'desc')
   }
-  const res = await q.limit(event && event.limit ? event.limit : 50).get()
-  return { ok: true, data: res.data }
+  // 分页（修 backlog「主时间线 50 条无翻页」）：主时间线默认页 30、前端 onReachBottom 传 skip 续取；
+  // 但显式大 limit 的调用方（pet.vue loadWeight 传 1000 取该宠全量算体重曲线 + 当前身价）必须放行，
+  // 只封到云端 get 上限 1000，绝不钳到 100（否则 >100 条的宠少画体重点 + 身价少算，评审 must-fix）。
+  // 默认序加 _id 兜底，保证 created_at 并列时分页不重不漏。
+  const limit = Math.min(event && event.limit ? event.limit : 30, 1000)
+  const skip = event && event.skip ? event.skip : 0
+  const res = await q.skip(skip).limit(limit).get()
+  return { ok: true, data: res.data, hasMore: res.data.length === limit }
 }

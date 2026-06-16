@@ -10,7 +10,7 @@
     <!-- ===== 提醒 ===== -->
     <block v-if="tab === 'rem'">
       <view v-if="reminders.length" class="rm-list">
-        <view v-for="r in reminders" :key="r._id" class="rm-card" :class="['rm-card--' + tagClass(r.type), { 'rm-card--overdue': dayDiff(r.next_date) < 0 }]">
+        <view v-for="(r, i) in reminders" :key="r._id" class="rm-card rise-in" :style="{ 'animation-delay': Math.min(i, 10) * 36 + 'ms' }" :class="['rm-card--' + tagClass(r.type), { 'rm-card--overdue': dayDiff(r.next_date) < 0 }]">
           <view class="rm-card__head">
             <text class="chip-tag" :class="'chip-tag--' + tagClass(r.type)">{{ r.type }}</text>
             <text class="rm-card__title">{{ r.title || '(未命名提醒)' }}</text>
@@ -41,7 +41,7 @@
         <text class="food-head__add" hover-class="food-head__add--press" hover-stay-time="60" @click="openFoodAdd">＋ 添加</text>
       </view>
       <view v-if="foods.length" class="food-list">
-        <view v-for="f in foods" :key="f._id" class="food-card" :class="{ 'food-card--current': f.current }">
+        <view v-for="(f, i) in foods" :key="f._id" class="food-card rise-in" :style="{ 'animation-delay': Math.min(i, 10) * 36 + 'ms' }" :class="{ 'food-card--current': f.current }">
           <view class="food-card__top">
             <text class="food-card__name">{{ f.name }}</text>
             <text v-if="f.current" class="food-card__badge">在喂</text>
@@ -94,7 +94,7 @@
     <!-- ===== 药品 ===== -->
     <block v-else>
       <view v-if="meds.length" class="med-list">
-        <view v-for="m in meds" :key="m._id" class="med-card">
+        <view v-for="(m, i) in meds" :key="m._id" class="med-card rise-in" :style="{ 'animation-delay': Math.min(i, 10) * 36 + 'ms' }">
           <view class="med-card__icon"><image class="med-card__icon-img" src="/static/icon/pill.png" mode="aspectFit" /></view>
           <view class="med-card__body">
             <view class="med-card__top">
