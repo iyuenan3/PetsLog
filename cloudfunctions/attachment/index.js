@@ -16,6 +16,9 @@ const FAMILY_BYTES_MAX = 1024 * 1024 * 1024 // 家庭总存储 ≤1GB
 const DAILY_BYTES_MAX = 200 * 1024 * 1024 // 速度护栏 ≤200MB/天/家庭
 // 单文件上限（服务端按真实体积复核；图片端侧已压缩、视频走 compressed ≤30s、PDF 压不了只能限体积）
 const FILE_BYTES_MAX = { image: 10 * 1024 * 1024, video: 30 * 1024 * 1024, pdf: 10 * 1024 * 1024 }
+// latest_weight_date 纯日期不变量（ADR-018 起 records.time 含到分）：写 / 删两侧统一用它取日期段，
+// 保字典序比较与字段类型一致（写侧 saveRecord 同口径 slice(0,10)）。
+const toDate = (t) => String(t || '').slice(0, 10)
 
 async function assertMember(openid, familyId) {
   if (!familyId) throw { code: 'NO_FAMILY', msg: '缺少家庭上下文' }
@@ -254,7 +257,7 @@ async function recomputeLatestWeight(familyId, rec) {
   if (!rec || !rec.weight || !rec.pet) return
   const pr = await db.collection('pets').where({ family_id: familyId, name: rec.pet }).limit(1).get().catch(() => ({ data: [] }))
   const p = pr.data[0]
-  if (!p || p.latest_weight_date !== rec.time) return // 删的不是最新体重记录，档案无需动
+  if (!p || p.latest_weight_date !== toDate(rec.time)) return // 删的不是最新体重记录，档案无需动（纯日期口径对齐 rec.time 到分）
   const wr = await db
     .collection('records')
     .where({ family_id: familyId, pet: rec.pet, weight: _.gt(0) })
@@ -266,6 +269,6 @@ async function recomputeLatestWeight(familyId, rec) {
   await db
     .collection('pets')
     .doc(p._id)
-    .update({ data: latest ? { latest_weight: latest.weight, latest_weight_date: latest.time || '' } : { latest_weight: null, latest_weight_date: '' } })
+    .update({ data: latest ? { latest_weight: latest.weight, latest_weight_date: toDate(latest.time) } : { latest_weight: null, latest_weight_date: '' } })
     .catch(() => {})
 }

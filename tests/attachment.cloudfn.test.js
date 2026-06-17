@@ -381,6 +381,37 @@ async function run(title, body) {
     assert(p.latest_weight === 4.5 && p.latest_weight_date === '2026-06-09', '删非最新不应动档案，实际 ' + p.latest_weight)
   })
 
+  // 13. 回归（ADR-018 口径）：删带「到分 time」的最新体重记录 → latest_weight 重算 + latest_weight_date 落纯日期 + weight_spark 收缩
+  // 防回潮根因：守卫曾拿纯日期 latest_weight_date 比含到分的 rec.time（恒不等→跳过重算）；回写曾把含到分 time 直灌（污染纯日期不变量）。
+  // 3 条体重记录：删最新 → 重算到「次新」（需 orderBy('time','desc').limit(1) 真排序，no-op 排序会取错条）
+  await run('回归: 删到分最新体重 → 重算到次新 + 纯日期 + spark 收缩', async () => {
+    CUR_OPENID = 'uA'
+    seedFamily('F1', ['uA'])
+    DB_INST.data.pets = [{ _id: 'p1', family_id: 'F1', name: '示例猫', latest_weight: 4.5, latest_weight_date: '2026-06-09', weight_spark: [4.2, 4.3, 4.5] }]
+    seedRecord('F1', { _id: 'recOld', pet: '示例猫', time: '2026-06-01 09:00', weight: 4.2, event_type: '体重' })
+    seedRecord('F1', { _id: 'recMid', pet: '示例猫', time: '2026-06-05 10:00', weight: 4.3, event_type: '体重' })
+    seedRecord('F1', { _id: 'recNew', pet: '示例猫', time: '2026-06-09 14:30', weight: 4.5, event_type: '体重' })
+    const r = await fn.main({ family_id: 'F1', action: 'deleteRecord', record_id: 'recNew' })
+    assert(r.ok === true, '应成功')
+    const p = DB_INST.data.pets[0]
+    assert(p.latest_weight === 4.3, '删到分最新体重应重算到次新 4.3（需 orderBy desc 真排序），实际 ' + p.latest_weight)
+    assert(p.latest_weight_date === '2026-06-05', 'latest_weight_date 应落纯日期 2026-06-05，实际 ' + p.latest_weight_date)
+    assert(JSON.stringify(p.weight_spark) === '[4.2,4.3]', '删侧 weight_spark 应升序收缩为 [4.2,4.3]，实际 ' + JSON.stringify(p.weight_spark))
+  })
+
+  // 14. 回归：删「非最新」体重记录 → 档案标量不动 + weight_spark 仍正确收缩（写/删两侧对称）
+  await run('回归: 删非最新体重 → 标量不动 + spark 收缩为 [4.5]', async () => {
+    CUR_OPENID = 'uA'
+    seedFamily('F1', ['uA'])
+    DB_INST.data.pets = [{ _id: 'p1', family_id: 'F1', name: '示例猫', latest_weight: 4.5, latest_weight_date: '2026-06-09', weight_spark: [4.2, 4.5] }]
+    seedRecord('F1', { _id: 'recOld', pet: '示例猫', time: '2026-06-01 09:00', weight: 4.2, event_type: '体重' })
+    seedRecord('F1', { _id: 'recNew', pet: '示例猫', time: '2026-06-09 14:30', weight: 4.5, event_type: '体重' })
+    await fn.main({ family_id: 'F1', action: 'deleteRecord', record_id: 'recOld' })
+    const p = DB_INST.data.pets[0]
+    assert(p.latest_weight === 4.5 && p.latest_weight_date === '2026-06-09', '删非最新不应动标量，实际 ' + p.latest_weight + '/' + p.latest_weight_date)
+    assert(JSON.stringify(p.weight_spark) === '[4.5]', '删侧 weight_spark 应收缩为 [4.5]，实际 ' + JSON.stringify(p.weight_spark))
+  })
+
   // 12. 鉴权：非成员调用直接 AUTH 拒
   await run('鉴权: 非家庭成员调用 → 拒', async () => {
     CUR_OPENID = 'stranger'

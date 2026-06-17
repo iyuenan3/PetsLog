@@ -129,7 +129,7 @@ async function importData(fid) {
   const lw = {} // name -> { weight, date }
   for (const r of records) {
     if (typeof r.weight !== 'number' || !(r.weight > 0)) continue
-    const cur = lw[r.pet], rt = String(r.time || '')
+    const cur = lw[r.pet], rt = String(r.time || '').slice(0, 10) // latest_weight_date 纯日期口径（records.time 含到分，ADR-018）
     if (!cur || rt > cur.date) lw[r.pet] = { weight: r.weight, date: rt }
   }
   for (const p of pets) {
@@ -260,7 +260,8 @@ async function backfillWeight(fid) {
       if (rs.length < 100) break
     }
     if (latest) {
-      await db.collection('pets').doc(p._id).update({ data: { latest_weight: latest.weight, latest_weight_date: latest.time || '' } }).catch(() => {})
+      // latest_weight_date 保持纯日期不变量（records.time 含到分时 slice，与 saveRecord / attachment 写删两侧同口径）
+      await db.collection('pets').doc(p._id).update({ data: { latest_weight: latest.weight, latest_weight_date: String(latest.time || '').slice(0, 10) } }).catch(() => {})
       updated++
     }
   }

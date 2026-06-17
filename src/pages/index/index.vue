@@ -146,7 +146,11 @@ export default {
       if (!this.cloudReady()) return
       try {
         const res = await callFn('pets', { action: 'list' })
-        if (res.result && res.result.ok) this.pets = res.result.data || []
+        if (res.result && res.result.ok) {
+          this.pets = res.result.data || []
+          // 删宠后重载夹紧 cur 到真实宠物卡：删「当前正看的末只宠」后 cur 会落到末张「＋ 添加宠物」卡（index = pets.length），收回最后一只真宠；pets 全删则不动，交空状态分支
+          if (this.pets.length && this.cur >= this.pets.length) this.cur = this.pets.length - 1
+        }
       } catch (e) {
         console.warn('loadPets failed', e)
       }

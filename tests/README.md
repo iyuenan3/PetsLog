@@ -37,17 +37,17 @@ node tests/isolation.e2e.test.js  # 单跑一套（迭代时更快）
 
 单函数 mock 抓不到「parse 给的字段 save 不认」这类跨边界问题，故有 E2E 层；功能 E2E 走的是「正常用户」，抓不到「攻击者伪造 family_id」，故有隔离 E2E 层。
 
-## 各套覆盖（共 234 断言，全绿）
+## 各套覆盖（共 292 断言，全绿）
 
 | 套 | 断言 | 覆盖 |
 |---|---|---|
-| `attachment.cloudfn.test.js` | 34 | 附件登记 / 删除 / 配额（单条 ≤9 / 家庭 ≤1GB / 日 ≤200MB）/ 服务端体积复核 / 级联清云存储 / 归属校验 |
-| `importNotion.cloudfn.test.js` | 36 | 历史导入 / clear 级联 / fix_times / stats / clean_tags（非病程 tag 清空，trim）/ resolveFamily 鉴权 |
+| `attachment.cloudfn.test.js` | 40 | 附件登记 / 删除 / 配额（单条 ≤9 / 家庭 ≤1GB / 日 ≤200MB）/ 服务端体积复核 / 级联清云存储 / 归属校验 / 删体重记录两侧重算 latest_weight + weight_spark（纯日期口径，ADR-018/025）|
+| `importNotion.cloudfn.test.js` | 45 | 历史导入 / clear 级联 / clean_tags（非病程 tag 清空，trim）/ backfill_profile（gender·neutered 覆盖 / intro 仅填空 / weight_spark 升序 / admin 鉴权）/ resolveFamily 鉴权 |
 | `foods.cloudfn.test.js` | 15 | 主粮 CRUD / current 单选互斥 / family 隔离 / IDOR |
-| `saveRecord.cloudfn.test.js` | 32 | 三分支落库 / PET_UNKNOWN 零写入 / suggest / 0 宠放行 / reminder 防线 / 日期·费用·时间归一 / emoji 名 / trim |
-| `pets.cloudfn.test.js` | 8 | 建宠查重 / 服务端 trim / 字段类型收紧 |
-| `parseRecord.prompt.test.js` | 11 | buildMessages 物种标注 / tag 候选喂入 / raw 移除 / SYSTEM 收紧（ADR-020）|
-| `timeline.cloudfn.test.js` | 16 | list_tags 全集 / course 聚合（起止·花费·体重序列）/ 跨宠不混画 / pet 下钻 / family 隔离 / 缺 tag 拒 |
+| `saveRecord.cloudfn.test.js` | 45 | 三分支落库 / PET_UNKNOWN 零写入 / suggest / 0 宠放行 / reminder 防线 / 日期·费用·时间归一 / 物种白名单 / 养护 params 门控 + 截断 / emoji 名 / trim |
+| `pets.cloudfn.test.js` | 16 | 建宠查重 / 服务端 trim / 字段类型收紧 / 物种 8 枚举白名单 / gender sanitize |
+| `parseRecord.prompt.test.js` | 26 | buildMessages 物种标注（8 枚举）/ tag 候选喂入 / raw 移除 / 养护 few-shot / SYSTEM 收紧（ADR-020）|
+| `timeline.cloudfn.test.js` | 23 | list_tags 全集 / course 聚合（起止·花费·体重序列）/ 跨宠不混画 / pet 下钻 / family 隔离 / 缺 tag 拒 / 分页 skip·hasMore·去重 |
 | `e2e.flow.test.js` | 18 | 自然语言 → parse（raw 服务端逐字 / tag 候选 / 物种）→ save → course / list_tags → clean_tags，跨函数契约 |
 | `isolation.e2e.test.js` | 64 | 家庭多租户隔离（下表 9 组）|
 
@@ -74,6 +74,8 @@ node tests/isolation.e2e.test.js  # 单跑一套（迭代时更快）
 支持：`where`（等值）/ `_.in` / `_.neq` / `_.inc` / `field`（no-op，不投影）/ `orderBy`（no-op）/ `skip` / `limit` / `doc().get/update/remove` / `add`（可指定 `_id`）/ `count`。
 
 不支持（写测试时绕开）：`_.lt` / `_.gt` 等比较命令（故隔离测试的邀请码用**不限次** `max_uses:0`，跳过 family `used_count: _.lt(...)` 的原子占名额分支，该分支由 `importNotion.cloudfn` / 真机覆盖）；`orderBy` 不真排序（断言别依赖跨条顺序）；`field` 不真投影（断言别依赖被裁字段不存在）。
+
+> 例外：`attachment.cloudfn.test.js` 的 mock 更强，已实现**真 `orderBy` 排序 + `_.gt`**（删体重记录重算 latest_weight 依赖 `orderBy('time','desc').limit(1)` 真排序，用例 13 以「删最新 → 重算到次新」直测该路径）。在该套写依赖排序 / `_.gt` 的断言是安全的。
 
 `Date.now()` / `Math.random()` 在 `node tests/*.js` 里是真实的（仅 Workflow 脚本里被禁），故 family 的 `genCode` / `created_at` 正常工作。
 

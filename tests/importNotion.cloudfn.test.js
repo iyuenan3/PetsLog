@@ -101,18 +101,20 @@ const FAKE_DATA = {
   ],
   foods: [{ name: '渴望', start_date: '2022-01-01', end_date: '', current: true, note: '' }],
 }
+let FAKE_PROFILES = [] // backfill_profile 的 mock profile_backfill.json（gitignore，测试期注入；reset 清空、各用例自设）
 
 const origLoad = Module._load
 Module._load = function (request, parent) {
   if (request === 'wx-server-sdk') return fakeCloud
   if (request === './data.json') return FAKE_DATA
+  if (request === './profile_backfill.json') return FAKE_PROFILES
   return origLoad.apply(this, arguments)
 }
 const fn = require(path.join(__dirname, '..', 'cloudfunctions', 'importNotion', 'index.js'))
 
 let pass = 0, fail = 0
 function assert(c, m) { if (c) pass++; else { fail++; console.log('  ❌ ' + m) } }
-function reset() { DB_INST.data = {}; DELETED.clear(); UPLOADED.clear(); MISSING_FILEIDS = new Set(); CUR_OPENID = '' }
+function reset() { DB_INST.data = {}; DELETED.clear(); UPLOADED.clear(); MISSING_FILEIDS = new Set(); CUR_OPENID = ''; FAKE_PROFILES = [] }
 function seedFamily(fid, name, members) {
   DB_INST.data.families = DB_INST.data.families || []
   DB_INST.data.families.push({ _id: fid, name, owner: members[0].openid, storage_bytes: 0 })
@@ -242,6 +244,46 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     DB_INST.data.records = [{ _id: 'r1', family_id: 'F1', tag: '', raw: 'x' }, { _id: 'r3', family_id: 'F1', tag: '尿闭', raw: 'y' }]
     const r = await fn.main({ action: 'clean_tags', family_name: '测试家', dryRun: false })
     assert(r.matched === 0 && r.cleared === 0, '已无非病程 tag 应 0 命中，实际 ' + JSON.stringify({ m: r.matched, c: r.cleared }))
+  })
+
+  // backfill_profile（ADR-025 方案 b 回填）：gender/neutered 始终覆盖、intro 仅填空、weight_spark 升序末12、admin 鉴权
+  await run('backfill_profile: gender/neutered 覆盖 + intro 仅填空 + weight_spark 升序', async () => {
+    CUR_OPENID = 'uA'
+    seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }])
+    DB_INST.data.pets = [
+      { _id: 'p1', family_id: 'F1', name: '示例猫', intro: '', neutered: false },
+      { _id: 'p2', family_id: 'F1', name: '示例狗', intro: '原有简介', neutered: false },
+    ]
+    DB_INST.data.records = [
+      { _id: 'w1', family_id: 'F1', pet: '示例猫', time: '2023-01-01', weight: 4.0 },
+      { _id: 'w2', family_id: 'F1', pet: '示例猫', time: '2023-06-01 10:00', weight: 4.5 }, // 含到分 time，验排序不踩坑
+      { _id: 'w3', family_id: 'F1', pet: '示例猫', time: '2023-03-01', weight: 4.2 },
+    ]
+    FAKE_PROFILES = [
+      { name: '示例猫', gender: 'female', neutered: true, intro: '软萌挑食' },
+      { name: '示例狗', gender: 'male', neutered: true, intro: '不该覆盖' },
+    ]
+    const r = await fn.main({ action: 'backfill_profile', family_name: '测试家' })
+    assert(r.ok === true && r.pets === 2 && r.updated === 2 && r.sparked === 1, '返回应 pets2/updated2/sparked1，实际 ' + JSON.stringify(r))
+    const cat = DB_INST.data.pets.find((p) => p._id === 'p1')
+    const dog = DB_INST.data.pets.find((p) => p._id === 'p2')
+    assert(cat.gender === 'female' && cat.neutered === true, '示例猫 gender/neutered 应被覆盖')
+    assert(cat.intro === '软萌挑食', '示例猫 intro 空 → 应填充，实际 ' + cat.intro)
+    assert(JSON.stringify(cat.weight_spark) === '[4,4.2,4.5]', '示例猫 weight_spark 应升序末12 [4,4.2,4.5]，实际 ' + JSON.stringify(cat.weight_spark))
+    assert(dog.gender === 'male' && dog.neutered === true, '示例狗 gender/neutered 应被覆盖')
+    assert(dog.intro === '原有简介', '示例狗 intro 非空 → 不覆盖，实际 ' + dog.intro)
+    assert(JSON.stringify(dog.weight_spark) === '[]', '示例狗 无体重记录 weight_spark 应 []')
+  })
+
+  // backfill_profile：非 admin → resolveFamily 拒（admin-only 维护红线）
+  await run('backfill_profile: 非 admin 被拒', async () => {
+    CUR_OPENID = 'uMember'
+    seedFamily('F1', '测试家', [{ openid: 'uA', role: 'admin' }, { openid: 'uMember', role: 'member' }])
+    DB_INST.data.pets = [{ _id: 'p1', family_id: 'F1', name: '示例猫', intro: '' }]
+    FAKE_PROFILES = [{ name: '示例猫', gender: 'female', neutered: true }]
+    const r = await fn.main({ action: 'backfill_profile', family_name: '测试家' })
+    assert(r.ok === false, '非 admin 应被 resolveFamily 拒，实际 ' + JSON.stringify(r))
+    assert(DB_INST.data.pets[0].gender === undefined, '被拒后不应写 gender')
   })
 
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)

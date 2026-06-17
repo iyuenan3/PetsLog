@@ -2,7 +2,7 @@
 <!-- 数据契约 / 数据字典：collection 字段定义是内部真相源。对外 API 见文末（当前 N/A）。实现→ARCHITECTURE，为何→DECISIONS。 -->
 
 > 数据库 = 微信云开发文档型。隔离键：业务数据按 `family_id`（见 ADR-008），`users` 按 `_openid`。
-> 标记：**[占位]** = 模型已定、建设排后（foods）。ADR-011/012/013 批次：轮1 字段已落地 v0.3.1，轮2 附件（attachments / att_count / storage_bytes / att_log）已落地 v0.3.2。ADR-014（price_base / intro / foods）v0.4.0、ADR-015（avatar_emoji / new_pet / pet_unknown）v0.4.2、ADR-018（time 到分）已落地；**ADR-019（tag 收敛 + 病程视图）/ ADR-020（raw 服务端落库 + tag 候选 + 解析收紧）= 代码已落 + 云函数已部署，待真机验 + commit；clean_tags 治理待触发、ADR-020 评测先行（合成集）待建**。
+> 标记：**[占位]** = 模型已定、建设排后（foods）。本字段表为字段真相源；各 ADR 的落地 / 部署 / 真机验状态以 ROADMAP / CHANGELOG 为单一真相源（此处不复述易腐的「待 commit / 待触发」）。字段相关批次：轮1 字段（v0.3.1）、轮2 附件 attachments / att_count / storage_bytes / att_log（v0.3.2）、ADR-014 price_base / intro / foods、ADR-015 avatar_emoji / new_pet / pet_unknown、ADR-018 time 到分、ADR-019 tag 收敛、ADR-020 raw 服务端落库、ADR-023 species 8 枚举、ADR-024 records.params 养护（event_type 第 8 桶）、ADR-025 pets.gender / pets.weight_spark 均已落地（见下方字段表）。ADR-020 解析评测（合成集）仍为 ROADMAP 待办。
 > 字段值约定：日期一律 `'YYYY-MM-DD'` 字符串（唯 records.time 可带时刻 `'YYYY-MM-DD HH:mm'`，ADR-018；meds / reminders / foods 等日期字段仍纯日期）；金额 / 体重为 number；时间戳 `created_at/updated_at` 为毫秒 number。
 
 ## pets（宠物档案 · family 隔离）
@@ -19,7 +19,7 @@
 | chronic | string | 慢病 / 病史 |
 | latest_weight | number \| null | 最新体重 kg |
 | latest_weight_date | string | 最新体重日期（防补录旧体重覆盖「最新」） |
-| weight_spark | number[] | 近 12 个体重点（旧→新），方案 b 冗余供首页轮播卡 sparkline（轮播只读 pets/list、无记录历史）；saveRecord 落体重记录时维护 + importNotion `backfill_profile` 一次性回填（ADR-025） |
+| weight_spark | number[] | 近 12 个体重点（旧→新），方案 b 冗余供首页轮播卡 sparkline（轮播只读 pets/list、无记录历史）；saveRecord 落体重记录时维护 + attachment/deleteRecord 删带体重记录后重算（写删两侧对称）+ importNotion `backfill_profile` 一次性回填（ADR-025）。注：latest_weight_date 保持纯日期口径，写删两侧统一 slice(0,10)（records.time 含到分，ADR-018） |
 | home_date | string | 到家日期 'YYYY-MM-DD'（陪伴时长） |
 | note | string | 备注（自由文本，如来历故事） |
 | intro | string | 简介（自由文本，用户自填；与 note 区分：note 偏备忘、intro 偏介绍，见 ADR-014） |
