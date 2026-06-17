@@ -7,20 +7,37 @@
 - Added: **档案卡加性别 / 绝育 / 体重趋势曲线（ADR-025）**：① 新增 `pets.gender` 字段（male / female / ''，pets EDITABLE + `normGender` sanitize），pet.vue 编辑表单加性别分段（公 ♂ / 母 ♀ / 未填）+ 详情页性别行，卡上名字后画 ♂(蓝) / ♀(粉) 符号；② `neutered=true` 时物种 chip 追加「· 已绝育」；③ 卡 `CARD_H` 440→480，3 胶囊下加整宽「体重趋势」band（`paintPetCard` 加 `weightSpark` 参数，≥2 点画珊瑚 sparkline + 末点 + 末值 + 升降箭头，否则占位「📈 记录体重看趋势」）。**不加身价**（费用衍生，守可分享红线）。
 - Changed: **体重曲线方案 b（冗余 weight_spark，as-built 改自方案 c）**：用户真机看到轮播占位「记录体重看趋势」在有体重的宠上误导 → 改为 `pets.weight_spark` 冗余近 12 个体重点（saveRecord `recomputeWeightSpark` 落体重记录时维护 + 建档初始化单点）。index.vue 轮播传 `pet.weight_spark`、`cardSig` 签名补 `gender / neutered / weight_spark` → **轮播卡也显真曲线**；pet.vue 分享卡仍传 `this.series` 全量。swiper / 离屏 canvas 高度按 480/320 比例自适应。
 - Added: **importNotion `backfill_profile` 一次性回填（admin）**：从 `profile_backfill.json`（gitignore，随函数部署私有云端）回填 9 宠 `gender`（来源：本地简介卡性别栏 + 个别宠物病历 + 用户口述）+ `neutered=true`（用户口述全家已绝育，病历 / Notion 佐证）+ `intro`（简介卡性格文案，仅填空不覆盖）+ 从 records 算 `weight_spark`。DevTools 云测试 admin 登录态触发。
-- Tested: `tests/pets` 加性别枚举 sanitize（add + update 两路 male/female 保留 / 非法落空串），pets 单测全绿；全仓 9 套测试 0 失败。`build:mp-weixin` 通过。档案卡新版式经 SVG 镜像 → headless Chrome 截图自验（公 + 已绝育 + 曲线 / 母 + 占位 band 两态，无重叠）。顺手把 pets 测试里残留的两处历史真名向前脱敏成示例占位。**待真机验 + commit**（含确认存量宠 neutered 字段、各物种 ♂/♀ 字形渲染、band 观感）。
+- Tested: `tests/pets` 加性别枚举 sanitize（add + update 两路 male/female 保留 / 非法落空串），pets 单测全绿；全仓 9 套测试 0 失败。`build:mp-weixin` 通过。档案卡新版式经 SVG 镜像 → headless Chrome 截图自验（公 + 已绝育 + 曲线 / 母 + 占位 band 两态，无重叠）。顺手把 pets 测试里残留的两处历史真名向前脱敏成示例占位。**已 commit + push（2bc83bd）**；待真机验（确认存量宠 neutered 字段、各物种 ♂/♀ 字形渲染、band 观感）。
+
+## 动画三项 + tl-item 抽全局修病程列表裸奔 · 2026-06-17
+- Added: **微交互动画三项**：① 列表项按下反馈（`:active` 轻压回弹，时间线 / 健康 / 宠物卡通用）；② 上拉加载「三点」loader（翻页时底部三点呼吸，替代生硬文案）；③ 身价 count-up（宠物详情进页时当前身价数字滚动到位，`priceShow` 影子值逐帧逼近 `priceNow`）。均走 GPU transform / opacity，不触 setData。
+- Fixed: **病程列表 course.vue mp-weixin 裸奔（页样式不跨页根因）**：`.tl-item` 时间线卡样式原只在 timeline.vue 的 `<style>` 内，mp-weixin 把每页样式各编进自己的 .wxss、**不跨页**，故 course.vue 复用 `.tl-item` class 时无样式（裸奔）。抽 `.tl-item` 全套 + `ev-*` 病程配色到 `App.vue`（→ app.wxss 全局），course / timeline 同源。系统普查全 11 页仅此一处裸奔 + 一处死类，一并清。
+- Hardened: 提交前 ultracode 22-agent 评审（6 维 finder / 3 视角对抗 / 完整性批判）must-fix 0。两处教训：动画 `fill-mode: both` 会占住 transform 压死后续 `:active` 按下 scale → 改 `backwards`（仅 delay 段防闪、播完释放）；count-up 展示值 `priceShow` 须以 `priceNow` 兜底，否则弱网 / 派生失败时闪 ¥0。
+- Committed: 已 commit + push（484ceb2）。待真机验微交互观感。
+
+## 全局宣纸纹理底 + 过渡动画 + 时间线分页 / 跨年日期 · 2026-06-16
+- Added: **全局宣纸纹理背景**：竖版单图 `cover`（非 `repeat`，防拼接缝）；mp-weixin wxss 不支持本地 `url()` → 纹理图 base64 内联进 App.vue；不支持 `fixed` 定位，故颗粒随页长自然延伸。温暖治愈 UI 再进一层。
+- Added: **过渡动画 1+2+3**：① 列表 stagger（列表项逐条错峰淡入上移）；② 空状态浮动（空态插画轻微上下浮 breathe）；③ 录入卡滑入（确认卡片从下滑入）。GPU 加速；mp-weixin 路由转场无法自定义（原生），只能做页面内元素动画。
+- Added: **时间线分页（修「50 条无翻页」backlog）**：timeline `list` action 加 `skip / hasMore / _id 兜底序`，前端 `onReachBottom` 续页 + 去重；跨年记录日期显示补年份（防同月日跨年混淆）。
+- Hardened: 4 维评审抓 1 must-fix：共享 `list` 的 limit 原钳 100，误伤 pet.vue `loadWeight`（取该宠全量算身价 / 体重，需 limit 1000）→ 放行 1000 + 补回归守卫（单宠记录数现最大 92 < 100，限值休眠但守卫在）。
+- Committed: 已 commit + push（b655539）。
+
+## emoji 换扁平 kawaii 图标（9 透明 PNG）· 2026-06-16
+- Changed: **门面位 emoji 换扁平 kawaii 图标**：tab 栏 / 空状态插画 / 录入门面位 9 处 emoji 替换为成套扁平 kawaii 透明 PNG（Seedream 出图 + 白底角点 floodfill 抠透明，描边当屏障保内部浅色）。小尺寸内联徽标位仍留 emoji（图标辨识度不划算）；tab 选中态仍仅文字变色（图标不切两套）。素材风格 DNA + 抠图做法见 reference。
+- Committed: 已 commit + push（a3ea60a）。待真机验图标观感。
 
 ## 物种扩展 A 档 + B 档 B2 + 默认头像 · 2026-06-16
 - Changed: **解除「仅猫狗」红线 → 8 类物种枚举（ADR-023）**：cat / dog / rabbit / rodent / bird / reptile / fish / other（非法 / 旧值落 other）。落库总闸 `pets/index.js` 二元钳制 `species==='dog'?'dog':'cat'` 改 `normSpecies` 白名单（saveRecord / importNotion / parseRecord/index.js 同步，含修了 record.vue / pet.vue 几处漏网钳制）；前端抽 `src/species.js` 单一真相源（SPECIES / normSpecies / speciesLabel / speciesEmoji / avatarStatic）。猫狗为主 + 常见宠物（A 档：一套统一记录模型，不为物种分叉医疗）。
 - Added: **8 物种默认头像（ADR-023）**：扁平 kawaii 矢量图标风（Seedream doubao-seedream-5-0 生成，正面坐姿团子 + 侧面金鱼 + 爪印），放 `src/static/avatar/<species>.png`（256² PNG）；头像优先级 **照片 > 自选 emoji > 物种静态图 > emoji 兜底**（pet.vue 头部三级降级 + petCard.js `loadSpeciesDefault` + index.vue 骨架）。
 - Added: **B 档 B2 养护数据维度（ADR-024）**：「养护」= event_type 第 8 桶；养护参数落 `records.params`（schemaless 对象，saveRecord `sanitizeParams` 兜垃圾 + event_type=养护 门控）；爬宠温湿度 / 鱼水质（pH / 氨 / 亚硝酸盐 / 水温）；`src/speciesProfile.js` 每物种 profile 驱动物种感知录入（event_type / 提醒分类按物种收敛 + 养护参数表单 + curSpecies 推导）；timeline / record-detail 渲染参数 chip + 养护配色 ev-care。**Q2 锁定纯用户自定义周期，绝不内置疫苗 / 驱虫周期建议值（守医疗红线）**。
-- Tested: `tests/pets` 加物种白名单覆盖、`tests/saveRecord` 加养护 / params 门控 / 键数截断、`tests/parseRecord.prompt` 加物种 / 养护断言；11 套全绿。`build:mp-weixin` 通过。两轮对抗式 review（上轮 12 条 + 提交前全量）修复落地。**待真机验 + commit。**
+- Tested: `tests/pets` 加物种白名单覆盖、`tests/saveRecord` 加养护 / params 门控 / 键数截断、`tests/parseRecord.prompt` 加物种 / 养护断言；11 套全绿。`build:mp-weixin` 通过。两轮对抗式 review（上轮 12 条 + 提交前全量）修复落地。**已 commit + push（89b5b78）**；待真机验（多物种 / 养护录入回归）。
 
 ## 宠物档案卡 + 首页轮播门面 · 2026-06-15
 - Added: **宠物档案卡（ADR-021）**：pet.vue 顶部「🪪 档案卡」一键生成温暖治愈风海报图（头像 / 名 / 物种品种 / 年龄 / 最新体重 / 陪伴天数 / 简介），离屏 canvas 出图 → 浮层（长按转发）+ 存相册，复用兽医小结导出管线；头像照片走 `wx.cloud.downloadFile` → `canvas.createImage` 圆形 aspectFill，失败回退 emoji；萌宠 + 轻健康，绝不含费用 / 医院 / 病史 / 病程 / 用药。（修了体重曲线 `canvas type=2d` 穿透档案卡浮层 → `overlayOpen` 计算属性 + v-if 摘 canvas、关后重绘。）
 - Changed: **档案卡改版 A·精致留白（ADR-022）**：头像加暖色径向光晕 + 放大（r52→58），物种行改圆角小 chip（🐱 品种），三胶囊加图标（🎂/⚖️/🏡）+ 圆角加大，去突兀大爪印换轻 ✨ + 小爪点缀，简介前加装饰引号，年龄胶囊值**自适应字号**（完整「2岁3个月」放不下逐级降字号、不省略 / 不截断）。
 - Added: **首页（宠物 tab）轮播门面（ADR-022）**：主视图从 2 列宠物网格重做成档案卡左右滑轮播（`<swiper>` 邻卡露边 + 当前卡放大、邻卡缩小变暗 + 指示点 + 末张「＋ 添加宠物」+ 点卡进详情）；一块离屏 `#petCardCanvas` 顺序出图 → 各宠 `<image>`，按 8 字段签名缓存（仅脏 / 缺图重渲，再次进 tab 命中缓存零重画），出图前骨架占位。
 - Refactored: **抽共享渲染模块 `src/petCard.js`**（`paintPetCard` / `loadPetAvatar` / `CARD_W/CARD_H`）：详情页分享卡与首页轮播卡共用同一份绘制，**逐像素同款、所见即所分享**，根治两处设计漂移；pet.vue 迁出 paintCard / loadAvatarImage / companionDays / roundRect（vet 小结仍用的 ageText / truncate / wrapByWidth 保留）。
-- Verified: `npm run build:mp-weixin` 通过（重构无语法错）；档案卡 A 版经 SVG 镜像 → headless Chrome 截图自验版式（占位「示例猫」）。**待真机验轮播交互 + commit。**
+- Verified: `npm run build:mp-weixin` 通过（重构无语法错）；档案卡 A 版经 SVG 镜像 → headless Chrome 截图自验版式（占位「示例猫」）。**已 commit + push（7079d64）**；待真机验轮播交互。
 
 ## 安全审计 · 家庭多租户隔离回归 E2E · 2026-06-14
 - Audited: **13-agent workflow 审计 11 个云函数 + 前端的家庭多租户隔离**，四条不变式（① 鉴权闸触库前零例外 ② `family_id` 作用域闭合 ③ IDOR 按 id 直操作前校验 `doc.family_id` ④ openid 单一可信源 `getWXContext`，闸与查询同一变量）全绿，**0 可利用缺陷**；每条 finding 经对抗式复核（默认怀疑、按设计的安全写法判 false-positive）。
@@ -28,7 +45,7 @@
 - Added: **`tests/isolation.e2e.test.js`（64 断言，9 组安全契约）**：可变 `CUR_OPENID` 模拟攻击者改包，串真实云函数验 A 鉴权闸跨家庭 8 函数全 `NOT_MEMBER` / B 空 family_id → `NO_FAMILY` / C IDOR 删改读别家文档被归属校验挡 / D parse→save 篡改链 / E importNotion 越权（`NOT_ADMIN`/`NOT_FOUND`/`AMBIGUOUS`）/ F 角色身份混淆 / G 邀请码加入 + 被踢后旧码 `BAD_CODE` / H 同名宠物不串档（`PET_UNKNOWN`）/ I 最后一人退出即解散且只清自己家。接入 `npm test`（9 套共 **234 断言**全绿）。
 - Added: **`tests/README.md`**：三层测试哲学（单函数集成 / 功能契约 E2E / 安全契约 E2E）+ `Module._load` mock 基建 + 各套覆盖表 + mock 内存 DB 能力边界（无 `_.lt`，故隔离测试邀请码用不限次）+ 真机层抓不到什么。
 - Hardened: **CONVENTIONS 新增「多租户隔离（红线）」节**：四条不变式写成契约 + 立 **assertMember 多副本同步红线**（非共享 lib，改任一份必须 N 份同步 + 跑隔离回归通过才提交，防单函数静默失守）。
-- Note: 本次为安全审计 + 测试 + 文档，无云函数 / 前端代码改动；3 处改动（isolation.e2e.test.js / tests/README.md / CONVENTIONS）待随 v0.4.5 批次 commit。
+- Note: 本次为安全审计 + 测试 + 文档，无云函数 / 前端代码改动；3 处改动（isolation.e2e.test.js / tests/README.md / CONVENTIONS）随 v0.4.5 批次 **已 commit + push（5b3a9de）**。
 
 ## v0.4.5 · 2026-06-12 · 录入重做：结构化直填 + 确认卡片可编辑 + 点＋弹「记录」入口卡 + 时间精确到分（ADR-017/018）
 - Added: **结构化直填（不调 LLM，ADR-017）**：录入新增「结构化逐项填」一路，不过 parseRecord、不写 parse_log、不耗解析配额，前端拼同形 record 直接调 saveRecord（**saveRecord 本就是落库校验边界**，normalizeDate / numOrNull / event_type 枚举 / fuzzyMatchPet + PET_UNKNOWN 服务端原样兜底，故零新增云函数 / 集合 / 字段）。明确知道哪只宠 / 哪天 / 什么类型时可精确录入，离线或上游故障时也能录。
@@ -37,7 +54,7 @@
 - Changed: **records.time 精确到分 + created_at 由事件时间派生（ADR-018）**：time 升为 `'YYYY-MM-DD HH:mm'`（缺时刻保留纯日期），`normalizeDateTime`（saveRecord + parseRecord 两处同步）日期段定长零填充保字典序；created_at 由事件时间派生（`createdAtFromTime`）：有分用准点（东八区），仅日期用当日 **12:00**（延续历史导入约定，避免补录旧记录排到时间线顶）。结构化表单时间 = 日期 picker + 时刻 picker（mode=time，到分）；AI 进卡片时 `ensureEventClock` 补当前时刻。prompt 教 LLM 说了时刻才输出 HH:mm + 1 条 few-shot。库内 217 条历史（纯日期 + 中午派生）不受影响，展示零改（timeline `slice(5)` 天然带出到分、体重图轴标 `slice(2,10)` 天然停在日期）。
 - Tested: saveRecord 集成测试加 2 组（时间 / created_at 到分 + latest_weight_date 仍纯日期；仅日期 → created_at 落中午 12:00），saveRecord 套 27 → 32 断言；五套共 114 断言（npm test 全绿）。
 - Deployed: saveRecord / parseRecord 已 `wxcloud function:upload` 重新部署；前端产物 `dist/build/mp-weixin`（≈0.65MB）走体验版内测。AIREADME 同步：DECISIONS 加 ADR-017/018、SPEC 改 records.time / created_at 字段说明、DEPLOYMENT 加内测发布（体验版）+ 用户隐私保护指引清单。
-- Note: 前端改动（record.vue 等）+ 云函数源码改动尚未 commit，待内测真机回归通过 + commit 前对抗式评审后随 v0.4.5 一并提交。
+- Committed: v0.4.5 前端（record.vue 等）+ 云函数源码 **已 commit + push（5b3a9de，与隔离审计回归同批）**；待内测真机回归（录入三路 / 时间到分 / 解析可编辑）。
 
 ## v0.4.4 · 2026-06-11 · LLM 上游切换：火山方舟 Coding Plan 直连（弃自建网关，ADR-016 反转 ADR-003）
 - Changed: parseRecord 上游从自建 newapi 网关中转改为**火山方舟 Coding Plan 直连**（OpenAI 兼容 `https://ark.cn-beijing.volces.com/api/coding/v3`，模型 `doubao-seed-2.0-pro`），消灭中转站单点（挂则 AI 录入整体不可用）。配置整套换名 `GATEWAY_*` → `ARK_*`，端点 / 模型进 config.local.js 可改（换后端 LLM 不动代码），唯一机密 ARK_API_KEY；**删除自签 root CA 信任逻辑**（方舟公网正规证书），「CA pinned 不可轮换」跨项目约束随之作废（CORE / RELATIONS / ARCHITECTURE / DEPLOYMENT / CLAUDE.md 同步清理）。
