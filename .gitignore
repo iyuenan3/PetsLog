@@ -21,6 +21,8 @@ unpackage/
 
 # 历史导入数据（真实宠物名，随函数部署到私有云端，不入公开仓）
 cloudfunctions/importNotion/data.json
+# 档案回填数据（真实宠物名 + 简介文案，随函数部署到私有云端，不入公开仓；backfill_profile 读它，ADR-025）
+cloudfunctions/importNotion/profile_backfill.json
 
 # 设计源图留底（宣纸纹理 base64 已内联进 App.vue，源图不进小程序包/公开仓；生成法见 worklog memory）
 design-assets/

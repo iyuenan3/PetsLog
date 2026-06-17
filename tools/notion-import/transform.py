@@ -59,7 +59,7 @@ def num_or_null_weight(s):
 
 
 def pet_names(link):
-    """'小葵 (%E7%8C%AB...md)' 或逗号分隔多个 → ['小葵', ...]"""
+    """'示例猫 (%E7%A4%BA...md)' 或逗号分隔多个 → ['示例猫', ...]"""
     out = []
     for part in (link or '').split(','):
         name = part.strip().split(' (')[0].strip()

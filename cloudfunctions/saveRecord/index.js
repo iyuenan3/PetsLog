@@ -1,6 +1,27 @@
 const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
+const _ = db.command
+
+// 体重趋势冗余点上限（ADR-025 方案 b）：pets.weight_spark 存近 N 个体重，供首页轮播卡 sparkline（轮播只读 pets/list、无记录历史）。
+const WSPARK_MAX = 12
+// 重算某宠近期体重序列写进 pets.weight_spark（旧→新，≤WSPARK_MAX）。派生数据，失败不阻断主流程。
+async function recomputeWeightSpark(familyId, petId, petName) {
+  try {
+    const recs = (
+      await db
+        .collection('records')
+        .where({ family_id: familyId, pet: petName, weight: _.gt(0) })
+        .orderBy('time', 'desc')
+        .limit(WSPARK_MAX)
+        .get()
+    ).data
+    const spark = recs.map((x) => x.weight).reverse()
+    await db.collection('pets').doc(petId).update({ data: { weight_spark: spark } })
+  } catch (e) {
+    /* 派生数据，忽略失败 */
+  }
+}
 
 // 事件类型受控枚举（8 桶，见 ADR-013 + ADR-024 加「养护」）。前端配色 / 分类依赖，非法值落「其它」。
 const EVENT_TYPES = ['症状', '用药', '疫苗', '驱虫', '体重', '就医', '养护', '其它']
@@ -224,6 +245,7 @@ exports.main = async (event) => {
       if (doc.weight && (!p.latest_weight_date || wDate >= p.latest_weight_date)) {
         await db.collection('pets').doc(p._id).update({ data: { latest_weight: doc.weight, latest_weight_date: wDate } })
       }
+      if (doc.weight) await recomputeWeightSpark(familyId, p._id, doc.pet) // 方案 b（ADR-025）：体重变更重算趋势点
     } else {
       // 字段集与 pets add 对齐（缺省值），避免后续读取 undefined 漂移
       await db.collection('pets').add({
@@ -234,6 +256,7 @@ exports.main = async (event) => {
           breed: '',
           birthday: '',
           neutered: false,
+          gender: '',
           allergy: '',
           chronic: '',
           home_date: '',
@@ -244,6 +267,7 @@ exports.main = async (event) => {
           avatar_emoji: '',
           latest_weight: doc.weight || null,
           latest_weight_date: doc.weight ? (doc.time || '').slice(0, 10) : '',
+          weight_spark: doc.weight ? [doc.weight] : [], // 方案 b（ADR-025）：体重趋势冗余点
           created_at: Date.now(),
         },
       })

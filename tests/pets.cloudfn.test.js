@@ -53,15 +53,15 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
   // 1. add: trim + 落库
   await run('add: 服务端 trim', async () => {
     CUR_OPENID = 'u'; seed('F1', 'u')
-    const r = await fn.main({ family_id: 'F1', action: 'add', pet: { name: ' 小七 ', species: 'dog' } })
-    assert(r.ok === true && pets()[0].name === '小七', '尾空格被 trim')
+    const r = await fn.main({ family_id: 'F1', action: 'add', pet: { name: ' 示例狗 ', species: 'dog' } })
+    assert(r.ok === true && pets()[0].name === '示例狗', '尾空格被 trim')
   })
 
   // 2. add: 同名查重拒
   await run('add: 同名查重拒', async () => {
     CUR_OPENID = 'u'; seed('F1', 'u')
-    await fn.main({ family_id: 'F1', action: 'add', pet: { name: '小七' } })
-    const r = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '小七 ' } })
+    await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例狗' } })
+    const r = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例狗 ' } })
     assert(r.ok === false, 'trim 后同名应拒')
     assert(pets().length === 1, '不产生重名档案')
   })
@@ -69,11 +69,11 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
   // 3. update: 改名撞已有名拒
   await run('update: 改名撞已有名拒', async () => {
     CUR_OPENID = 'u'; seed('F1', 'u')
-    await fn.main({ family_id: 'F1', action: 'add', pet: { name: '小七' } })
-    const b = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '小葵' } })
-    const r = await fn.main({ family_id: 'F1', action: 'update', id: b.id, pet: { name: '小七' } })
+    await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例狗' } })
+    const b = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例猫' } })
+    const r = await fn.main({ family_id: 'F1', action: 'update', id: b.id, pet: { name: '示例狗' } })
     assert(r.ok === false, '改名撞名应拒')
-    assert(pets().filter((p) => p.name === '小七').length === 1, '仍只一只小七')
+    assert(pets().filter((p) => p.name === '示例狗').length === 1, '仍只一只示例狗')
   })
 
   // 4. avatar_emoji 类型收紧
@@ -97,6 +97,19 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(pets().find((p) => p._id === a.id).species === 'bird', 'update 改物种保留')
     await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { species: 'xyz' } })
     assert(pets().find((p) => p._id === a.id).species === 'other', 'update 非法 species 落 other')
+  })
+
+  // 6b. 性别枚举(ADR-025): male/female 保留，其余（含未填）落空串（add + update 两路）
+  await run('性别枚举: male/female 保留 + 非法落空串', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u')
+    const a = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例甲', gender: 'female' } })
+    assert(pets().find((p) => p._id === a.id).gender === 'female', 'add female 保留')
+    const b = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例乙', gender: 'X' } })
+    assert(pets().find((p) => p._id === b.id).gender === '', 'add 非法性别落空串')
+    await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { gender: 'male' } })
+    assert(pets().find((p) => p._id === a.id).gender === 'male', 'update male 保留')
+    await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { gender: 'zzz' } })
+    assert(pets().find((p) => p._id === a.id).gender === '', 'update 非法性别落空串')
   })
 
   // 6. 隔离: 非成员拒

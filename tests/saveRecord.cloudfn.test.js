@@ -4,21 +4,28 @@ const Module = require('module')
 const path = require('path')
 
 function clone(o) { return JSON.parse(JSON.stringify(o)) }
+const CMD = { gt: (n) => ({ __op: 'gt', v: n }) } // db.command.gt（ADR-025 weight_spark 查询用）
 function matchRow(row, where) {
-  return Object.entries(where || {}).every(([k, v]) => row[k] === v)
+  return Object.entries(where || {}).every(([k, v]) => {
+    if (v && typeof v === 'object' && v.__op === 'gt') return row[k] > v.v
+    return row[k] === v
+  })
 }
 let SEQ = 0
 class Coll {
-  constructor(db, name) { this.db = db; this.name = name; this._where = null; this._docId = undefined }
+  constructor(db, name) { this.db = db; this.name = name; this._where = null; this._docId = undefined; this._order = null; this._limit = undefined }
   rows() { return this.db.data[this.name] || (this.db.data[this.name] = []) }
   where(c) { this._where = c; return this }
   field() { return this }
-  orderBy() { return this }
-  limit() { return this }
+  orderBy(field, dir) { this._order = { field, dir: dir || 'asc' }; return this }
+  limit(n) { this._limit = n; return this }
   doc(id) { this._docId = id; return this }
   async get() {
     if (this._docId !== undefined) { const d = this.rows().find((r) => r._id === this._docId); if (!d) throw new Error('nf'); return { data: clone(d) } }
-    return { data: this.rows().filter((r) => matchRow(r, this._where)).map(clone) }
+    let out = this.rows().filter((r) => matchRow(r, this._where))
+    if (this._order) { const { field, dir } = this._order; out = out.slice().sort((a, b) => { const x = a[field], y = b[field]; const c = x < y ? -1 : x > y ? 1 : 0; return dir === 'desc' ? -c : c }) }
+    if (this._limit !== undefined) out = out.slice(0, this._limit)
+    return { data: out.map(clone) }
   }
   async update({ data }) {
     if (this._docId !== undefined) { const d = this.rows().find((r) => r._id === this._docId); if (!d) return { stats: { updated: 0 } }; Object.assign(d, data); return { stats: { updated: 1 } } }
@@ -26,7 +33,7 @@ class Coll {
   }
   async add({ data }) { const doc = clone(data); doc._id = data._id || 'id_' + ++SEQ; this.rows().push(doc); return { _id: doc._id } }
 }
-class DB { constructor() { this.data = {} } collection(n) { return new Coll(this, n) } createCollection() { return Promise.resolve() } }
+class DB { constructor() { this.data = {} } get command() { return CMD } collection(n) { return new Coll(this, n) } createCollection() { return Promise.resolve() } }
 
 let DB_INST = new DB()
 let CUR_OPENID = ''
@@ -66,9 +73,9 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
   })
 
   // 3. 歧义(两候选互距1) → PET_UNKNOWN 零写入
-  await run('歧义: 小气 vs [小七,小葵] → PET_UNKNOWN 零写入', async () => {
-    CUR_OPENID = 'u'; seed('F1', 'u', ['小七', '小葵'])
-    const r = await fn.main({ family_id: 'F1', record: { pet: '小气', time: '2026-06-11', event_type: '体重', weight: 3 } })
+  await run('歧义: 示例丙 vs [示例甲,示例乙] → PET_UNKNOWN 零写入', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例甲', '示例乙'])
+    const r = await fn.main({ family_id: 'F1', record: { pet: '示例丙', time: '2026-06-11', event_type: '体重', weight: 3 } })
     assert(r.ok === false && r.code === 'PET_UNKNOWN', '应拒 PET_UNKNOWN')
     assert(Array.isArray(r.pets) && r.pets.length === 2, '附宠物名单供前端点选')
     assert(recs().length === 0, '不留孤儿记录')
@@ -103,6 +110,24 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(p && p.latest_weight === 4.5 && p.latest_weight_date === '2026-06-11', 'latest_weight 回写到示例猫')
   })
 
+  // 6b. weight_spark 维护（ADR-025 方案 b）：连续落体重记录 → pets.weight_spark 按 time 升序累积
+  await run('weight_spark: 体重记录维护趋势点（不论录入顺序按 time 升序）', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    await fn.main({ family_id: 'F1', record: { pet: '示例猫', time: '2026-03-01', event_type: '体重', weight: 4.8 } })
+    await fn.main({ family_id: 'F1', record: { pet: '示例猫', time: '2026-01-01', event_type: '体重', weight: 4.2 } })
+    await fn.main({ family_id: 'F1', record: { pet: '示例猫', time: '2026-02-01', event_type: '体重', weight: 4.5 } })
+    const sp = pets().find((p) => p.name === '示例猫').weight_spark
+    assert(Array.isArray(sp) && sp.join(',') === '4.2,4.5,4.8', '趋势点按 time 升序累积')
+  })
+
+  // 6c. weight_spark：建档带体重 → 初始化单点
+  await run('weight_spark: 建档带体重初始化单点', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    await fn.main({ family_id: 'F1', record: { pet: '阿狗', new_pet: true, species: 'dog', time: '2026-06-11', event_type: '体重', weight: 2.1 } })
+    const p = pets().find((x) => x.name === '阿狗')
+    assert(p && Array.isArray(p.weight_spark) && p.weight_spark.join(',') === '2.1', '建档 weight_spark=[体重]')
+  })
+
   // 7. 简称包含 → 同样 PET_UNKNOWN + suggest(落库层不猜)
   await run('简称: 例猫 ⊂ 示例猫 → PET_UNKNOWN + suggest', async () => {
     CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫', '旺财'])
@@ -127,17 +152,17 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
 
   // 7d. reminder 错别字 → 同走 PET_UNKNOWN 零写入(防线覆盖提醒通道)
   await run('reminder: 错别字拒 PET_UNKNOWN 零写入', async () => {
-    CUR_OPENID = 'u'; seed('F1', 'u', ['小七', '小葵'])
-    const r = await fn.main({ family_id: 'F1', record: { kind: 'reminder', pet: '小淇', rem_title: '体外驱虫', rem_type: '驱虫', rem_date: '2026-07-15' } })
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例甲', '示例乙'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'reminder', pet: '示例丁', rem_title: '体外驱虫', rem_type: '驱虫', rem_date: '2026-07-15' } })
     assert(r.ok === false && r.code === 'PET_UNKNOWN', '提醒错别字应拒')
     assert((DB_INST.data.reminders || []).length === 0, 'reminders 零写入')
   })
 
   // 7e. reminder pet 在库 → 正常落库
   await run('reminder: 在库宠物正常设提醒', async () => {
-    CUR_OPENID = 'u'; seed('F1', 'u', ['小七'])
-    const r = await fn.main({ family_id: 'F1', record: { kind: 'reminder', pet: '小七', rem_title: '疫苗', rem_type: '疫苗', rem_date: '2026-07-01' } })
-    assert(r.ok === true && (DB_INST.data.reminders || [])[0].pet === '小七', '提醒落库')
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例甲'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'reminder', pet: '示例甲', rem_title: '疫苗', rem_type: '疫苗', rem_date: '2026-07-01' } })
+    assert(r.ok === true && (DB_INST.data.reminders || [])[0].pet === '示例甲', '提醒落库')
   })
 
   // 7f. emoji 名: 单 emoji 不互相误 snap(code point 护栏)

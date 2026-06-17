@@ -13,11 +13,13 @@
 | species | enum | 8 类固定枚举：cat / dog / rabbit / rodent / bird / reptile / fish / other（非法 / 旧值落 other）。猫狗为主 + 常见宠物（A 档），原「仅猫狗」红线已解除，见 ADR-023。仅作展示 + 选默认头像，不驱动隔离 / 落库校验 |
 | breed | string | 品种 |
 | birthday | string | 生日 'YYYY-MM-DD' |
-| neutered | boolean | 绝育 |
+| neutered | boolean | 绝育（上档案卡：true 时物种 chip 追加「 · 已绝育」，ADR-025） |
+| gender | enum | 性别：male / female / ''（未填）。基础档案信息，上档案卡显 ♂/♀ 符号（ADR-025）。仅展示，不驱动逻辑 |
 | allergy | string | 过敏史 |
 | chronic | string | 慢病 / 病史 |
 | latest_weight | number \| null | 最新体重 kg |
 | latest_weight_date | string | 最新体重日期（防补录旧体重覆盖「最新」） |
+| weight_spark | number[] | 近 12 个体重点（旧→新），方案 b 冗余供首页轮播卡 sparkline（轮播只读 pets/list、无记录历史）；saveRecord 落体重记录时维护 + importNotion `backfill_profile` 一次性回填（ADR-025） |
 | home_date | string | 到家日期 'YYYY-MM-DD'（陪伴时长） |
 | note | string | 备注（自由文本，如来历故事） |
 | intro | string | 简介（自由文本，用户自填；与 note 区分：note 偏备忘、intro 偏介绍，见 ADR-014） |
@@ -26,7 +28,7 @@
 | avatar_emoji | string | 自选 emoji 头像（ADR-015）。显示优先级：avatar 照片 > avatar_emoji > 物种默认 🐱/🐶；前端选 emoji 时清空 avatar（pets update 顺带删旧照片文件） |
 | created_at / updated_at | number | updated_at 仅 update 时写入，新建文档暂无（reminders 则 add 即写） |
 
-> EDITABLE 白名单（pets update）需同步加 home_date / note / intro / avatar / price_base / avatar_emoji。
+> EDITABLE 白名单（pets update）需同步加 home_date / note / intro / avatar / price_base / avatar_emoji / gender。
 > 「当前身价」与「累计花费」均派生：累计花费 = 该宠 records.cost 之和；当前身价 = price_base + 累计花费（前端聚合，不落库）。
 > 宠物名解析契约（ADR-015，录入防错别字）：parseRecord 输出 `new_pet`（LLM 判定的「明确新增宠物」意图）+ `pet_unknown`（名字无匹配且非新增意图，前端确认卡片须让用户从已有宠物点选）+ 顶层回传 `pets` 名单；模糊匹配（编辑距离 ≤1 / 互含，按 code point 算，**唯一候选才 snap**）只发生在 parse 层（结果用户在卡片可见）。saveRecord 对 record + reminder 都先验名：在库 → 用；record 且 `new_pet=true` 或 0 宠家庭首录 → 建档；其余拒 `code:'PET_UNKNOWN'`（附 pets 名单 + suggest 建议名，零写入，**落库层不静默 snap**）。模糊匹配函数 parseRecord / saveRecord 各持一份，改须两处同步。
 

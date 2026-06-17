@@ -267,6 +267,46 @@ async function backfillWeight(fid) {
   return { ok: true, pets: pets.length, updated }
 }
 
+// 回填 pets.gender / neutered / intro（从 profile_backfill.json，gitignore 不入公开仓）+ 重算 weight_spark（方案 b，ADR-025）。
+// gender / neutered 始终覆盖（新字段 + 用户确认全家已绝育）；intro 仅当前为空才填（不覆盖 app 内编辑）；weight_spark 取该宠全部带体重记录按 time 升序末 12。一次性、幂等可重跑。
+async function backfillProfile(fid) {
+  let profiles = []
+  try {
+    profiles = require('./profile_backfill.json')
+  } catch (e) {
+    profiles = []
+  }
+  const byName = {}
+  for (const x of profiles || []) if (x && x.name) byName[String(x.name).trim()] = x
+  const pets = (await db.collection('pets').where({ family_id: fid }).limit(1000).get().catch(() => ({ data: [] }))).data
+  let updated = 0
+  let sparked = 0
+  for (const p of pets) {
+    const patch = {}
+    const prof = byName[String(p.name || '').trim()]
+    if (prof) {
+      if (prof.gender === 'male' || prof.gender === 'female') patch.gender = prof.gender
+      if (typeof prof.neutered === 'boolean') patch.neutered = prof.neutered
+      if (prof.intro && !String(p.intro || '').trim()) patch.intro = String(prof.intro) // 仅填空，不覆盖用户编辑
+    }
+    const ws = []
+    for (let skip = 0; ; skip += 100) {
+      const rs = (await db.collection('records').where({ family_id: fid, pet: p.name }).field({ weight: true, time: true }).skip(skip).limit(100).get().catch(() => ({ data: [] }))).data
+      for (const r of rs) if (typeof r.weight === 'number' && r.weight > 0) ws.push({ w: r.weight, t: String(r.time || '') })
+      if (rs.length < 100) break
+    }
+    ws.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0))
+    const spark = ws.slice(-12).map((x) => x.w)
+    patch.weight_spark = spark
+    if (spark.length) sparked++
+    if (Object.keys(patch).length) {
+      await db.collection('pets').doc(p._id).update({ data: patch }).catch(() => {})
+      updated++
+    }
+  }
+  return { ok: true, pets: pets.length, updated, sparked }
+}
+
 // 一次性修复（Notion 全量核对后）：① 删无日期记录（日期必填约定；含 CSV 空行脏数据 + Notion 源头漏填日期的，
 // 后者经用户确认删除，见 2026-06-11 核对）；② 导入记录 created_at 统一改为 事件日期+12:00（缺时间默认中午）。
 // 只动 imported:true 的记录，不碰用户真机自己记的。幂等可重跑。
@@ -362,6 +402,9 @@ exports.main = async (event) => {
     }
     if (action === 'backfill_weight') {
       return await backfillWeight(fid)
+    }
+    if (action === 'backfill_profile') {
+      return await backfillProfile(fid)
     }
     if (action === 'fix_times') {
       return await fixTimes(fid)

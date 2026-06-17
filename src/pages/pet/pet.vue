@@ -52,6 +52,7 @@
       <view class="rows">
         <view class="row"><text class="row__k">品种</text><text class="row__v">{{ pet.breed || '未填' }}</text></view>
         <view class="row"><text class="row__k">生日</text><text class="row__v">{{ pet.birthday || '未填' }}</text></view>
+        <view class="row"><text class="row__k">性别</text><text class="row__v">{{ pet.gender === 'male' ? '公 ♂' : pet.gender === 'female' ? '母 ♀' : '未填' }}</text></view>
         <view class="row"><text class="row__k">绝育</text><text class="row__v">{{ pet.neutered ? '是' : '否' }}</text></view>
         <view class="row"><text class="row__k">过敏史</text><text class="row__v">{{ pet.allergy || '无' }}</text></view>
         <view class="row"><text class="row__k">病史</text><text class="row__v">{{ pet.chronic || '无' }}</text></view>
@@ -103,6 +104,14 @@
           </view>
         </view>
         <view class="form-row"><text class="form-row__label">品种</text><input class="form-input" v-model="form.breed" placeholder="如 布偶 / 金毛" placeholder-class="form-ph" /></view>
+        <view class="form-row">
+          <text class="form-row__label">性别</text>
+          <view class="chips">
+            <text :class="['chip', form.gender === 'male' ? 'chip--active' : '']" @click="pickGender('male')">♂ 公</text>
+            <text :class="['chip', form.gender === 'female' ? 'chip--active' : '']" @click="pickGender('female')">♀ 母</text>
+            <text :class="['chip', !form.gender ? 'chip--active' : '']" @click="pickGender('')">未填</text>
+          </view>
+        </view>
         <view class="form-row">
           <text class="form-row__label">生日</text>
           <picker class="form-picker" mode="date" :value="form.birthday || ''" @change="onBirthday">
@@ -213,6 +222,7 @@ export default {
         name: '',
         species: 'cat',
         breed: '',
+        gender: '',
         birthday: '',
         neutered: false,
         allergy: '',
@@ -614,6 +624,7 @@ export default {
         name: p.name || '',
         species: p.species || 'cat', // 物种透传（ADR-023 多物种），editable chip 选；pets 云函数 normSpecies 兜底
         breed: p.breed || '',
+        gender: p.gender === 'male' || p.gender === 'female' ? p.gender : '', // 性别（ADR-025）
         birthday: p.birthday || '',
         neutered: !!p.neutered,
         allergy: p.allergy || '',
@@ -656,6 +667,10 @@ export default {
     },
     pickSpecies(s) {
       this.form.species = s
+    },
+    // 性别选择（ADR-025）：male / female / ''（未填）；落库 pets 云函数 normGender 兜底
+    pickGender(g) {
+      this.form.gender = g
     },
     // 物种展示助手（ADR-023）：委托 src/species.js 单一真相源
     spLabel(s) {
@@ -1055,7 +1070,8 @@ export default {
           // 头像照片先异步加载（cloud:// → 本地路径 → createImage），失败回退 emoji，再整张绘制
           // 渲染下沉到共享模块 @/petCard（与首页轮播同款，ADR-022），杜绝两处设计漂移
           const avatarImg = await loadPetAvatar(canvas, this.pet)
-          paintPetCard(ctx, W, H, this.pet || {}, avatarImg)
+          // 传 this.series 体重点 → 档案卡画体重趋势曲线（ADR-025；首页轮播不传，band 走占位降级）
+          paintPetCard(ctx, W, H, this.pet || {}, avatarImg, this.series)
           wx.canvasToTempFilePath({
             canvas,
             success: (r) => {

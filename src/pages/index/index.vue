@@ -114,7 +114,7 @@ export default {
     }
   },
   onLoad() {
-    // 轮播高度按屏宽派生：卡宽 = 屏宽 - 左右露边(30*2) - slide 内距(8*2)，卡高 = 卡宽 × 440/320
+    // 轮播高度按屏宽派生：卡宽 = 屏宽 - 左右露边(30*2) - slide 内距(8*2)，卡高 = 卡宽 × CARD_H/CARD_W（随常量自适应，不硬编码）
     let win = 375
     // #ifdef MP-WEIXIN
     win = (uni.getSystemInfoSync().windowWidth) || 375
@@ -153,7 +153,7 @@ export default {
     },
     // 字段签名：任一展示字段变了即重渲该卡（漏签名字段会显旧卡到下次匹配，新增展示字段记得补这里）
     sigOf(p) {
-      return [p.avatar, p.name, p.species, p.breed, p.birthday, p.latest_weight, p.home_date, p.intro]
+      return [p.avatar, p.name, p.species, p.breed, p.gender, p.neutered, p.birthday, p.latest_weight, p.home_date, p.intro, p.weight_spark]
         .map((x) => (x == null ? '' : String(x)))
         .join('|')
     },
@@ -194,7 +194,8 @@ export default {
             ctx.scale(dpr, dpr)
             // 头像照片异步加载（失败回退 emoji），再整张绘制（与详情页同款，@/petCard）
             const avatarImg = await loadPetAvatar(canvas, p)
-            paintPetCard(ctx, CARD_W, CARD_H, p, avatarImg)
+            // 方案 b（ADR-025）：传 pets.weight_spark 冗余体重点 → 轮播卡也画体重趋势曲线（轮播无记录历史，靠冗余点）
+            paintPetCard(ctx, CARD_W, CARD_H, p, avatarImg, p.weight_spark)
             wx.canvasToTempFilePath({
               canvas,
               success: (r) => resolve(r.tempFilePath),

@@ -3,6 +3,12 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## 宠物档案卡富化：性别 + 绝育 + 体重趋势 · 2026-06-17
+- Added: **档案卡加性别 / 绝育 / 体重趋势曲线（ADR-025）**：① 新增 `pets.gender` 字段（male / female / ''，pets EDITABLE + `normGender` sanitize），pet.vue 编辑表单加性别分段（公 ♂ / 母 ♀ / 未填）+ 详情页性别行，卡上名字后画 ♂(蓝) / ♀(粉) 符号；② `neutered=true` 时物种 chip 追加「· 已绝育」；③ 卡 `CARD_H` 440→480，3 胶囊下加整宽「体重趋势」band（`paintPetCard` 加 `weightSpark` 参数，≥2 点画珊瑚 sparkline + 末点 + 末值 + 升降箭头，否则占位「📈 记录体重看趋势」）。**不加身价**（费用衍生，守可分享红线）。
+- Changed: **体重曲线方案 b（冗余 weight_spark，as-built 改自方案 c）**：用户真机看到轮播占位「记录体重看趋势」在有体重的宠上误导 → 改为 `pets.weight_spark` 冗余近 12 个体重点（saveRecord `recomputeWeightSpark` 落体重记录时维护 + 建档初始化单点）。index.vue 轮播传 `pet.weight_spark`、`cardSig` 签名补 `gender / neutered / weight_spark` → **轮播卡也显真曲线**；pet.vue 分享卡仍传 `this.series` 全量。swiper / 离屏 canvas 高度按 480/320 比例自适应。
+- Added: **importNotion `backfill_profile` 一次性回填（admin）**：从 `profile_backfill.json`（gitignore，随函数部署私有云端）回填 9 宠 `gender`（来源：本地简介卡性别栏 + 个别宠物病历 + 用户口述）+ `neutered=true`（用户口述全家已绝育，病历 / Notion 佐证）+ `intro`（简介卡性格文案，仅填空不覆盖）+ 从 records 算 `weight_spark`。DevTools 云测试 admin 登录态触发。
+- Tested: `tests/pets` 加性别枚举 sanitize（add + update 两路 male/female 保留 / 非法落空串），pets 单测全绿；全仓 9 套测试 0 失败。`build:mp-weixin` 通过。档案卡新版式经 SVG 镜像 → headless Chrome 截图自验（公 + 已绝育 + 曲线 / 母 + 占位 band 两态，无重叠）。顺手把 pets 测试里残留的两处历史真名向前脱敏成示例占位。**待真机验 + commit**（含确认存量宠 neutered 字段、各物种 ♂/♀ 字形渲染、band 观感）。
+
 ## 物种扩展 A 档 + B 档 B2 + 默认头像 · 2026-06-16
 - Changed: **解除「仅猫狗」红线 → 8 类物种枚举（ADR-023）**：cat / dog / rabbit / rodent / bird / reptile / fish / other（非法 / 旧值落 other）。落库总闸 `pets/index.js` 二元钳制 `species==='dog'?'dog':'cat'` 改 `normSpecies` 白名单（saveRecord / importNotion / parseRecord/index.js 同步，含修了 record.vue / pet.vue 几处漏网钳制）；前端抽 `src/species.js` 单一真相源（SPECIES / normSpecies / speciesLabel / speciesEmoji / avatarStatic）。猫狗为主 + 常见宠物（A 档：一套统一记录模型，不为物种分叉医疗）。
 - Added: **8 物种默认头像（ADR-023）**：扁平 kawaii 矢量图标风（Seedream doubao-seedream-5-0 生成，正面坐姿团子 + 侧面金鱼 + 爪印），放 `src/static/avatar/<species>.png`（256² PNG）；头像优先级 **照片 > 自选 emoji > 物种静态图 > emoji 兜底**（pet.vue 头部三级降级 + petCard.js `loadSpeciesDefault` + index.vue 骨架）。

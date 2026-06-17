@@ -228,7 +228,25 @@ async function deleteRecord(familyId, event) {
   if (bytes) await db.collection('families').doc(familyId).update({ data: { storage_bytes: _.inc(-bytes) } })
   await deleteFiles(list.flatMap((a) => [a.fileID, a.thumb]))
   await recomputeLatestWeight(familyId, rec) // 删的若是该宠最新体重记录，重算档案体重（与 saveRecord 写侧不变量对称，评审 medium 回归）
+  if (rec.weight) await recomputeWeightSpark(familyId, rec.pet) // 方案 b（ADR-025）：删带体重记录后重算趋势点，防 weight_spark 留幽灵点
   return { ok: true }
+}
+
+// 删记录后维护 pets.weight_spark 不变量（方案 b，ADR-025）：删掉带体重的记录后从剩余记录重算近 12 点（与 saveRecord 写侧对称）。
+async function recomputeWeightSpark(familyId, petName) {
+  if (!petName) return
+  const pr = await db.collection('pets').where({ family_id: familyId, name: petName }).limit(1).get().catch(() => ({ data: [] }))
+  const p = pr.data[0]
+  if (!p) return
+  const wr = await db
+    .collection('records')
+    .where({ family_id: familyId, pet: petName, weight: _.gt(0) })
+    .orderBy('time', 'desc')
+    .limit(12)
+    .get()
+    .catch(() => ({ data: [] }))
+  const spark = wr.data.map((x) => x.weight).reverse()
+  await db.collection('pets').doc(p._id).update({ data: { weight_spark: spark } }).catch(() => {})
 }
 
 // 删记录后维护 pets.latest_weight 不变量：仅当删掉的正是该宠当前「最新体重」记录时，从剩余记录重算

@@ -8,7 +8,7 @@ import { speciesEmoji, speciesLabel, avatarStatic } from '@/species'
 
 // 卡片逻辑尺寸（竖版海报）；dpr3 物理 960×1440 < 4096，不触发真机白屏。
 export const CARD_W = 320
-export const CARD_H = 440
+export const CARD_H = 480 // ADR-025：440→480，3 胶囊下增「体重趋势」band
 
 // 陪伴天数 = 今天 - 到家日期（天）；无 / 非法 / 未来 → null（对应胶囊不出）。
 function companionDays(home) {
@@ -117,7 +117,10 @@ export function loadPetAvatar(canvas, pet) {
 
 // 把一只宠物画成海报卡（A 版）。ctx 已按 dpr 缩放；W/H = CARD_W/CARD_H。
 // avatarImg 由 loadPetAvatar 预加载（可为 null → 回退 emoji）。
-export function paintPetCard(ctx, W, H, pet, avatarImg) {
+// weightSpark（ADR-025，可选）：[{weight}] 或 [number] 体重点（已按时间排序）。
+// 详情/分享卡传 this.series（全量历史）；首页轮播传 pets.weight_spark（方案 b 冗余的近 12 点，saveRecord 维护 + 一次性回填）。
+// ≥2 点画趋势曲线，否则（该宠确无体重记录）走占位提示。
+export function paintPetCard(ctx, W, H, pet, avatarImg, weightSpark) {
   const p = pet || {}
   const cx = W / 2
 
@@ -191,16 +194,35 @@ export function paintPetCard(ctx, W, H, pet, avatarImg) {
   ctx.strokeStyle = '#ffffff'
   ctx.stroke()
 
-  // 名字。
-  ctx.textAlign = 'center'
+  // 名字（+ 性别符号，ADR-025）：名字 + ♂/♀ 作为整体居中（量总宽后左对齐起画），符号贴名字右侧、按性别上色、抬 3px 对齐名字视觉中线。
   ctx.textBaseline = 'alphabetic'
-  ctx.fillStyle = '#3A3330'
+  const gsym = p.gender === 'male' ? '♂' : p.gender === 'female' ? '♀' : ''
   ctx.font = '700 27px sans-serif'
-  ctx.fillText(truncate(ctx, p.name || '未命名', W - 56), cx, 220)
+  const nm = truncate(ctx, p.name || '未命名', W - (gsym ? 72 : 56))
+  const nmW = ctx.measureText(nm).width
+  if (gsym) {
+    ctx.font = '700 19px sans-serif'
+    const gw = ctx.measureText(gsym).width
+    const gap = 8
+    const startX = cx - (nmW + gap + gw) / 2
+    ctx.textAlign = 'left'
+    ctx.font = '700 27px sans-serif'
+    ctx.fillStyle = '#3A3330'
+    ctx.fillText(nm, startX, 220)
+    ctx.font = '700 19px sans-serif'
+    ctx.fillStyle = p.gender === 'male' ? '#5B8DEF' : '#E86F9E'
+    ctx.fillText(gsym, startX + nmW + gap, 217)
+    ctx.textAlign = 'center'
+  } else {
+    ctx.textAlign = 'center'
+    ctx.fillStyle = '#3A3330'
+    ctx.fillText(nm, cx, 220)
+  }
 
-  // 物种 chip：emoji 品种（无品种则物种名），暖色圆角小标签。
+  // 物种 chip：emoji 品种（无品种则物种名）+ 已绝育（ADR-025，neutered 才追加），暖色圆角小标签。
   const spe = speciesEmoji(p.species)
-  const spt = p.breed ? `${spe} ${p.breed}` : `${spe} ${speciesLabel(p.species)}`
+  let spt = p.breed ? `${spe} ${p.breed}` : `${spe} ${speciesLabel(p.species)}`
+  if (p.neutered) spt += ' · 已绝育'
   ctx.font = '600 12.5px sans-serif'
   const chipTxt = truncate(ctx, spt, W - 90)
   const chipW = ctx.measureText(chipTxt).width + 28
@@ -256,18 +278,95 @@ export function paintPetCard(ctx, W, H, pet, avatarImg) {
     })
   }
 
+  // 体重趋势 band（ADR-025）：3 胶囊下整宽一条。≥2 个体重点 → 珊瑚 sparkline + 升降箭头（不重复显示当前值，值在 ⚖️ 胶囊）；
+  // 否则（该宠无 / 不足 2 点体重记录）→ 占位提示「记录体重看趋势」。
+  {
+    const bx = 24
+    const by = 362
+    const bw = W - 48
+    const bh = 40
+    roundRect(ctx, bx, by, bw, bh, 14)
+    ctx.fillStyle = 'rgba(255,255,255,0.78)'
+    ctx.fill()
+    ctx.lineWidth = 1
+    ctx.strokeStyle = 'rgba(242,130,92,0.22)'
+    ctx.stroke()
+    const ws = (weightSpark || [])
+      .map((p2) => (typeof p2 === 'number' ? p2 : p2 && p2.weight))
+      .filter((w) => typeof w === 'number' && w > 0)
+      .slice(-12)
+    if (ws.length >= 2) {
+      // 左标签「体重」
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'middle'
+      ctx.font = '11px sans-serif'
+      ctx.fillStyle = '#9A8E85'
+      ctx.fillText('体重', bx + 14, by + bh / 2)
+      // 升降箭头（末 vs 首）放最右，按方向上色（升珊瑚 / 降青 / 平灰）；不重复显示数值（当前值在 ⚖️ 胶囊）
+      const last = ws[ws.length - 1]
+      const first = ws[0]
+      const arrow = last > first ? '↗' : last < first ? '↘' : '→'
+      ctx.textAlign = 'right'
+      ctx.font = '700 15px sans-serif'
+      ctx.fillStyle = last > first ? '#C9542F' : last < first ? '#3C8579' : '#9A8E85'
+      ctx.fillText(arrow, bx + bw - 14, by + bh / 2)
+      // sparkline 占满「标签 → 箭头」之间（高 weight 在上）
+      const sx0 = bx + 50
+      const sx1 = bx + bw - 34
+      const sw = Math.max(20, sx1 - sx0)
+      const pad = 9
+      const sy0 = by + pad
+      const sh = bh - pad * 2
+      const mn = Math.min(...ws)
+      const mx = Math.max(...ws)
+      const range = mx - mn || 1
+      ctx.beginPath()
+      ws.forEach((w, i) => {
+        const x = sx0 + (sw * i) / (ws.length - 1)
+        const y = sy0 + sh * (1 - (w - mn) / range)
+        if (i === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      })
+      ctx.strokeStyle = '#F2825C'
+      ctx.lineWidth = 2
+      ctx.lineJoin = 'round'
+      ctx.lineCap = 'round'
+      ctx.stroke()
+      // 末点小圆
+      const ey = sy0 + sh * (1 - (last - mn) / range)
+      ctx.beginPath()
+      ctx.arc(sx0 + sw, ey, 2.6, 0, Math.PI * 2)
+      ctx.fillStyle = '#F2825C'
+      ctx.fill()
+    } else {
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.font = '12px sans-serif'
+      ctx.fillStyle = '#B7ACA3'
+      ctx.fillText('📈 记录体重看趋势', cx, by + bh / 2)
+    }
+    ctx.textBaseline = 'alphabetic'
+  }
+
   // 简介引用句（有才画，最多 2 行）：左侧装饰大引号 + 居中两行。
   if (p.intro && String(p.intro).trim()) {
     const quote = String(p.intro).trim()
     ctx.font = '13px sans-serif'
-    const lines = wrapByWidth(ctx, quote, W - 72).slice(0, 2)
+    const allLines = wrapByWidth(ctx, quote, W - 72)
+    const lines = allLines.slice(0, 2)
+    if (allLines.length > 2 && lines.length === 2) {
+      // 截断更干净：去掉末行尾部悬挂的开括号 / 标点，再加省略号且保证不溢出（避免断在「等开引号上）
+      let last = lines[1].replace(/[「『（(【〈《，、,.。．·\s]+$/u, '')
+      while (last && ctx.measureText(last + '…').width > W - 72) last = last.slice(0, -1)
+      lines[1] = last + '…'
+    }
     ctx.save()
     ctx.textAlign = 'left'
-    ctx.font = '34px Georgia, serif'
+    ctx.font = '30px Georgia, serif'
     ctx.fillStyle = 'rgba(242,130,92,0.3)'
-    ctx.fillText('“', 38, 392)
+    ctx.fillText('“', 38, 430)
     ctx.restore()
-    let qy = 388
+    let qy = 426
     ctx.font = '13px sans-serif'
     ctx.fillStyle = '#6B615B'
     ctx.textAlign = 'center'
@@ -281,6 +380,6 @@ export function paintPetCard(ctx, W, H, pet, avatarImg) {
   ctx.fillStyle = '#C2B8AF'
   ctx.font = '10.5px sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText('🐾 PetsLog · 温暖记录', cx, 430)
+  ctx.fillText('🐾 PetsLog · 温暖记录', cx, 470)
   ctx.textAlign = 'left'
 }
