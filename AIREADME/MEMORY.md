@@ -88,3 +88,7 @@
 - 假阳性先归一再下结论：换行（`<br>` vs `\n`）、有意的转换规则（驱虫 tag 归一、合成 desc）、同宠同日多记录的匹配错位（按字段打分选最优而非先到先得）。
 - 真问题往往在快照之外：CSV 尾部空行混入全空记录；**源头本身就漏数据**（2 条体重记录 Notion 里就没填日期，要用户决策而非代码兜底，相邻页面 ID + 快照时间可锚定大致日期辅助回忆）；时间语义约定（缺时间默认 12:00 而非 00:00，否则同日排序乱）。
 - 导出快照（CSV）会过期：核对一律以实时源为准；data.json / transform 同步修，保证未来重放与线上终态一致。
+
+## 派生日期字段口径不对齐：time 升到分后 latest_weight_date 必须 slice · 2026-06-18
+- 根因：ADR-018 把 `records.time` 升到分（`YYYY-MM-DD HH:mm`），但派生标量 `pets.latest_weight_date` 仍是纯日期（供与写侧做字典序比较）。写侧 saveRecord 落值时 `slice(0,10)` 是对的，删侧 attachment `recomputeLatestWeight` 却两处漏 slice：① 守卫 `latest_weight_date !== rec.time` 拿纯日期比含到分（恒不等 → 删真·最新体重记录跳过重算、留指向已删记录的幽灵值）；② 回写直接灌含到分 `latest.time` 污染字段（后续写侧 `wDate >= latest_weight_date` 永假 → 同日合法新体重静默不回写）。
+- 教训：**一个时间字段升格（加时刻 / 改格式），所有从它派生或与它比较的字段都要审一遍口径**；尤其派生标量散落在「写侧 + 删侧 + 导入回填」多处，抽一个 `toDate()` 工具多处共用、别各写各的。**回归测试要带「到分 time」**（旧用例全用纯日期 seed，两侧恰好相等绕过生产路径、绿灯掩盖 bug）。修复 commit 5befbd3，详见 DECISIONS ADR-025 as-built。

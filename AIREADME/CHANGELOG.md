@@ -3,6 +3,16 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## 数据核对 · live DB ↔ Notion 逐条一致 + 孤儿清理 · 2026-06-18
+- Verified: **家庭 live DB 与 Notion 源逐条核对，数据健康**。搭微信云 DB 直连只读（服务端 HTTP API，见 DEPLOYMENT「直连读 live DB」）+ 三路核对法（live ↔ data.json 导入载荷 ↔ Notion 新鲜导出；复用 transform.py 归一，内容签名多重集 diff）。结论：217 记录 / 9 宠 / 12 主粮 / 46 附件**逐条一致，0 意外增删改、附件文件 0 缺失**。
+- Note: 差异全部有据非数据错：Notion 3 条无日期行未导入（含早先确认跳过的 2 条无日期体重）；当前在喂主粮 end 留空（ADR-014 约定）；live 107 个非病程 tag 被 clean_tags 有意清空（ADR-019）；6 张宠物简介图在「档案 / 简介」列、出导入范围（app 宠物模型 = 头像 + 简介文本，无简介图位）。
+- Cleaned: **清除 4 条孤儿测试残留**（1 个无 family_id 的早期 openid 时代测试宠 + 3 条无 family_id 记录，app 本就不显示）。删前逐条核验「确无 family_id」（有则全部中止）+ 完整备份可恢复 + 只按精确 _id 删、绝无批量 where。清理后库内 family_id 分布 100% 真家庭（9 / 217 / 12），0 孤儿。
+
+## v0.4.5 修复 · latest_weight_date 纯日期口径对齐 + 内测前全项目 review · 2026-06-18（commit 5befbd3）
+- Fixed: **latest_weight_date 纯日期口径不对齐（ADR-018 起 records.time 含到分）**：写侧 saveRecord 已 `slice(0,10)` 存纯日期，但删侧 attachment `recomputeLatestWeight` 守卫拿纯日期比含到分 `rec.time`（恒不等 → 删真·最新体重记录跳过重算、留幽灵值）+ 回写灌含到分 time 污染字段（→ 同日新体重静默丢写）。抽 `toDate(t)=slice(0,10)` 写删两侧统一（attachment 守卫 + 回写 + importNotion importData / backfillWeight 共 3 处）。实证 buggy 回写在生产不可达（守卫先失败），存量数据未污染、无需清洗。
+- Added: 回归用例（attachment 删带到分 time 最新体重 → 重算到次新 + 纯日期 + weight_spark 写删两侧对称；importNotion backfill_profile）。**先对未修代码跑确认失败证非假绿**。tests/README 断言表除锈（→ 292）。SPEC / PRD 数据字典漂移修（event_type 8 桶 + records.params + 档案卡字段）。
+- Reviewed: **内测发码前两轮对抗式 workflow review**（① 7 维 finder → 对抗验真 13→9，greenlight 无 must-fix；② fix 后 5 维 verify-the-fix，当场抓出我新犯的 README 断言数字错 + cur off-by-one）。红线 / 隔离 / 数据损坏 / 崩页全 0，本修复是唯一 should-fix。全 9 套 292 断言绿 + build 通过。
+
 ## 宠物档案卡富化：性别 + 绝育 + 体重趋势 · 2026-06-17
 - Added: **档案卡加性别 / 绝育 / 体重趋势曲线（ADR-025）**：① 新增 `pets.gender` 字段（male / female / ''，pets EDITABLE + `normGender` sanitize），pet.vue 编辑表单加性别分段（公 ♂ / 母 ♀ / 未填）+ 详情页性别行，卡上名字后画 ♂(蓝) / ♀(粉) 符号；② `neutered=true` 时物种 chip 追加「· 已绝育」；③ 卡 `CARD_H` 440→480，3 胶囊下加整宽「体重趋势」band（`paintPetCard` 加 `weightSpark` 参数，≥2 点画珊瑚 sparkline + 末点 + 末值 + 升降箭头，否则占位「📈 记录体重看趋势」）。**不加身价**（费用衍生，守可分享红线）。
 - Changed: **体重曲线方案 b（冗余 weight_spark，as-built 改自方案 c）**：用户真机看到轮播占位「记录体重看趋势」在有体重的宠上误导 → 改为 `pets.weight_spark` 冗余近 12 个体重点（saveRecord `recomputeWeightSpark` 落体重记录时维护 + 建档初始化单点）。index.vue 轮播传 `pet.weight_spark`、`cardSig` 签名补 `gender / neutered / weight_spark` → **轮播卡也显真曲线**；pet.vue 分享卡仍传 `this.series` 全量。swiper / 离屏 canvas 高度按 480/320 比例自适应。

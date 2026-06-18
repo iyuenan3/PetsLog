@@ -49,3 +49,8 @@
 ## 运维约束
 - 部署前在火山方舟控制台拿 API Key 填入 config.local.js（或云函数环境变量 ARK_API_KEY）。
 - 上游可用性随方舟官方 SLA（不再有自建中转单点，ADR-016）。
+
+## 直连读 live DB / 数据维护（只读 + 定点维护，`tools/wxdump`）
+- **读库**：微信云 live DB 可经**服务端 HTTP API 直连只读**（绕过 openid/family 隔离 = admin 级读全 env），免 DevTools / 真机。机制：`GET cgi-bin/token`（AppID + AppSecret 换 access_token）→ `POST tcb/databasequery`（`{env, query:'db.collection("X").skip().limit().get()'}` 分页）。`tools/wxdump/dump.mjs` 导出 pets / records / foods 到 `out/`，供与 Notion 等源逐条核对（见 CHANGELOG 2026-06-18）。
+- **凭证 / 隐私**：AppSecret 只进 `tools/wxdump/config.local.json`（**gitignore**），脚本读、绝不回显；`out/` 含真实数据亦 gitignore，均不入库。AppSecret 重置对本项目无影响（云函数走 openid 鉴权、不用它）。微信端点走直连（国内可达，Node fetch 默认不走代理；curl 须剥代理前缀）。
+- **定点维护**：`tcb/databasedelete` 可按精确 `_id` 删（如 `delete_orphans.mjs` 清无 family_id 孤儿）。**红线**：删前逐条核验归属（孤儿须 family_id 为空、真数据须属本家庭）+ 完整备份可恢复 + 绝无批量 where；**永久删除由人工确认执行**。

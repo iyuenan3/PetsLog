@@ -13,9 +13,15 @@ caddy-root.crt
 **/config.local.*
 *.local.md
 
+# wxdump 工具：云 DB 直查凭证（AppSecret）+ 导出数据（含真实 PII），绝不入库
+tools/wxdump/config.local.json
+tools/wxdump/out/
+
 # 依赖 / 构建产物
 node_modules/
 dist/
+__pycache__/
+*.pyc
 unpackage/
 .cloudbase/
 
