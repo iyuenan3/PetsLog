@@ -122,14 +122,14 @@
   - **event_type 增「驱虫」成 7 桶**（症状 / 用药 / 疫苗 / 驱虫 / 体重 / 就医 / 其它），与疫苗对称（都是周期性预防）；saveRecord 校验、前端配色、parseRecord 分类同步。
   - **驱虫建模**：做了的驱虫 = 一条 record（event_type=驱虫、med=外驱 / 内驱）；该驱虫 = reminder（type=驱虫）。两者本轮**松耦合**，「做了 → 自动顺延下次提醒」留作后续。
   - **批量录入**：给全家做同一件事（驱虫 / 疫苗）支持录入时**多选宠物 → 生成 N 条 record**（UX 便利，records 仍按宠物一条，不改 schema）。
-  - **foods 模块（占位，排后建）**：主粮台账是家庭级喂粮历史 `foods{family_id,name,start_date,end_date,current,note}`，不分宠；模型先定，建设排在附件 / 字段 / 导入之后。
+  - **foods 模块（占位，排后建）**：主粮台账是家庭级喂粮历史 `foods{family_id,name,start_date,end_date,current,note}`，不分宠；模型先定，建设排在附件 / 字段 / 导入之后。**（→ ADR-027 部分 revise：多宠场景「不分宠」不成立，foods 改物种默认 + 单宠覆盖 + brand/model 拆分）**
   - meds / reminders 本轮不动。
 - Alternatives（否决）: 存身价（与健康无关，累计花费可由 cost 算）；驱虫塞「其它 / 用药」（与疫苗不对称，量大值得独立桶）；批量做成 batch 实体（records 仍 per-pet 更简单，多选只是 UX 层）；主粮塞 records（它是家庭级、非 per-pet，概念不符）。
 - Tradeoff: ① event_type 加桶要同步前端配色 + parse 分类 + 老数据（历史无驱虫桶，旧驱虫散在其它，导入时归位）；② pets / records 字段渐增，保持可选 + 默认空兜底；③ foods 先记不建，SPEC 标 deferred，避免范围蔓延。完整字段见 SPEC 数据字典。
 
 ## ADR-014 · pets 加初始身价 + 简介 + 当前身价派生 + foods 主粮模块建设 + 历史导入扩展 · 2026-06-10
 - Problem: 轮3 导入开发者 Notion 真实数据时，用户要求把此前 ADR-013 决定不做的几项补上：① 初始身价（导出有「初始身价 / 当前身价」，是养宠成本叙事的一部分）；② 每宠自由文本简介；③ 主粮台账（家庭级喂粮历史，导出 12 条）；④ 绝育状态（导出无独立字段，散在病史 / 备注文本里）。
-- Constraint: 保持 family 隔离；pets 字段可选 + 默认空兜底；导出「当前身价」= 初始身价 + 累计花费，是 Notion 自动算的派生值；foods 是家庭级、不分宠（ADR-013 模型已定）。
+- Constraint: 保持 family 隔离；pets 字段可选 + 默认空兜底；导出「当前身价」= 初始身价 + 累计花费，是 Notion 自动算的派生值；foods 是家庭级、不分宠（ADR-013 模型已定）**（→ ADR-027 部分 revise：多宠化改物种默认 + 单宠覆盖）**。
 - Decision（锁定，部分反转 ADR-013）:
   - **pets 加 `price_base`（初始身价，number\|null）**：反转 ADR-013「身价不入库」。**仅存初始身价**；「当前身价」不落库，前端实时派生 = `price_base + 该宠 records.cost 累计`（与 ADR-013「累计花费由 cost 算」一脉，避免静态快照随记录变动而过时）。
   - **pets 加 `intro`（简介，自由文本）**：导出的「简介」列实为指向 Notion 页的链接（无文本），故 intro 为**新建自由文本字段、导入留空**，供用户后续填写。导出的「品种常见病」（品种科普长文）非本宠真实数据，不入库。
@@ -274,3 +274,14 @@
 - Impl: ① petCard.js 加 `loadCardIcons(canvas)` 按 canvas 节点缓存预加载 + 两调用方 `Promise.all`，胶囊 / 点缀 / 水印 / 占位改 `drawImage`，每处 `if(img) drawImage else fillText(emoji)` 优雅降级；② App.vue 加 `.ic / .ic--sm(24rpx) / .ic--lg(40rpx)` 全局图标类（跨页复用必挂 App.vue，否则别页裸奔，见 MEMORY wxss-scope），`.tl-note` 改 inline-flex、`.btn-primary` 加 `display:flex` 居中；模板 emoji-in-text 改 `<view>` 包 `<image> + <text>`（mp `<image>` 不能放进 `<text>`）；③ tab calendar / stetho 换图 + 9 张 kawaii 同名覆盖使原引用零改自动换图；④ 命名 = 功能型 `fn-` 前缀、表达型无前缀。
 - Tradeoff: ① 退役 a3ea60a 刚做的 bespoke 套图（git 可回退，用户知情选库）；② License = Fluent-emoji-flat MIT、Phosphor MIT（零负担）；③ 同概念两档图标增一项认知，靠「表达型 Fluent / 功能型 Phosphor fn-」前缀 + 尺寸档位约束自洽；④ 同一概念在卡片（Fluent 彩）与行内（Phosphor 暖染）视觉不同，是刻意按场景分、非不一致。
 - Verified: 两轮对抗 workflow（9 agent）0 must-fix；git 旧→新逐条账本 0 换错 / 0 漏换 / 0 误删；产物 src ↔ dist 字节一致（非旧缓存）、27 引用 0 悬挂；档案卡 / 行内 chip + tab / 爱心胶囊 三处浏览器 1:1 截图自验 + 真机验过。commit fbb3d1d。
+
+## ADR-027 · 主粮多宠化：物种默认 + 单宠覆盖 + brand/model 拆分 · 2026-06-18（设计已定，待实现）
+- Problem: 现 foods 是家庭级单轨（ADR-013/014「家庭一种粮」假设），`current` 家庭排他（`clearOtherCurrent(familyId)` 设一条在喂清掉全家其它）。多宠家庭不同猫 / 狗 / 鸟吃不同品牌型号主粮，需按宠区分记录 + 各自「在喂」+ 各自换粮史。用户自家全猫同款（简单态要保住），但要支持多宠多粮。
+- Constraint: 守 family 隔离 + assertMember 不变；不破坏简单态（全家同款仍一条搞定）；现 12 条历史零丢失；species 沿用 ADR-023 的 8 枚举真相源（`src/species.js` / `normSpecies`）。**主粮本就物种特异**（猫狗鸟粮天然不同）→ 默认粒度取**物种**、非全家（用户指出，否决初版「全家默认」）。
+- Decision: **物种默认 + 单宠覆盖两级模型**。foods 加 `species`（必填，这条粮喂给哪物种）+ `pet`（**宠物名字串、非 pet_id**，空 = 该物种默认 / 所有这种宠，填 = 某只单独覆盖）；`name` 废弃，拆成 `brand` + `model`（健康页改显 brand + model）。**pet 用名字**：全 app 一律按宠物名关联（records.pet / reminders.pet，改名走 pets 云函数级联、删宠有意保留病史），foods 单宠覆盖入同一约定 → **改名级联也改 foods.pet、删宠保留 foods**（删档案≠删病史，像 records 不级联清；评审 must-fix 纠正了初版 pet_id + 删宠级联）。
+  - **解析（某宠当前主粮）**：`它的单宠覆盖在喂（foods.pet=宠.name 且 current）?? 它物种的默认在喂（foods.pet 空 且 foods.species=宠.species 且 current）?? 无`。**覆盖匹配只认名字、不认 species**（species 在覆盖记录上仅作台账分组 / 展示、不参与覆盖解析）→ 宠改物种后旧覆盖仍按名命中、不成孤儿（解决 species 快照歧义）。**历史覆盖（current=false）不参与解析**，该宠回落物种默认；两级皆无在喂 → 当前主粮 = 无（pet.vue 显空态 / 台账默认段显「未设置默认」灰占位）。同作用域脏数据多条 current=true 时 tie-break 取 start_date 最新（与 list 排序一致）。
+  - **`current` 排他作用域 = (family_id, species, pet) 精确匹配**（pet 空也精确匹配空）：`clearOtherCurrent(familyId, species, pet, exceptId)` 带满三元、add / update 两路都传；物种默认在喂与单宠覆盖在喂可并存、互不清（猫默认在喂 + 狗默认在喂 + 某猫覆盖在喂三者共存）。**add 拒空 species**。**取消某条在喂时自动写 end_date**（取消当日 / 录入换粮日）进史，避免「已结束但 end_date 空」（两级下取消覆盖回吃默认是常见操作、频率上升，承接旧码 foods/index.js line 72 / 100 的 low 并收口）。
+- Decision: **UI = 健康页台账按物种分组**（只列家庭已有物种段）。每物种段头**固定显「默认主粮：&lt;在喂 brand model&gt; / 未设置默认（灰占位）」**（无默认也段结构恒定不塌）+ 该物种史 + 嵌该物种的单宠覆盖卡。**pet.vue 宠物详情显该宠解析后当前主粮**（零云请求，详情页本就加载宠档 + foods）；**录入加「喂给谁」**默认当前物种（所有 X）、可 narrow 到具体宠（宠物选项 = 该物种的宠）。本轮主粮维持手动台账，不做 parseRecord 自然语言录入。
+- Alternatives（否决）: ① 全家默认 + 单宠覆盖（初版 C）→ 猫狗鸟粮天然不同、默认该按物种非全家，否；② 纯每宠独立轨（每条单宠，全家同款批量建 N 条）→ 全猫同款会永久 N 倍冗余 + 12 条迁移爆炸，否；③ 每条挂多宠 `pet_ids[]` → 历史分叉要拆共享记录、共享记录上做 per-pet 在喂 / 结束别扭，否；④ 单宠覆盖用 `pet_id` → 全 app 按名关联、pet_id 代码里根本没有，用 id 会与改名级联 / 删宠留史约定分叉，否（评审 must-fix）；⑤ foods 塞 records（ADR-013/014 已否）→ 本 ADR 部分 revise 其「不分宠」但 foods 仍独立集合；⑥ 本轮做主粮 NL 录入 → 维持手动，后续另起。
+- Tradeoff: ① **部分 revise ADR-013/014「foods 家庭级不分宠」**（「家庭一种粮」假设在多宠场景不成立，本 ADR 备据；ADR-013 / 014 已加前向指针）；② 加 species（必填）/ pet（名字、可空）/ brand / model 字段，废 name，迁移 12 条 admin backfill；③ 两级解析（覆盖 ?? 默认 ?? 无）增一点前端逻辑，但比 pet_ids[] 拆记录简单；④ current 排他收窄到 (family,species,pet)，删 / 改在喂守卫带全作用域（**最易漏的回归：跨物种在喂被旧家庭级逻辑错误互清 → 须回归用例「猫默认 + 狗默认在喂并存」**）；⑤ foods.pet 入 pets 改名级联（与 records / reminders 一致）、删宠保留；⑥ foods.species 是分组 / 默认匹配键、不是覆盖解析键 → 物种变更不破覆盖解析（变更后覆盖记录的分组 species 旧值可顺手随 pets 物种变更级联纠偏，纯展示、非必须）。
+- Migration: 现 12 条（family 级、`name` 揉品牌型号、无 pet 关联）→ admin `backfill_foods`：**这 12 条历史主粮均为猫粮**（用户确认；2 只狗的粮未进过此台账，故非「全家全猫」而是「此台账历史只录了猫粮」，留证防误判）→ 全置 `species='cat'` + `pet=''`（猫物种默认）+ 解析 `name`「brand（model）」拆 brand / model。**解析正则容全角（）与半角 () / 无右括号则整串落 brand·model 空 / model 取到最后一个右括号前（容 I27+F32 的 +）**，逐条打印 brand / model 供 admin 肉眼复核。同 ADR-025 `backfill_profile` 范式（DevTools 云测试 admin 触发，明细不入公开仓）。

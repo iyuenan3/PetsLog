@@ -57,6 +57,8 @@
         <view class="row"><text class="row__k">过敏史</text><text class="row__v">{{ pet.allergy || '无' }}</text></view>
         <view class="row"><text class="row__k">病史</text><text class="row__v">{{ pet.chronic || '无' }}</text></view>
         <view class="row"><text class="row__k">最新体重</text><text class="row__v">{{ pet.latest_weight ? pet.latest_weight + 'kg' : '未记' }}</text></view>
+        <!-- 当前主粮（ADR-027）：单宠覆盖 > 物种默认 > 无；无记录走灰占位 -->
+        <view class="row"><text class="row__k">当前主粮</text><text class="row__v" :class="{ 'row__v--empty': !foodText }">{{ foodText || '未记录' }}</text></view>
         <view class="row"><text class="row__k">到家日期</text><text class="row__v">{{ pet.home_date || '未填' }}</text></view>
         <view class="row"><text class="row__k">初始身价</text><text class="row__v">{{ pet.price_base != null ? '¥' + pet.price_base : '未填' }}</text></view>
         <view class="row" v-if="hasPrice"><text class="row__k">当前身价</text><text class="row__v">¥{{ priceShow }}<text class="row__sub"> (含累计花费 ¥{{ costSum }})</text></text></view>
@@ -195,6 +197,7 @@ export default {
       yMax: 0,
       costSum: 0, // 该宠累计花费 = records.cost 之和；当前身价 = price_base + costSum（派生不落库）
       priceShow: 0, // 当前身价 count-up 显示值（从 0 缓动滚到 priceNow，纯展示）
+      currentFood: null, // 该宠当前主粮（ADR-027 解析：单宠覆盖 > 物种默认 > 无），food 对象或 null
       editing: false,
       saving: false,
       form: {},
@@ -256,6 +259,12 @@ export default {
     hasPrice() {
       return (this.pet && typeof this.pet.price_base === 'number') || this.costSum > 0
     },
+    // 当前主粮展示文案：品牌 + 型号（型号有则空格拼接）；无则空串（模板走灰占位「未记录」）
+    foodText() {
+      const f = this.currentFood
+      if (!f) return ''
+      return (f.brand || '') + (f.model ? ' ' + f.model : '')
+    },
     // 固定 y 轴上下标签（取派生的 yMax/yMin，与画布渲染同一范围）
     wMax() {
       return this.series.length ? this.yMax.toFixed(1) : ''
@@ -297,9 +306,28 @@ export default {
           // ① 避免 loadWeight 返回前静止显示 ¥0；② loadWeight 失败/弱网时身价行不回退成 ¥0（priceShow 始终以 priceNow 兜底）。
           this.priceShow = this.priceNow
           this.loadWeight()
+          this.loadCurrentFood() // 当前主粮（ADR-027），独立拉取不阻塞体重 / 身价
         }
       } catch (e) {
         console.warn('pet load failed', e)
+      }
+    },
+    // 当前主粮（ADR-027）：拉家庭主粮列表，按「单宠覆盖在喂 > 物种默认在喂 > 无」解析该宠在喂粮。
+    // list 已按 current desc + start_date desc 排序，多条命中同档（脏数据）取第一个。失败保持 null（不崩）。
+    async loadCurrentFood() {
+      if (!this.pet) return
+      try {
+        const res = await callFn('foods', { action: 'list' })
+        if (!(res.result && res.result.ok)) return
+        const list = res.result.data || []
+        const name = this.pet.name
+        const species = this.pet.species
+        // 先找单宠覆盖在喂（只认名字、不认 species）；否则找物种默认在喂（pet 空 且 species 匹配）
+        const override = list.find((f) => f.current === true && f.pet === name)
+        const def = list.find((f) => f.current === true && f.pet === '' && f.species === species)
+        this.currentFood = override || def || null
+      } catch (e) {
+        console.warn('current food load failed', e)
       }
     },
     async loadWeight() {
@@ -1313,6 +1341,11 @@ export default {
   color: var(--c-text);
   font-size: var(--fs-sub);
   font-weight: 500;
+}
+/* 空态值（如当前主粮未记录）：弱化成灰占位 */
+.row__v--empty {
+  color: var(--c-text-3);
+  font-weight: 400;
 }
 .row__sub {
   color: var(--c-text-3);

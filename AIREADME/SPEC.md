@@ -132,18 +132,23 @@
 
 > 日上传限速（≤200MB/天/家庭）= 当日流水 bytes 求和 + 本次 > 上限即拒（attachment 云函数 register）。
 
-## foods（主粮台账 · family 级 · v0.4.0 建设，ADR-014）
+## foods（主粮台账 · 物种默认 + 单宠覆盖 · ADR-014 建设 / ADR-027 多宠化 [待实现]）
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| family_id | string | 家庭级隔离键，不分宠 |
-| name | string | 主粮品牌 / 名称 |
+| family_id | string | 家庭级隔离键 |
+| species | string | **[ADR-027]** 这条粮喂给哪物种（ADR-023 的 8 枚举，normSpecies，必填） |
+| pet | string | **[ADR-027]** 宠物名字（**非 pet_id**，全 app 按名关联）。空 = 该物种默认（所有这种宠）；填 = 某只单独覆盖。覆盖解析只认名字、不认 species；入 pets 改名级联、删宠保留（删档案≠删病史） |
+| brand | string | **[ADR-027]** 品牌（皇家 / 诚实一口），由旧 `name` 拆出 |
+| model | string | **[ADR-027]** 型号 / 配方（I27+F32 / P40 / 无谷鸡肉），由旧 `name` 拆出 |
 | start_date | string | 起始 'YYYY-MM-DD' |
-| end_date | string | 结束 'YYYY-MM-DD'（空 = 当前在喂） |
-| current | boolean | 是否当前主粮；设某条 current=true 时云函数自动把同家庭其它条置 false（家庭通常只一个在喂） |
+| end_date | string | 结束 'YYYY-MM-DD'（空 = 在喂） |
+| current | boolean | 当前在喂；**[ADR-027]** 排他作用域从家庭级收窄到 `(family_id, species, pet)` 精确匹配（pet 空也精确匹配空），各档在喂可并存（猫默认 + 狗默认 + 某猫覆盖共存）；取消在喂自动写 end_date 进史 |
 | note | string | 备注 |
 | created_at / updated_at | number | |
 
-> foods 云函数：list / add / update / delete，family 隔离 + assertMember。导入历史 12 条（Notion 主粮记录，日期区间 → start/end，最近一条 current）。
+> **解析（某宠当前主粮，ADR-027）**：单宠覆盖在喂（pet=宠.name 且 current，**不认 species**）?? 物种默认在喂（pet 空 且 species=宠.species 且 current）?? 无。历史覆盖（current=false）不参与、回落默认；两级皆无在喂 → 无（pet.vue 显空态 / 台账默认段灰占位）。多条脏 current tie-break 取 start_date 最新。物种可无默认（全单宠覆盖合法）。
+> **旧字段 `name`（ADR-014）废弃 → ADR-027 拆成 brand + model**（健康页改显 brand+model）；现 12 条历史（均为猫粮，用户确认）admin `backfill_foods` 置 species='cat' / pet='' / 解析 name 括号（全 / 半角，无括号兜底）拆 brand·model。
+> foods 云函数：list / add / update / delete + `backfill_foods`(admin)，family 隔离 + assertMember。
 
 ---
 

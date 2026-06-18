@@ -122,6 +122,23 @@ exports.main = async (event) => {
         .where({ family_id: familyId, pet: cur.data.name })
         .update({ data: { pet: patch.name } })
         .catch(() => {})
+      // foods 单宠覆盖也按名关联（ADR-027），改名一并改 foods.pet（物种默认 pet='' 不受影响）
+      await db
+        .collection('foods')
+        .where({ family_id: familyId, pet: cur.data.name })
+        .update({ data: { pet: patch.name } })
+        .catch(() => {})
+    }
+
+    // 物种变更级联（ADR-027 ⑥）：该宠单宠覆盖 foods.species 随之纠偏（覆盖解析只认名字、不靠 species，这步纯保台账分组正确）。
+    // 用改名后的有效名查（若本次同时改名，上面 rename 级联已把 foods.pet 改成 patch.name）
+    if (patch.species && patch.species !== cur.data.species) {
+      const petName = patch.name && patch.name !== cur.data.name ? patch.name : cur.data.name
+      await db
+        .collection('foods')
+        .where({ family_id: familyId, pet: petName })
+        .update({ data: { species: patch.species } })
+        .catch(() => {})
     }
 
     await db.collection('pets').doc(id).update({ data: patch })

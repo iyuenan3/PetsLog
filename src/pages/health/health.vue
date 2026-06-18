@@ -40,18 +40,27 @@
         <text class="food-head__title">主粮台账</text>
         <text class="food-head__add" hover-class="food-head__add--press" hover-stay-time="60" @click="openFoodAdd">＋ 添加</text>
       </view>
-      <view v-if="foods.length" class="food-list">
-        <view v-for="(f, i) in foods" :key="f._id" class="food-card rise-in" :style="{ 'animation-delay': Math.min(i, 10) * 36 + 'ms' }" :class="{ 'food-card--current': f.current }">
-          <view class="food-card__top">
-            <text class="food-card__name">{{ f.name }}</text>
-            <text v-if="f.current" class="food-card__badge">在喂</text>
+      <view v-if="foodGroups.length" class="food-list">
+        <!-- 按物种分组：每组组头（物种头像 + label）+ 无默认主粮灰提示 + 组内卡片 -->
+        <view v-for="(g, gi) in foodGroups" :key="g.key" class="food-grp rise-in" :style="{ 'animation-delay': Math.min(gi, 10) * 36 + 'ms' }">
+          <view class="food-grp__head">
+            <image class="food-grp__avatar" :src="g.avatar" mode="aspectFit" />
+            <text class="food-grp__label">{{ g.label }}</text>
           </view>
-          <text class="food-card__period">{{ foodPeriod(f) }}</text>
-          <text v-if="f.note" class="food-card__note">{{ f.note }}</text>
-          <view class="food-card__ops">
-            <text v-if="!f.current" class="op op--success" hover-class="op--press" hover-stay-time="60" @click="setCurrent(f)">设为在喂</text>
-            <text class="op op--secondary" hover-class="op--press" hover-stay-time="60" @click="openFoodEdit(f)">编辑</text>
-            <text class="op op--danger" hover-class="op--press" hover-stay-time="60" @click="removeFood(f)">删除</text>
+          <text v-if="!g.hasDefaultCurrent" class="food-grp__hint">未设置该物种默认主粮</text>
+          <view v-for="f in g.list" :key="f._id" class="food-card" :class="{ 'food-card--current': f.current }">
+            <view class="food-card__top">
+              <text class="food-card__name">{{ foodName(f) }}</text>
+              <text class="food-card__scope" :class="{ 'food-card__scope--solo': f.pet }">{{ f.pet ? '仅 ' + f.pet : '全部' + g.label }}</text>
+              <text v-if="f.current" class="food-card__badge">在喂</text>
+            </view>
+            <text class="food-card__period">{{ foodPeriod(f) }}</text>
+            <text v-if="f.note" class="food-card__note">{{ f.note }}</text>
+            <view class="food-card__ops">
+              <text v-if="!f.current" class="op op--success" hover-class="op--press" hover-stay-time="60" @click="setCurrent(f)">设为在喂</text>
+              <text class="op op--secondary" hover-class="op--press" hover-stay-time="60" @click="openFoodEdit(f)">编辑</text>
+              <text class="op op--danger" hover-class="op--press" hover-stay-time="60" @click="removeFood(f)">删除</text>
+            </view>
           </view>
         </view>
       </view>
@@ -68,7 +77,20 @@
         <view class="sheet__grab"></view>
         <text class="sheet__title">{{ foodSheet._id ? '编辑主粮' : '添加主粮' }}</text>
         <view class="f-form">
-          <view class="f-row"><text class="f-row__label">名称</text><input class="f-input" v-model="foodSheet.name" placeholder="如 渴望六种鱼" placeholder-class="f-ph" /></view>
+          <view class="f-row">
+            <text class="f-row__label">物种</text>
+            <picker class="f-picker" mode="selector" :range="speciesOptions" range-key="label" :value="speciesIndex" @change="onFoodSpecies">
+              <view class="f-input f-pick" :class="{ 'f-pick--ph': !foodSheet.species }">{{ curSpeciesLabel || '点击选择' }}</view>
+            </picker>
+          </view>
+          <view class="f-row">
+            <text class="f-row__label">喂给谁</text>
+            <picker class="f-picker" mode="selector" :range="petOptions" :value="petIndex" @change="onFoodPet">
+              <view class="f-input f-pick">{{ petOptions[petIndex] }}</view>
+            </picker>
+          </view>
+          <view class="f-row"><text class="f-row__label">品牌</text><input class="f-input" v-model="foodSheet.brand" placeholder="如 皇家" placeholder-class="f-ph" /></view>
+          <view class="f-row"><text class="f-row__label">型号</text><input class="f-input" v-model="foodSheet.model" placeholder="如 I27+F32 / 无谷鸡肉" placeholder-class="f-ph" /></view>
           <view class="f-row">
             <text class="f-row__label">开始</text>
             <picker class="f-picker" mode="date" :value="foodSheet.start_date || ''" @change="onFoodStart">
@@ -120,6 +142,7 @@
 import { CLOUD_ENV } from '@/config'
 import { callFn } from '@/cloud'
 import { syncTab } from '@/tabSync'
+import { SPECIES, speciesLabel, avatarStatic } from '@/species'
 
 export default {
   data() {
@@ -134,7 +157,60 @@ export default {
       foodLoaded: false,
       foodSheet: null, // 编辑中的主粮（null = 弹层关闭）
       foodSaving: false,
+      pets: [], // 家庭宠物（供主粮分组 + 弹层「喂给谁」候选）
     }
+  },
+  computed: {
+    // 台账按物种分组：只列「家庭已有宠物的物种 ∪ foods 出现的物种」，按 SPECIES 固定序。
+    foodGroups() {
+      const present = new Set()
+      this.pets.forEach((p) => present.add(p.species || 'other'))
+      this.foods.forEach((f) => present.add(f.species || 'other'))
+      return SPECIES.filter((s) => present.has(s.key)).map((s) => {
+        const list = this.foods.filter((f) => (f.species || 'other') === s.key)
+        return {
+          key: s.key,
+          label: s.label,
+          avatar: avatarStatic(s.key),
+          list,
+          hasDefaultCurrent: list.some((f) => !f.pet && f.current), // 该物种有无「全部默认」在喂
+        }
+      })
+    },
+    // 弹层物种 picker 候选：家庭已有物种（按 SPECIES 序）；无宠时给全 8 类兜底。
+    speciesOptions() {
+      const present = new Set(this.pets.map((p) => p.species || 'other'))
+      // 编辑态把当前记录的物种并入候选（即便该物种已无在养宠物 / 物种漂移），避免 picker 错位显成 index 0（ADR-027 verify should-fix）
+      if (this.foodSheet && this.foodSheet.species) present.add(this.foodSheet.species)
+      const has = SPECIES.filter((s) => present.has(s.key))
+      return has.length ? has : SPECIES.slice()
+    },
+    speciesIndex() {
+      if (!this.foodSheet) return 0
+      const i = this.speciesOptions.findIndex((s) => s.key === this.foodSheet.species)
+      return i < 0 ? 0 : i
+    },
+    curSpeciesLabel() {
+      return this.foodSheet && this.foodSheet.species ? speciesLabel(this.foodSheet.species) : ''
+    },
+    // 当前物种的宠物候选（按名字）
+    petsOfSpecies() {
+      if (!this.foodSheet) return []
+      const names = this.pets.filter((p) => (p.species || 'other') === this.foodSheet.species).map((p) => p.name).filter(Boolean)
+      // 编辑态：当前记录的单宠覆盖名若不在候选里（宠物已删 / 物种漂移），并入，避免 picker 落到「全部」错位（ADR-027 verify should-fix）
+      if (this.foodSheet.pet && !names.includes(this.foodSheet.pet)) names.push(this.foodSheet.pet)
+      return names
+    },
+    // 「喂给谁」picker 候选：['全部<物种>'] + 该物种各宠名；index 0 = 全部（pet=''）
+    petOptions() {
+      const all = '全部' + (this.curSpeciesLabel || '')
+      return [all, ...this.petsOfSpecies]
+    },
+    petIndex() {
+      if (!this.foodSheet || !this.foodSheet.pet) return 0
+      const i = this.petsOfSpecies.indexOf(this.foodSheet.pet)
+      return i < 0 ? 0 : i + 1
+    },
   },
   onShow() {
     syncTab(this, 2)
@@ -148,6 +224,7 @@ export default {
     this.loadRem()
     this.loadMed()
     this.loadFood()
+    this.loadPets()
   },
   methods: {
     cloudReady() {
@@ -290,18 +367,57 @@ export default {
         console.warn('foods load failed', e)
       }
     },
+    async loadPets() {
+      if (!this.cloudReady()) return
+      try {
+        const res = await callFn('pets', { action: 'list' })
+        if (res.result && res.result.ok) {
+          this.pets = res.result.data || []
+        }
+      } catch (e) {
+        console.warn('pets load failed', e)
+      }
+    },
     foodPeriod(f) {
       const s = f.start_date || '?'
       return f.current ? `${s} 起 · 在喂` : `${s} ~ ${f.end_date || '?'}`
     },
+    // 展示名：品牌 + 型号（型号空只显品牌）
+    foodName(f) {
+      // brand 兜底旧 name：backfill_foods 跑前的旧条无 brand，避免台账显空名（ADR-027 verify nit，迁移后 brand 必有）
+      return (f.brand || f.name || '') + (f.model ? ' ' + f.model : '')
+    },
     openFoodAdd() {
-      this.foodSheet = { name: '', start_date: '', end_date: '', current: false, note: '' }
+      // 默认物种：第一个家庭物种，无宠则 cat
+      const sp = (this.speciesOptions[0] && this.speciesOptions[0].key) || 'cat'
+      this.foodSheet = { species: sp, pet: '', brand: '', model: '', start_date: '', end_date: '', current: false, note: '' }
     },
     openFoodEdit(f) {
-      this.foodSheet = { _id: f._id, name: f.name || '', start_date: f.start_date || '', end_date: f.end_date || '', current: !!f.current, note: f.note || '' }
+      this.foodSheet = {
+        _id: f._id,
+        species: f.species || 'cat',
+        pet: f.pet || '',
+        brand: f.brand || '',
+        model: f.model || '',
+        start_date: f.start_date || '',
+        end_date: f.end_date || '',
+        current: !!f.current,
+        note: f.note || '',
+      }
     },
     closeFood() {
       this.foodSheet = null
+    },
+    onFoodSpecies(e) {
+      const opt = this.speciesOptions[Number(e.detail.value)]
+      if (!opt) return
+      this.foodSheet.species = opt.key
+      this.foodSheet.pet = '' // 切物种重置「喂给谁」为全部 + 候选随 computed 刷新
+    },
+    onFoodPet(e) {
+      const i = Number(e.detail.value)
+      // index 0 = 全部（pet=''），其余 = 该物种第 i-1 只宠
+      this.foodSheet.pet = i <= 0 ? '' : this.petsOfSpecies[i - 1] || ''
     },
     onFoodStart(e) {
       this.foodSheet.start_date = e.detail.value
@@ -311,16 +427,31 @@ export default {
     },
     onFoodCurrent(e) {
       this.foodSheet.current = e.detail.value
+      // 切「在喂」时前端同步清结束日，与后端落库一致（后端 add/update 在喂会清 end_date；ADR-027 verify nit）
+      if (e.detail.value) this.foodSheet.end_date = ''
     },
     async saveFood() {
       const f = this.foodSheet
-      if (!f || !String(f.name || '').trim()) {
-        uni.showToast({ title: '主粮名必填', icon: 'none' })
+      if (!f || !f.species) {
+        uni.showToast({ title: '请选择物种', icon: 'none' })
+        return
+      }
+      if (!String(f.brand || '').trim()) {
+        uni.showToast({ title: '品牌必填', icon: 'none' })
         return
       }
       this.foodSaving = true
       try {
-        const food = { name: f.name.trim(), start_date: f.start_date, end_date: f.end_date, current: f.current, note: f.note }
+        const food = {
+          species: f.species,
+          pet: f.pet || '',
+          brand: f.brand.trim(),
+          model: String(f.model || '').trim(),
+          start_date: f.start_date,
+          end_date: f.end_date,
+          current: f.current,
+          note: f.note,
+        }
         const res = f._id
           ? await callFn('foods', { action: 'update', id: f._id, food })
           : await callFn('foods', { action: 'add', food })
@@ -351,7 +482,7 @@ export default {
     removeFood(f) {
       uni.showModal({
         title: '删除主粮记录',
-        content: `删除「${f.name}」？`,
+        content: `删除「${this.foodName(f) || f.brand || '该主粮'}」？`,
         confirmColor: '#e05d4e',
         success: async (m) => {
           if (!m.confirm) return
@@ -614,6 +745,38 @@ export default {
 .food-list {
   padding: 12rpx var(--pad-page) 8rpx;
 }
+/* 物种分组段 */
+.food-grp {
+  margin-bottom: 28rpx;
+}
+.food-grp__head {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin-bottom: 14rpx;
+  padding-left: 4rpx;
+}
+.food-grp__avatar {
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: var(--r-pill);
+  background: var(--c-bg-sink);
+  flex: none;
+}
+.food-grp__label {
+  font-size: var(--fs-sub);
+  font-weight: 600;
+  color: var(--c-text);
+}
+.food-grp__hint {
+  display: block;
+  font-size: var(--fs-cap);
+  color: var(--c-text-3);
+  background: var(--c-bg-sink);
+  border-radius: var(--r-sm);
+  padding: 14rpx 22rpx;
+  margin-bottom: 16rpx;
+}
 .food-card {
   position: relative;
   background: var(--c-card);
@@ -641,6 +804,23 @@ export default {
   font-size: var(--fs-h2);
   font-weight: 600;
   color: var(--c-text);
+}
+/* 对象标签 chip：全部<物种>（灰）/ 仅 某宠（主色高亮） */
+.food-card__scope {
+  flex: none;
+  height: 36rpx;
+  padding: 0 16rpx;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-tiny);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  background: var(--c-bg-sink);
+  color: var(--c-text-2);
+}
+.food-card__scope--solo {
+  background: var(--c-primary-tint);
+  color: var(--c-primary-deep);
 }
 .food-card__badge {
   height: 36rpx;
