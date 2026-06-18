@@ -92,3 +92,10 @@
 ## 派生日期字段口径不对齐：time 升到分后 latest_weight_date 必须 slice · 2026-06-18
 - 根因：ADR-018 把 `records.time` 升到分（`YYYY-MM-DD HH:mm`），但派生标量 `pets.latest_weight_date` 仍是纯日期（供与写侧做字典序比较）。写侧 saveRecord 落值时 `slice(0,10)` 是对的，删侧 attachment `recomputeLatestWeight` 却两处漏 slice：① 守卫 `latest_weight_date !== rec.time` 拿纯日期比含到分（恒不等 → 删真·最新体重记录跳过重算、留指向已删记录的幽灵值）；② 回写直接灌含到分 `latest.time` 污染字段（后续写侧 `wDate >= latest_weight_date` 永假 → 同日合法新体重静默不回写）。
 - 教训：**一个时间字段升格（加时刻 / 改格式），所有从它派生或与它比较的字段都要审一遍口径**；尤其派生标量散落在「写侧 + 删侧 + 导入回填」多处，抽一个 `toDate()` 工具多处共用、别各写各的。**回归测试要带「到分 time」**（旧用例全用纯日期 seed，两侧恰好相等绕过生产路径、绿灯掩盖 bug）。修复 commit 5befbd3，详见 DECISIONS ADR-025 as-built。
+
+## UI 图标系统统一的三个验证坑（emoji 换图标轮，ADR-026）· 2026-06-18
+落图标系统时踩 / 验出三个会骗人的点（症状太规整、先验尺别盲信工具）：
+- **uni-app mp-weixin 把静态 `src` 路径外提到 `common/assets.js`**：模板 `<image src="/static/icon/fn-weight.png">` 编译后 wxml 变成 `src="{{r.j}}"`（绑定变量），路径常量统一 hoist 进 `common/assets.js`，**不在页面 .js / .wxml 里**。grep 页面产物找不到路径串一度误判「引用没编进去」→ 与已知 device 能用的 clipboard.png 一比，两者同在 common/assets.js、同机制，虚惊。验图标引用要扫 `common/assets.js`，别只扫 pages。
+- **dev 与 build 的 wxss 压缩态不同**：`build:mp-weixin` 压缩成 `.ic{...}`，`dev:mp-weixin` 不压缩是 `.ic {...}`（带空格）。起后台轮询等 dist/dev 编译落地、marker 写成压缩态 `ic{` → 在 dev 产物里永不匹配 → **假超时**。验 dev 产物 class 用宽松匹配（`.ic[ {]`）。DevTools 导入 dist/dev（非 dist/build）。
+- **`rg -oh` 的 `-h` 被当成 `--help`**：想 `rg -o --no-filename` 写成 `rg -oh`，rg 把 `-h` 解析为 `--help` 吐帮助文档淹没真输出，一度以为「所有引用都缺失」。rg 的 `-h` = help，no-filename 用 `--no-filename`。
+- 图标素材管线（可复用）：Iconify API 取 SVG（`fluent-emoji-flat` 原色 / `ph` duotone `?color=` 暖染）→ headless Chrome `--default-background-color=00000000` 栅格透明 PNG（比 floodfill 抠图干净）；批量取图用 curl `-K` 配置文件**单进程 keepalive**（突发并发会被 CDN reset）；Chrome 截图后因 GoogleUpdater 不退出会卡到超时，但**截图其实已写出**，subprocess timeout 兜底 + 后续单独 PIL 切图即可。

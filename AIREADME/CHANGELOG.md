@@ -3,6 +3,14 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## 图标系统统一 · emoji → Fluent 彩 + Phosphor 暖染 · 2026-06-18（commit fbb3d1d）
+- Added: **装饰性 + 档案卡 emoji 全量换双档图标系（ADR-026）**：表达型（卡片 / 标题 / 按钮 / 空状态 / tab）用 Fluent-emoji-flat 彩色；功能型（时间线 / 病程行内信息 chip）用 Phosphor-duotone 暖染珊瑚。素材走 Iconify API 取 SVG → headless Chrome 栅格成透明 PNG（`--default-background-color` 原生透明，比 a3ea60a 的 floodfill 抠图干净），27 张入 `src/static/icon`。
+- Changed: **档案卡 canvas（petCard.js）emoji → drawImage**：`loadCardIcons` 按 canvas 节点预加载图标，年龄 / 体重 / 陪伴胶囊、点缀、水印、体重占位改 `drawImage`，每处带 emoji 兜底（图加载失败优雅降级）。陪伴胶囊用 sparkling-heart 爱心（避开与家庭卡房子混淆 + 房子隐喻陪伴偏弱，深审 should-fix 已修）。
+- Changed: **tab 栏换 Fluent 彩**（时间线 calendar、健康 stetho；选中态仅文字变色）；**a3ea60a 9 张 kawaii 图标同名覆盖成 Fluent**，原按这些文件名引用处（空状态 / 录入门面 / med-card 等）零改自动换图。
+- Added: **App.vue 全局图标工具类** `.ic / .ic--sm / .ic--lg`（跨页复用必须挂 App.vue，守 wxss-scope 红线）；`.tl-note` 改 inline-flex、`.btn-primary` 加 `display:flex` 居中（容纳「图标 + 文字」）。
+- Kept: 红线保留 8 张物种默认头像 / `species.js` 物种 emoji / 性别 ♂♀ / 控件符号（✓ ✕ ← → ↗ ↘）不动（用户明确物种那几张不换）。
+- Reviewed: **两轮对抗式 workflow 评审（共 9 agent）0 must-fix**：① 4 维（canvas / 模板 CSS / 全局回归 / 完整性红线）；② 深审 5 维（git 旧→新逐条可追溯账本 / 图标隐喻 / mp 运行时坑 / 跨文件一致性 / 回归与产物新鲜度），2 should-fix（陪伴换爱心已修、时间线日历用户选保留）。**三处可视化自验**（档案卡 / 行内 chip + tab / 爱心胶囊，浏览器 1:1 canvas + mock 截图）+ 真机验过。build 通过。
+
 ## 数据核对 · live DB ↔ Notion 逐条一致 + 孤儿清理 · 2026-06-18
 - Verified: **家庭 live DB 与 Notion 源逐条核对，数据健康**。搭微信云 DB 直连只读（服务端 HTTP API，见 DEPLOYMENT「直连读 live DB」）+ 三路核对法（live ↔ data.json 导入载荷 ↔ Notion 新鲜导出；复用 transform.py 归一，内容签名多重集 diff）。结论：217 记录 / 9 宠 / 12 主粮 / 46 附件**逐条一致，0 意外增删改、附件文件 0 缺失**。
 - Note: 差异全部有据非数据错：Notion 3 条无日期行未导入（含早先确认跳过的 2 条无日期体重）；当前在喂主粮 end 留空（ADR-014 约定）；live 107 个非病程 tag 被 clean_tags 有意清空（ADR-019）；6 张宠物简介图在「档案 / 简介」列、出导入范围（app 宠物模型 = 头像 + 简介文本，无简介图位）。
