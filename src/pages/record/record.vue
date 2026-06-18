@@ -4,7 +4,7 @@
          卡在普通文档流（非 position:fixed），原生 textarea 不踩层级穿透坑；暗背景点空白处关闭。 -->
     <view v-if="!parsed" class="card" @click.stop>
       <view class="card__head">
-        <text class="card__title">记录 🐾</text>
+        <view class="card__title"><text>记录</text><image class="ic" src="/static/icon/paw.png" mode="aspectFit" /></view>
         <text class="card__close" hover-class="card__close--press" hover-stay-time="60" @click="close">✕</text>
       </view>
       <text class="card__hint">用大白话说一句，AI 自动归档。可记健康、设提醒、入库药品。</text>
@@ -69,7 +69,7 @@
 
         <!-- 药品入库（可编辑，见 ADR-017） -->
         <block v-if="parsed.kind === 'med_stock'">
-          <text class="sheet__title">{{ manual ? '手动入库一盒药 💊' : '入库一盒药 💊' }}</text>
+          <view class="sheet__title"><text>{{ manual ? '手动入库一盒药' : '入库一盒药' }}</text><image class="ic" src="/static/icon/pill.png" mode="aspectFit" /></view>
           <text class="sheet__hint">确认后存进药品库存</text>
           <view class="sheet__fields">
             <view class="field-row"><text class="field-row__label">药品</text><input class="field-row__input" v-model="parsed.med_name" placeholder="药品名" placeholder-class="ph" /></view>
@@ -86,7 +86,7 @@
 
         <!-- 提醒（可编辑，见 ADR-017） -->
         <block v-else-if="parsed.kind === 'reminder'">
-          <text class="sheet__title">{{ manual ? '手动设提醒 🔔' : '设个提醒 🔔' }}</text>
+          <view class="sheet__title"><text>{{ manual ? '手动设提醒' : '设个提醒' }}</text><image class="ic" src="/static/icon/bell.png" mode="aspectFit" /></view>
           <text class="sheet__hint">到期会在宠物页和健康页提示你</text>
           <view class="sheet__fields">
             <!-- 提醒不挂幽灵宠物名（ADR-015 评审硬化）：错别字时从已有宠物点选，正常态 picker 选（宠物可空） -->
@@ -126,12 +126,12 @@
 
         <!-- 健康记录（可编辑，见 ADR-017） -->
         <block v-else>
-          <text class="sheet__title">{{ manual ? '手动记录 🩺' : '记录健康事件 🩺' }}</text>
+          <view class="sheet__title"><text>{{ manual ? '手动记录' : '记录健康事件' }}</text><image class="ic" src="/static/icon/stetho.png" mode="aspectFit" /></view>
           <text class="sheet__hint">确认后归档到时间线</text>
           <view class="sheet__fields">
             <!-- 宠物三态：① is_new 建档意图（名字可改 + 选种类，ADR-015 唯一建档通道）② 错别字没匹配上→点选 ③ 正常→picker 选已有 -->
             <template v-if="parsed.is_new">
-              <view class="field-row"><text class="field-row__label">宠物</text><input class="field-row__input" v-model="parsed.pet" placeholder="新宠物名" placeholder-class="ph" /><text class="new-badge"> 🆕 将建档</text></view>
+              <view class="field-row"><text class="field-row__label">宠物</text><input class="field-row__input" v-model="parsed.pet" placeholder="新宠物名" placeholder-class="ph" /><text class="new-badge">将建档</text></view>
               <view class="field-row"><text class="field-row__label">种类</text>
                 <view class="chips">
                   <text v-for="s in speciesList" :key="s.key" :class="['chip', parsed.species === s.key ? 'chip--active' : '']" @click="setSpecies(s.key)">{{ s.emoji }} {{ s.label }}</text>
@@ -139,7 +139,7 @@
               </view>
             </template>
             <template v-else-if="parsed.pet_unknown">
-              <view class="field-row"><text class="field-row__label">宠物</text><text class="field-row__value field-row__value--empty">{{ parsed.pet || '待确认' }}<text class="new-badge new-badge--warn"> ❓ 没找到这只</text></text></view>
+              <view class="field-row"><text class="field-row__label">宠物</text><text class="field-row__value field-row__value--empty">{{ parsed.pet || '待确认' }}<text class="new-badge new-badge--warn">没找到这只</text></text></view>
               <view class="field-row"><text class="field-row__label">选一只</text>
                 <view class="chips" v-if="petOptions.length"><text v-for="n in petOptions" :key="n" class="chip" @click="pickPet(n)">{{ n }}</text></view>
                 <text v-else class="field-row__value field-row__value--empty">还没有宠物档案，先到宠物页添加</text>
@@ -194,7 +194,7 @@
                     <view class="att-cell__mask">▶</view>
                   </block>
                   <view v-else class="att-cell__pdf">
-                    <text class="att-cell__pdf-ico">📄</text>
+                    <image class="att-cell__pdf-ico" src="/static/icon/fn-pdf.png" mode="aspectFit" />
                     <text class="att-cell__pdf-name">{{ a.name }}</text>
                   </view>
                   <text class="att-cell__del" @click.stop="removeAtt(i)">✕</text>
@@ -648,6 +648,9 @@ export default {
   justify-content: space-between;
 }
 .card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
   font-size: var(--fs-h2);
   font-weight: 700;
   color: var(--c-text);
@@ -786,7 +789,9 @@ export default {
   padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
 }
 .sheet__title {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
   font-size: var(--fs-h2);
   font-weight: 700;
   color: var(--c-text);
@@ -832,6 +837,7 @@ export default {
   font-weight: 400;
 }
 .new-badge {
+  margin-left: 8rpx;
   font-size: var(--fs-tiny);
   color: var(--c-warning);
   font-weight: 500;
@@ -996,7 +1002,8 @@ export default {
   box-sizing: border-box;
 }
 .att-cell__pdf-ico {
-  font-size: 48rpx;
+  width: 48rpx;
+  height: 48rpx;
 }
 .att-cell__pdf-name {
   max-width: 100%;

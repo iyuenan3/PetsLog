@@ -3,7 +3,7 @@
     <scroll-view scroll-y class="pets-scroll">
       <!-- 问候 -->
       <view class="greeting">
-        <text class="greeting__hi">今天，毛孩子们还好吗 🐾</text>
+        <view class="greeting__hi"><text>今天，毛孩子们还好吗</text><image class="ic ic--lg" src="/static/icon/paw.png" mode="aspectFit" /></view>
         <text class="greeting__sub">点下面的 ＋ 说一句，我帮你记下来</text>
       </view>
 
@@ -15,7 +15,7 @@
         hover-stay-time="80"
         @click="goHealth"
       >
-        <text class="banner__icon">🔔</text>
+        <image class="banner__icon" src="/static/icon/bell.png" mode="aspectFit" />
         <text class="banner__text">有 <text class="banner__num">{{ dueCount }}</text> 条提醒到期</text>
         <text class="banner__arrow">›</text>
       </view>
@@ -96,7 +96,7 @@
 import { CLOUD_ENV } from '@/config'
 import { petAge } from '@/utils'
 import { callFn } from '@/cloud'
-import { paintPetCard, loadPetAvatar, CARD_W, CARD_H } from '@/petCard'
+import { paintPetCard, loadPetAvatar, loadCardIcons, CARD_W, CARD_H } from '@/petCard'
 import { avatarStatic } from '@/species'
 import { syncTab } from '@/tabSync'
 
@@ -197,9 +197,9 @@ export default {
             canvas.height = CARD_H * dpr
             ctx.scale(dpr, dpr)
             // 头像照片异步加载（失败回退 emoji），再整张绘制（与详情页同款，@/petCard）
-            const avatarImg = await loadPetAvatar(canvas, p)
+            const [avatarImg, cardIcons] = await Promise.all([loadPetAvatar(canvas, p), loadCardIcons(canvas)])
             // 方案 b（ADR-025）：传 pets.weight_spark 冗余体重点 → 轮播卡也画体重趋势曲线（轮播无记录历史，靠冗余点）
-            paintPetCard(ctx, CARD_W, CARD_H, p, avatarImg, p.weight_spark)
+            paintPetCard(ctx, CARD_W, CARD_H, p, avatarImg, p.weight_spark, cardIcons)
             wx.canvasToTempFilePath({
               canvas,
               success: (r) => resolve(r.tempFilePath),
@@ -270,6 +270,9 @@ export default {
   flex-direction: column;
 }
 .greeting__hi {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
   font-size: var(--fs-display);
   line-height: 1.25;
   font-weight: 700;
@@ -300,7 +303,8 @@ export default {
   background: var(--c-primary-tint);
 }
 .banner__icon {
-  font-size: 36rpx;
+  width: 40rpx;
+  height: 40rpx;
 }
 .banner__text {
   flex: 1;

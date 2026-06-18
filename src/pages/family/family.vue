@@ -45,7 +45,7 @@
           <text class="mem-row__role" :class="{ 'is-admin': m.role === 'admin' }">{{ m.role === 'admin' ? '管理员' : '成员' }}</text>
         </view>
       </view>
-      <button v-if="isAdmin" class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" @click="genInvite">🔑 生成邀请码</button>
+      <button v-if="isAdmin" class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" @click="genInvite"><image class="ic ic--sm" src="/static/icon/key.png" mode="aspectFit" /><text>生成邀请码</text></button>
       <text class="leave" hover-class="leave--press" hover-stay-time="60" @click="leave">退出该家庭</text>
     </view>
   </view>

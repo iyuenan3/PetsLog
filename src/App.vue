@@ -127,6 +127,10 @@ button::after {
   flex: 1;
   height: 92rpx;
   line-height: 92rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
   border-radius: var(--r-pill);
   background: var(--c-primary-grad);
   color: var(--c-text-inv);
@@ -178,6 +182,21 @@ button::after {
   width: 124rpx;
   height: 124rpx;
   animation: float-soft 3.2s ease-in-out infinite;
+}
+/* 行内小图标统一工具类（UI 图标统一轮，2026-06-18）：表达型 Fluent 彩 / 功能型 Phosphor 暖染通用，
+   配合 inline-flex 容器随文字居中对齐。跨页复用故必须挂 App.vue 全局（见 wxss-scope 红线）。 */
+.ic {
+  width: 30rpx;
+  height: 30rpx;
+  flex-shrink: 0;
+}
+.ic--sm {
+  width: 24rpx;
+  height: 24rpx;
+}
+.ic--lg {
+  width: 40rpx;
+  height: 40rpx;
 }
 /* 入场动画：.rise-in 工具类（列表项 stagger，配合内联 animation-delay）+ float-soft 空状态图标呼吸。
    全走 transform/opacity（GPU 合成、不触发 layout），克制即可。 */
@@ -288,6 +307,9 @@ button::after {
   margin-top: 16rpx;
 }
 .tl-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
   padding: 8rpx 18rpx;
   background: var(--c-bg-sink);
   border-radius: var(--r-sm);

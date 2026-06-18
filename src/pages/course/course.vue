@@ -8,7 +8,7 @@
       <!-- 病程概览卡 -->
       <view class="cv-card">
         <view class="cv-card__head">
-          <text class="cv-card__tag">🏷️ {{ tag }}</text>
+          <view class="cv-card__tag"><image class="ic" src="/static/icon/fn-tag.png" mode="aspectFit" /><text>{{ tag }}</text></view>
           <text v-if="petLabel" class="cv-card__pet">{{ petLabel }}</text>
         </view>
         <view class="cv-stats">
@@ -29,7 +29,7 @@
 
       <!-- 体重迷你趋势（静态 canvas，单宠且 ≥2 点才画；ADR-019：不复用 pet.vue 拖动 canvas） -->
       <view v-if="summary.weights && summary.weights.length >= 2" class="cv-chart">
-        <text class="cv-chart__title">⚖️ 体重趋势</text>
+        <view class="cv-chart__title"><image class="ic ic--sm" src="/static/icon/fn-weight.png" mode="aspectFit" /><text>体重趋势</text></view>
         <canvas type="2d" id="cvWeight" class="cv-chart__canvas"></canvas>
       </view>
 
@@ -44,16 +44,16 @@
           </view>
           <text v-if="r.raw || r.desc" class="tl-item__quote">{{ r.raw || r.desc }}</text>
           <view v-if="r.weight || r.med || r.hospital || r.cost != null || r.att_count" class="tl-item__notes">
-            <text v-if="r.weight" class="tl-note">⚖️ {{ r.weight }}kg</text>
-            <text v-if="r.med" class="tl-note">💊 {{ r.med }}</text>
-            <text v-if="r.hospital" class="tl-note">🏥 {{ r.hospital }}</text>
-            <text v-if="r.cost != null" class="tl-note">💰 ¥{{ r.cost }}</text>
-            <text v-if="r.att_count" class="tl-note">📎 {{ r.att_count }}</text>
+            <view v-if="r.weight" class="tl-note"><image class="ic ic--sm" src="/static/icon/fn-weight.png" mode="aspectFit" /><text>{{ r.weight }}kg</text></view>
+            <view v-if="r.med" class="tl-note"><image class="ic ic--sm" src="/static/icon/fn-med.png" mode="aspectFit" /><text>{{ r.med }}</text></view>
+            <view v-if="r.hospital" class="tl-note"><image class="ic ic--sm" src="/static/icon/fn-hospital.png" mode="aspectFit" /><text>{{ r.hospital }}</text></view>
+            <view v-if="r.cost != null" class="tl-note"><image class="ic ic--sm" src="/static/icon/fn-cost.png" mode="aspectFit" /><text>¥{{ r.cost }}</text></view>
+            <view v-if="r.att_count" class="tl-note"><image class="ic ic--sm" src="/static/icon/fn-attach.png" mode="aspectFit" /><text>{{ r.att_count }}</text></view>
           </view>
         </view>
       </view>
       <view v-else class="empty">
-        <view class="empty__art">🏷️</view>
+        <view class="empty__art"><image class="empty__art-img" src="/static/icon/label.png" mode="aspectFit" /></view>
         <text class="empty__title">这个病程还没有记录</text>
       </view>
     </block>
@@ -204,6 +204,9 @@ export default {
   gap: 16rpx;
 }
 .cv-card__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
   font-size: var(--fs-h2);
   font-weight: 700;
   color: var(--c-text);
@@ -279,6 +282,9 @@ export default {
   margin-bottom: 24rpx;
 }
 .cv-chart__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
   font-size: var(--fs-cap);
   color: var(--c-text-2);
 }

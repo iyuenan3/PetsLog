@@ -14,8 +14,8 @@
 
     <!-- 导出：兽医小结 / 档案卡 -->
     <view v-if="!creating" class="export-row">
-      <button class="btn-vet" hover-class="btn-vet--press" hover-stay-time="80" :loading="exporting" @click="exportVet">📋 兽医小结</button>
-      <button class="btn-vet" hover-class="btn-vet--press" hover-stay-time="80" :loading="cardExporting" @click="exportCard">🪪 档案卡</button>
+      <button class="btn-vet" hover-class="btn-vet--press" hover-stay-time="80" :loading="exporting" @click="exportVet"><image v-if="!exporting" class="ic ic--sm" src="/static/icon/clipboard.png" mode="aspectFit" /><text>兽医小结</text></button>
+      <button class="btn-vet" hover-class="btn-vet--press" hover-stay-time="80" :loading="cardExporting" @click="exportCard"><image v-if="!cardExporting" class="ic ic--sm" src="/static/icon/idcard.png" mode="aspectFit" /><text>档案卡</text></button>
     </view>
 
     <!-- 体重曲线 -->
@@ -37,7 +37,7 @@
       </view>
       <text v-if="series.length && canScroll && !overlayOpen" class="weight-hint">← 按住曲线左右拖动看更早记录</text>
       <view v-else-if="!series.length" class="chart-empty">
-        <text class="chart-empty__icon">⚖️</text>
+        <image class="chart-empty__icon" src="/static/icon/scale.png" mode="aspectFit" />
         <text class="chart-empty__title">还没有体重数据</text>
         <text class="chart-empty__hint">回首页说一句「{{ pet.name }} 今天 X.X kg」即可记上</text>
       </view>
@@ -173,7 +173,7 @@
 <script>
 import { CLOUD_ENV } from '@/config'
 import { petAge } from '@/utils'
-import { paintPetCard, loadPetAvatar, CARD_W, CARD_H } from '@/petCard'
+import { paintPetCard, loadPetAvatar, loadCardIcons, CARD_W, CARD_H } from '@/petCard'
 import { SPECIES, speciesLabel, speciesEmoji, avatarStatic } from '@/species'
 import { callFn, uploadAvatar } from '@/cloud'
 
@@ -1069,9 +1069,9 @@ export default {
           ctx.scale(dpr, dpr)
           // 头像照片先异步加载（cloud:// → 本地路径 → createImage），失败回退 emoji，再整张绘制
           // 渲染下沉到共享模块 @/petCard（与首页轮播同款，ADR-022），杜绝两处设计漂移
-          const avatarImg = await loadPetAvatar(canvas, this.pet)
+          const [avatarImg, cardIcons] = await Promise.all([loadPetAvatar(canvas, this.pet), loadCardIcons(canvas)])
           // 传 this.series 体重点 → 档案卡画体重趋势曲线（ADR-025；首页轮播不传，band 走占位降级）
-          paintPetCard(ctx, W, H, this.pet || {}, avatarImg, this.series)
+          paintPetCard(ctx, W, H, this.pet || {}, avatarImg, this.series, cardIcons)
           wx.canvasToTempFilePath({
             canvas,
             success: (r) => {
@@ -1173,6 +1173,10 @@ export default {
   margin: 0 var(--pad-page) 24rpx;
   height: 88rpx;
   line-height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
   border-radius: var(--r-pill);
   background: var(--c-card);
   border: 2rpx solid var(--c-primary);
@@ -1272,7 +1276,8 @@ export default {
   align-items: center;
 }
 .chart-empty__icon {
-  font-size: 64rpx;
+  width: 88rpx;
+  height: 88rpx;
 }
 .chart-empty__title {
   font-size: var(--fs-sub);

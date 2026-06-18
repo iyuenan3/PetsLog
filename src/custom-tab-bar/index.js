@@ -6,10 +6,10 @@ Component({
     selected: 0,
     left: [
       { idx: 0, page: '/pages/index/index', text: '宠物', ico: '/static/icon/paw.png' },
-      { idx: 1, page: '/pages/timeline/timeline', text: '时间线', ico: '/static/icon/clipboard.png' },
+      { idx: 1, page: '/pages/timeline/timeline', text: '时间线', ico: '/static/icon/calendar.png' },
     ],
     right: [
-      { idx: 2, page: '/pages/health/health', text: '健康', ico: '/static/icon/pill.png' },
+      { idx: 2, page: '/pages/health/health', text: '健康', ico: '/static/icon/stetho.png' },
       { idx: 3, page: '/pages/me/me', text: '我的', ico: '/static/icon/person.png' },
     ],
   },

@@ -41,7 +41,7 @@
               <view class="cell__mask">▶</view>
             </block>
             <view v-else class="cell__pdf">
-              <text class="cell__pdf-ico">📄</text>
+              <image class="cell__pdf-ico" src="/static/icon/fn-pdf.png" mode="aspectFit" />
               <text class="cell__pdf-name">{{ a.name }}</text>
               <text class="cell__pdf-size">{{ fmtSize(a.size) }}</text>
             </view>
@@ -315,7 +315,8 @@ export default {
   box-sizing: border-box;
 }
 .cell__pdf-ico {
-  font-size: 56rpx;
+  width: 56rpx;
+  height: 56rpx;
 }
 .cell__pdf-name {
   max-width: 100%;

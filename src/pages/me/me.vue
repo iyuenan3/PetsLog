@@ -4,7 +4,7 @@
     <view class="hero" hover-class="hero--press" hover-stay-time="80" @click="goProfile">
       <view class="hero__avatar">
         <image v-if="profile.avatar" :src="profile.avatar" class="hero__img" mode="aspectFill"></image>
-        <text v-else class="hero__emoji">🐾</text>
+        <image v-else class="hero__emoji" src="/static/icon/paw.png" mode="aspectFit" />
       </view>
       <view class="hero__meta">
         <text class="hero__name">{{ profile.nickname || '设置昵称' }}</text>
@@ -14,7 +14,7 @@
 
     <!-- 当前家庭 -->
     <view class="fam-card" hover-class="fam-card--press" hover-stay-time="80" @click="goFamily">
-      <view class="fam-card__icon">🏠</view>
+      <view class="fam-card__icon"><image class="fam-card__icon-img" src="/static/icon/home.png" mode="aspectFit" /></view>
       <view class="fam-card__body">
         <text class="fam-card__title">{{ fam ? fam.name : '我的家' }}</text>
         <view class="fam-card__sub">
@@ -128,7 +128,8 @@ export default {
   height: 100%;
 }
 .hero__emoji {
-  font-size: 64rpx;
+  width: 76rpx;
+  height: 76rpx;
 }
 .hero__meta {
   margin-left: 28rpx;
@@ -167,7 +168,10 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 44rpx;
+}
+.fam-card__icon-img {
+  width: 52rpx;
+  height: 52rpx;
 }
 .fam-card__body {
   flex: 1;

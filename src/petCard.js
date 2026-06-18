@@ -115,14 +115,53 @@ export function loadPetAvatar(canvas, pet) {
   })
 }
 
+// 卡内 Fluent 彩色图标（替代旧 emoji 胶囊 / 点缀 / 水印；UI 图标统一轮，2026-06-18）。
+// 按 canvas 节点缓存（轮播一张 canvas 顺序出多宠，避免每宠重载）；图未就位 → 该项 null，paint 回退 emoji。
+const CARD_ICONS = {
+  cake: '/static/icon/cake.png',
+  scale: '/static/icon/scale.png',
+  heart: '/static/icon/heart.png',
+  sparkle: '/static/icon/sparkle.png',
+  paw: '/static/icon/paw.png',
+  trend: '/static/icon/trend.png',
+}
+export function loadCardIcons(canvas) {
+  // #ifdef MP-WEIXIN
+  if (!canvas || typeof canvas.createImage !== 'function') return Promise.resolve({})
+  if (canvas.__cardIcons) return Promise.resolve(canvas.__cardIcons)
+  const entries = Object.keys(CARD_ICONS)
+  return Promise.all(
+    entries.map(
+      (k) =>
+        new Promise((res) => {
+          const img = canvas.createImage()
+          img.onload = () => res([k, img])
+          img.onerror = () => res([k, null])
+          img.src = CARD_ICONS[k]
+        }),
+    ),
+  ).then((pairs) => {
+    const out = {}
+    pairs.forEach(([k, img]) => {
+      out[k] = img
+    })
+    canvas.__cardIcons = out
+    return out
+  })
+  // #endif
+  // eslint-disable-next-line no-unreachable
+  return Promise.resolve({})
+}
+
 // 把一只宠物画成海报卡（A 版）。ctx 已按 dpr 缩放；W/H = CARD_W/CARD_H。
 // avatarImg 由 loadPetAvatar 预加载（可为 null → 回退 emoji）。
 // weightSpark（ADR-025，可选）：[{weight}] 或 [number] 体重点（已按时间排序）。
 // 详情/分享卡传 this.series（全量历史）；首页轮播传 pets.weight_spark（方案 b 冗余的近 12 点，saveRecord 维护 + 一次性回填）。
 // ≥2 点画趋势曲线，否则（该宠确无体重记录）走占位提示。
-export function paintPetCard(ctx, W, H, pet, avatarImg, weightSpark) {
+export function paintPetCard(ctx, W, H, pet, avatarImg, weightSpark, icons) {
   const p = pet || {}
   const cx = W / 2
+  const ic = icons || {} // 卡内 Fluent 图标（loadCardIcons 预加载，缺失则回退 emoji）
 
   // 背景：暖米珊瑚竖向渐变（温暖治愈令牌镜像，canvas 读不了 CSS 变量）。
   const bg = ctx.createLinearGradient(0, 0, 0, H)
@@ -132,19 +171,24 @@ export function paintPetCard(ctx, W, H, pet, avatarImg, weightSpark) {
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, W, H)
 
-  // 轻量点缀（低透明散布的 ✨ + 小爪，替代初版突兀大爪印）。
+  // 轻量点缀（低透明散布的闪光 + 小爪，Fluent 图标；图未就位回退 emoji）。
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   const deco = [
-    ['✨', 44, 70, 16, 0.35],
-    ['✨', 280, 150, 13, 0.3],
-    ['🐾', 36, 300, 12, 0.25],
-    ['🐾', 286, 318, 14, 0.22],
+    ['sparkle', '✨', 44, 70, 20, 0.42],
+    ['sparkle', '✨', 280, 150, 16, 0.36],
+    ['paw', '🐾', 36, 300, 18, 0.3],
+    ['paw', '🐾', 286, 318, 20, 0.26],
   ]
-  deco.forEach(([g, x, y, s, a]) => {
+  deco.forEach(([key, g, x, y, s, a]) => {
     ctx.globalAlpha = a
-    ctx.font = `${s}px sans-serif`
-    ctx.fillText(g, x, y)
+    const img = ic[key]
+    if (img) {
+      ctx.drawImage(img, x - s / 2, y - s / 2, s, s)
+    } else {
+      ctx.font = `${s}px sans-serif`
+      ctx.fillText(g, x, y)
+    }
   })
   ctx.globalAlpha = 1
 
@@ -241,13 +285,13 @@ export function paintPetCard(ctx, W, H, pet, avatarImg, weightSpark) {
   ctx.fillText(chipTxt, cx, chipY + chipH / 2 + 0.5)
   ctx.textBaseline = 'alphabetic'
 
-  // 数据胶囊（动态：缺项不出，按实际数量居中）：🎂 年龄 / ⚖️ 体重 / 🏡 陪伴。
+  // 数据胶囊（动态：缺项不出，按实际数量居中）：年龄 / 体重 / 陪伴，Fluent 图标。
   const pills = []
   const age = petAge(p.birthday)
-  if (age) pills.push(['🎂', '年龄', age])
-  if (p.latest_weight) pills.push(['⚖️', '体重', p.latest_weight + 'kg'])
+  if (age) pills.push(['cake', '🎂', '年龄', age])
+  if (p.latest_weight) pills.push(['scale', '⚖️', '体重', p.latest_weight + 'kg'])
   const days = companionDays(p.home_date)
-  if (days != null) pills.push(['🏡', '陪伴', days + '天'])
+  if (days != null) pills.push(['heart', '💖', '陪伴', days + '天'])
   if (pills.length) {
     const pw = 96
     const ph = 70
@@ -255,7 +299,7 @@ export function paintPetCard(ctx, W, H, pet, avatarImg, weightSpark) {
     const totalW = pills.length * pw + (pills.length - 1) * gap
     let px = cx - totalW / 2
     const py = 286
-    pills.forEach(([icon, label, value]) => {
+    pills.forEach(([key, emoji, label, value]) => {
       const pcx = px + pw / 2
       roundRect(ctx, px, py, pw, ph, 16)
       ctx.fillStyle = 'rgba(255,255,255,0.78)'
@@ -263,10 +307,17 @@ export function paintPetCard(ctx, W, H, pet, avatarImg, weightSpark) {
       ctx.lineWidth = 1
       ctx.strokeStyle = 'rgba(242,130,92,0.22)'
       ctx.stroke()
+      const img = ic[key]
+      const isz = 27
+      if (img) {
+        ctx.drawImage(img, pcx - isz / 2, py + 5, isz, isz)
+      } else {
+        ctx.textAlign = 'center'
+        ctx.font = '19px sans-serif'
+        ctx.fillStyle = '#3A3330'
+        ctx.fillText(emoji, pcx, py + 26)
+      }
       ctx.textAlign = 'center'
-      ctx.font = '19px sans-serif'
-      ctx.fillStyle = '#3A3330'
-      ctx.fillText(icon, pcx, py + 26)
       const vs = fitFont(ctx, value, pw - 16, 16, 11, '700')
       ctx.font = `700 ${vs}px sans-serif`
       ctx.fillStyle = '#C9542F'
@@ -339,11 +390,23 @@ export function paintPetCard(ctx, W, H, pet, avatarImg, weightSpark) {
       ctx.fillStyle = '#F2825C'
       ctx.fill()
     } else {
-      ctx.textAlign = 'center'
+      const txt = '记录体重看趋势'
       ctx.textBaseline = 'middle'
       ctx.font = '12px sans-serif'
       ctx.fillStyle = '#B7ACA3'
-      ctx.fillText('📈 记录体重看趋势', cx, by + bh / 2)
+      const tw = ctx.measureText(txt).width
+      const isz = 15
+      const gap = 5
+      const img = ic.trend
+      if (img) {
+        const gx = cx - (isz + gap + tw) / 2
+        ctx.drawImage(img, gx, by + bh / 2 - isz / 2, isz, isz)
+        ctx.textAlign = 'left'
+        ctx.fillText(txt, gx + isz + gap, by + bh / 2)
+      } else {
+        ctx.textAlign = 'center'
+        ctx.fillText('📈 ' + txt, cx, by + bh / 2)
+      }
     }
     ctx.textBaseline = 'alphabetic'
   }
@@ -376,10 +439,23 @@ export function paintPetCard(ctx, W, H, pet, avatarImg, weightSpark) {
     })
   }
 
-  // 底部水印。
+  // 底部水印（爪 Fluent 图标 + 文字；图未就位回退 emoji）。
+  const wtxt = 'PetsLog · 温暖记录'
   ctx.fillStyle = '#C2B8AF'
   ctx.font = '10.5px sans-serif'
-  ctx.textAlign = 'center'
-  ctx.fillText('🐾 PetsLog · 温暖记录', cx, 470)
-  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  const pawImg = ic.paw
+  const wtw = ctx.measureText(wtxt).width
+  const wisz = 13
+  const wgap = 4
+  if (pawImg) {
+    const wx0 = cx - (wisz + wgap + wtw) / 2
+    ctx.drawImage(pawImg, wx0, 470 - wisz / 2, wisz, wisz)
+    ctx.textAlign = 'left'
+    ctx.fillText(wtxt, wx0 + wisz + wgap, 470)
+  } else {
+    ctx.textAlign = 'center'
+    ctx.fillText('🐾 ' + wtxt, cx, 470)
+  }
+  ctx.textBaseline = 'alphabetic'
 }
