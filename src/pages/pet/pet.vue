@@ -177,6 +177,7 @@ import { CLOUD_ENV } from '@/config'
 import { petAge } from '@/utils'
 import { paintPetCard, loadPetAvatar, loadCardIcons, CARD_W, CARD_H } from '@/petCard'
 import { SPECIES, speciesLabel, speciesEmoji, avatarStatic } from '@/species'
+import { resolveCurrentFood } from '@/foodsResolve'
 import { callFn, uploadAvatar } from '@/cloud'
 
 export default {
@@ -320,12 +321,8 @@ export default {
         const res = await callFn('foods', { action: 'list' })
         if (!(res.result && res.result.ok)) return
         const list = res.result.data || []
-        const name = this.pet.name
-        const species = this.pet.species
-        // 先找单宠覆盖在喂（只认名字、不认 species）；否则找物种默认在喂（pet 空 且 species 匹配）
-        const override = list.find((f) => f.current === true && f.pet === name)
-        const def = list.find((f) => f.current === true && f.pet === '' && f.species === species)
-        this.currentFood = override || def || null
+        // 解析「单宠覆盖在喂 > 物种默认在喂 > 无」抽到 foodsResolve（单一真相源 + 可单测，见 tests/foodsResolve.test.js）
+        this.currentFood = resolveCurrentFood(list, this.pet.name, this.pet.species)
       } catch (e) {
         console.warn('current food load failed', e)
       }

@@ -56,6 +56,9 @@ function splitName(name) {
 // pet 空也精确匹配空（物种默认档），故猫默认在喂 / 狗默认在喂 / 某猫覆盖在喂三者可并存、互不清。
 // 不吞错：失败冒泡使整个 add/update 失败回 ok:false，避免静默留两条 current:true。
 async function clearOtherCurrent(familyId, species, pet, exceptId) {
+  // 失安全闸：species 必须是合法枚举。否则真 tcb 上行会丢弃 species=undefined 键，where 约束退化为
+  // {family_id, pet:'', current:true}，把本家所有物种的默认在喂条一起清掉（跨物种误清）。调用点均已先验 species，这里是兜底。
+  if (!isSpecies(species)) throw { code: 'NO_SPECIES', msg: '主粮缺合法物种，无法计算在喂作用域' }
   const where = { family_id: familyId, species, pet: pet || '', current: true }
   if (exceptId) where._id = _.neq(exceptId)
   await db.collection('foods').where(where).update({ data: { current: false, updated_at: Date.now() } })
@@ -134,12 +137,15 @@ exports.main = async (event) => {
       const scopeSpecies = 'species' in patch ? patch.species : doc.species
       const scopePet = 'pet' in patch ? patch.pet : doc.pet || ''
       if (patch.current) {
+        // legacy 条（迁移前只有 name、无 species）设在喂会让作用域缺失 → 拒绝并提示先迁移，而非静默跨物种误清在喂（评审 should-fix）
+        if (!isSpecies(scopeSpecies)) return { ok: false, code: 'NO_SPECIES', msg: '该主粮缺物种，请先完成迁移再设为在喂' }
         await clearOtherCurrent(familyId, scopeSpecies, scopePet, id)
         patch.end_date = '' // 设为在喂清结束日，否则取消在喂后旧 end_date 突然重现
       } else {
-        // 取消在喂：若仍无结束日，补换粮日进史（ADR-027）
+        // 补换粮日仅在「本次由在喂→停喂」时（doc.current===true）执行。否则前端每次 save 都回发 current:false，
+        // 会把普通编辑（仅改品牌）误判为停喂、给空结束日的历史条盖上今天，污染病程（评审 should-fix）。
         const willEnd = 'end_date' in patch ? patch.end_date : doc.end_date || ''
-        if (!willEnd) patch.end_date = todayCN()
+        if (doc.current && !willEnd) patch.end_date = todayCN()
       }
     }
     await db.collection('foods').doc(id).update({ data: patch })

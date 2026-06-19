@@ -24,7 +24,11 @@ class Coll {
     if (this._docId !== undefined) { const d = this.rows().find((r) => r._id === this._docId); if (!d) return { stats: { updated: 0 } }; Object.assign(d, data); return { stats: { updated: 1 } } }
     let n = 0; for (const r of this.rows().filter((x) => matchRow(x, this._where))) { Object.assign(r, data); n++ } return { stats: { updated: n } }
   }
-  async remove() { const i = this.rows().findIndex((r) => r._id === this._docId); if (i >= 0) this.rows().splice(i, 1); return { stats: { removed: 1 } } }
+  async remove() {
+    if (this._docId !== undefined) { const i = this.rows().findIndex((r) => r._id === this._docId); if (i >= 0) this.rows().splice(i, 1); return { stats: { removed: 1 } } }
+    // where().remove() 批量删（对齐真 tcb）：使「删宠保留」用例对任何形态的级联删都敏感，不止 doc(id) 形态
+    const before = this.rows().length; this.db.data[this.name] = this.rows().filter((r) => !matchRow(r, this._where)); return { stats: { removed: before - this.db.data[this.name].length } }
+  }
   async add({ data }) { const doc = clone(data); doc._id = data._id || 'id_' + ++SEQ; this.rows().push(doc); return { _id: doc._id } }
 }
 class DB { constructor() { this.data = {} } collection(n) { return new Coll(this, n) } createCollection() { return Promise.resolve() } }
@@ -47,6 +51,8 @@ function assert(c, m) { if (c) pass++; else { fail++; console.log('  ❌ ' + m) 
 function reset() { DB_INST.data = {}; CUR_OPENID = '' }
 function seed(fid, openid) { DB_INST.data.family_members = [{ family_id: fid, openid, role: 'admin' }] }
 const pets = () => DB_INST.data.pets || []
+const foodsOf = (fid) => (DB_INST.data.foods || []).filter((f) => f.family_id === fid)
+const recsOf = (fid) => (DB_INST.data.records || []).filter((r) => r.family_id === fid)
 async function run(t, body) { reset(); try { await body(); console.log('✔ ' + t) } catch (e) { fail++; console.log('✘ ' + t + ' — ' + (e && e.message)) } }
 
 ;(async () => {
@@ -110,6 +116,46 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(pets().find((p) => p._id === a.id).gender === 'male', 'update male 保留')
     await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { gender: 'zzz' } })
     assert(pets().find((p) => p._id === a.id).gender === '', 'update 非法性别落空串')
+  })
+
+  // 7. 改名级联（ADR-027，本 commit 新增）：foods.pet 单宠覆盖随改名迁移；物种默认（pet=''）不受波及。
+  await run('改名级联: foods.pet 随改名迁移, 默认档不动', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u')
+    const a = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例猫', species: 'cat' } })
+    DB_INST.data.foods = [
+      { _id: 'fo1', family_id: 'F1', pet: '示例猫', species: 'cat', brand: '处方粮', current: true }, // 单宠覆盖
+      { _id: 'fo2', family_id: 'F1', pet: '', species: 'cat', brand: '默认粮', current: true }, // 物种默认
+      { _id: 'fo3', family_id: 'F9', pet: '示例猫', species: 'cat', brand: '别家粮', current: true }, // 别家同名
+    ]
+    const r = await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { name: '咪咪' } })
+    assert(r.ok === true, '改名成功')
+    assert(foodsOf('F1').find((f) => f.brand === '处方粮').pet === '咪咪', '单宠覆盖 pet 迁到新名')
+    assert(foodsOf('F1').find((f) => f.brand === '默认粮').pet === '', '物种默认 pet 仍为空（不被误改）')
+    assert(foodsOf('F9').find((f) => f.brand === '别家粮').pet === '示例猫', '别家同名 food 不受波及（family 隔离）')
+  })
+
+  // 8. 物种变更级联（ADR-027 ⑥，本 commit 新增）：改 species 时该宠 foods.species 纠偏（保台账分组正确）。
+  await run('物种级联: 改 species 同步 foods.species', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u')
+    const a = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例宠', species: 'cat' } })
+    DB_INST.data.foods = [{ _id: 'fo1', family_id: 'F1', pet: '示例宠', species: 'cat', brand: '某粮', current: true }]
+    const r = await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { species: 'dog' } })
+    assert(r.ok === true, '改物种成功')
+    assert(foodsOf('F1').find((f) => f.brand === '某粮').species === 'dog', '该宠单宠覆盖 foods.species 同步为 dog')
+    assert(foodsOf('F1').find((f) => f.brand === '某粮').pet === '示例宠', 'pet 不变')
+  })
+
+  // 9. 删宠保留病史（删档案≠删病史）：delete 只删 pet 文档，foods/records 不级联删。靠「没写删」保证的不变量，须钉死。
+  await run('删宠保留: foods/records 不级联删', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u')
+    const a = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例猫', species: 'cat' } })
+    DB_INST.data.foods = [{ _id: 'fo1', family_id: 'F1', pet: '示例猫', species: 'cat', brand: '处方粮', current: true }]
+    DB_INST.data.records = [{ _id: 're1', family_id: 'F1', pet: '示例猫', event_type: '体检', time: '2025-01-01 12:00' }]
+    const r = await fn.main({ family_id: 'F1', action: 'delete', id: a.id })
+    assert(r.ok === true, '删宠成功')
+    assert(pets().length === 0, 'pet 文档已删')
+    assert(foodsOf('F1').some((f) => f.pet === '示例猫'), '该宠 foods 仍在（不级联删）')
+    assert(recsOf('F1').some((r) => r.pet === '示例猫'), '该宠 records 仍在（删档案≠删病史）')
   })
 
   // 6. 隔离: 非成员拒

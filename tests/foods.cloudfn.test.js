@@ -6,8 +6,11 @@ const path = require('path')
 
 function clone(o) { return JSON.parse(JSON.stringify(o)) }
 // where 匹配：支持 db.command.neq（clearOtherCurrent 的 _id: _.neq(exceptId)）+ 其余精确等值（含 pet:'' 精确匹配空作用域）
+// 关键：值为 undefined 的键视为「不约束」（真 tcb 上行 JSON 序列化会丢弃 undefined 键，约束随之消失）。
+// mock 必须对齐此行为，否则 species=undefined 的 where 会被当成「只匹配 species 也 undefined 的行」，掩盖 legacy 跨物种误清缺陷。
 function matchRow(row, where) {
   return Object.entries(where || {}).every(([k, v]) => {
+    if (v === undefined) return true
     if (v && typeof v === 'object' && v.__cmd === 'neq') return row[k] !== v.v
     return row[k] === v
   })
@@ -169,6 +172,36 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     const a = await fn.main({ family_id: 'F1', action: 'add', food: { species: 'cat', brand: 'C', current: true } })
     await fn.main({ family_id: 'F1', action: 'update', id: a.id, food: { current: false, end_date: '2025-03-15' } })
     assert(foodsOf('F1')[0].end_date === '2025-03-15', '显式结束日保留不被当天覆盖')
+  })
+
+  // 4d. 回归（评审 should-fix）：对 legacy 条（无 species）设在喂，不得跨物种误清其它默认在喂。
+  // 缺陷机制：scopeSpecies 回退 doc.species=undefined → clearOtherCurrent 的 where 在真 tcb 丢弃 undefined 键 → 约束退化为
+  // {family_id, pet:'', current:true} → 把猫默认 + 狗默认在喂一起清掉。修法：设在喂前 scopeSpecies 非法则拒，不广播清除。
+  await run('回归: legacy 设在喂不跨物种误清默认在喂', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', 'uA')
+    await fn.main({ family_id: 'F1', action: 'add', food: { species: 'cat', brand: '猫默认', current: true } })
+    await fn.main({ family_id: 'F1', action: 'add', food: { species: 'dog', brand: '狗默认', current: true } })
+    const legId = seedLegacy('F1', '老猫粮（成猫）') // 未迁移条：只有 name、无 species
+    const r = await fn.main({ family_id: 'F1', action: 'update', id: legId, food: { current: true } })
+    assert(r.ok === false, 'legacy（缺 species）设在喂应被拒，而非静默跨物种清除')
+    const fs = foodsOf('F1')
+    assert(fs.find((f) => f.brand === '猫默认').current === true, '猫默认在喂不被误清')
+    assert(fs.find((f) => f.brand === '狗默认').current === true, '狗默认在喂不被误清')
+  })
+
+  // 4e. 回归（评审 should-fix）：编辑「非在喂 + 空结束日」的历史条（仅改品牌），不得被自动盖上今天为换粮日。
+  // 缺陷机制：前端 saveFood 每次都回发 current:false + end_date:''，后端 else 分支 if(!willEnd) 补 todayCN → 污染病程。
+  // 修法：补换粮日仅在「本次由在喂→停喂」时（doc.current===true）执行。
+  await run('回归: 编辑非在喂历史条不盖换粮日', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', 'uA')
+    const a = await fn.main({ family_id: 'F1', action: 'add', food: { species: 'cat', brand: '历史粮', current: false } })
+    assert(foodsOf('F1')[0].current === false && foodsOf('F1')[0].end_date === '', '初始：非在喂、空结束日')
+    // 模拟前端编辑（只改品牌错字），payload 一如既往携带 current:false + end_date:''
+    await fn.main({ family_id: 'F1', action: 'update', id: a.id, food: { brand: '历史粮改', current: false, end_date: '' } })
+    const f = foodsOf('F1')[0]
+    assert(f.brand === '历史粮改', '品牌已改')
+    assert(f.current === false, '仍非在喂')
+    assert(f.end_date === '', '结束日仍为空，未被静默盖成今天')
   })
 
   // 5a. backfill_foods dryRun：返 report 不改库

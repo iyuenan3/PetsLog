@@ -275,7 +275,7 @@
 - Tradeoff: ① 退役 a3ea60a 刚做的 bespoke 套图（git 可回退，用户知情选库）；② License = Fluent-emoji-flat MIT、Phosphor MIT（零负担）；③ 同概念两档图标增一项认知，靠「表达型 Fluent / 功能型 Phosphor fn-」前缀 + 尺寸档位约束自洽；④ 同一概念在卡片（Fluent 彩）与行内（Phosphor 暖染）视觉不同，是刻意按场景分、非不一致。
 - Verified: 两轮对抗 workflow（9 agent）0 must-fix；git 旧→新逐条账本 0 换错 / 0 漏换 / 0 误删；产物 src ↔ dist 字节一致（非旧缓存）、27 引用 0 悬挂；档案卡 / 行内 chip + tab / 爱心胶囊 三处浏览器 1:1 截图自验 + 真机验过。commit fbb3d1d。
 
-## ADR-027 · 主粮多宠化：物种默认 + 单宠覆盖 + brand/model 拆分 · 2026-06-18（设计已定，待实现）
+## ADR-027 · 主粮多宠化：物种默认 + 单宠覆盖 + brand/model 拆分 · 2026-06-18（已实现 c9d1117，待部署 + 待 backfill 迁移）
 - Problem: 现 foods 是家庭级单轨（ADR-013/014「家庭一种粮」假设），`current` 家庭排他（`clearOtherCurrent(familyId)` 设一条在喂清掉全家其它）。多宠家庭不同猫 / 狗 / 鸟吃不同品牌型号主粮，需按宠区分记录 + 各自「在喂」+ 各自换粮史。用户自家全猫同款（简单态要保住），但要支持多宠多粮。
 - Constraint: 守 family 隔离 + assertMember 不变；不破坏简单态（全家同款仍一条搞定）；现 12 条历史零丢失；species 沿用 ADR-023 的 8 枚举真相源（`src/species.js` / `normSpecies`）。**主粮本就物种特异**（猫狗鸟粮天然不同）→ 默认粒度取**物种**、非全家（用户指出，否决初版「全家默认」）。
 - Decision: **物种默认 + 单宠覆盖两级模型**。foods 加 `species`（必填，这条粮喂给哪物种）+ `pet`（**宠物名字串、非 pet_id**，空 = 该物种默认 / 所有这种宠，填 = 某只单独覆盖）；`name` 废弃，拆成 `brand` + `model`（健康页改显 brand + model）。**pet 用名字**：全 app 一律按宠物名关联（records.pet / reminders.pet，改名走 pets 云函数级联、删宠有意保留病史），foods 单宠覆盖入同一约定 → **改名级联也改 foods.pet、删宠保留 foods**（删档案≠删病史，像 records 不级联清；评审 must-fix 纠正了初版 pet_id + 删宠级联）。
