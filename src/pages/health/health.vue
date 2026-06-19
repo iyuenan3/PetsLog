@@ -72,11 +72,11 @@
     </block>
 
     <!-- 主粮 编辑弹层 -->
-    <view v-if="foodSheet" class="sheet-mask" @click="closeFood">
+    <view v-if="foodSheet" class="sheet-mask" @click="closeFood" @touchmove.stop.prevent="noop">
       <view class="sheet" @click.stop>
         <view class="sheet__grab"></view>
         <text class="sheet__title">{{ foodSheet._id ? '编辑主粮' : '添加主粮' }}</text>
-        <view class="f-form">
+        <scroll-view scroll-y class="f-form">
           <view class="f-row">
             <text class="f-row__label">物种</text>
             <picker class="f-picker" mode="selector" :range="speciesOptions" range-key="label" :value="speciesIndex" @change="onFoodSpecies">
@@ -105,7 +105,7 @@
           </view>
           <view class="f-row"><text class="f-row__label">当前在喂</text><switch :checked="foodSheet.current" color="#f2825c" @change="onFoodCurrent" /></view>
           <view class="f-row"><text class="f-row__label">备注</text><input class="f-input" v-model="foodSheet.note" placeholder="可留空" placeholder-class="f-ph" /></view>
-        </view>
+        </scroll-view>
         <view class="sheet__actions">
           <button class="btn-ghost" hover-class="btn-ghost--press" hover-stay-time="60" @click="closeFood">取消</button>
           <button class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" :loading="foodSaving" @click="saveFood">保存</button>
@@ -408,6 +408,7 @@ export default {
     closeFood() {
       this.foodSheet = null
     },
+    noop() {}, // 仅为给 sheet-mask 绑 catchtouchmove（@touchmove.stop）阻断滚动穿透到背后列表
     onFoodSpecies(e) {
       const opt = this.speciesOptions[Number(e.detail.value)]
       if (!opt) return
@@ -866,7 +867,12 @@ export default {
   background: var(--c-card);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   box-shadow: var(--sh-3);
-  padding: 16rpx var(--pad-page) calc(32rpx + env(safe-area-inset-bottom));
+  /* 底部留出 ~原生 tabBar 高度（fixed z-index:100 在浮层之上，见 custom-tab-bar），否则「保存/取消」被 tabBar 压住点不到 */
+  padding: 16rpx var(--pad-page) calc(180rpx + env(safe-area-inset-bottom));
+  /* 字段多于一屏时整体封顶 + 表单区内部滚动，保证「保存/取消」常驻可点（ADR-027 加了物种/喂给谁两行后会顶出屏） */
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
 }
 .sheet__grab {
   width: 64rpx;
@@ -883,6 +889,8 @@ export default {
   margin-bottom: 20rpx;
 }
 .f-form {
+  flex: 1 1 auto;
+  min-height: 0; /* 让 scroll-view 在 flex 列里可收缩并内部滚动，否则会撑开把 actions 顶出屏 */
   background: var(--c-card-cream);
   border-radius: var(--r-md);
   padding: 4rpx 28rpx;
