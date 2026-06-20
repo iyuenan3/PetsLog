@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>PetsLog 设计系统镜像 · 总览</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  *,*::before,*::after { box-sizing: border-box; }
+  body { margin: 0; background: #efe7dc; color: var(--c-text); font-family: var(--font); padding: 56px; }
+  h1 { font-size: 40px; margin: 0 0 6px; }
+  .lead { font-size: 17px; color: #8a7f77; margin: 0 0 8px; line-height: 1.6; max-width: 900px; }
+  .meta { font-size: 14px; color: #b0a79f; margin: 0 0 44px; }
+  .sec { font-size: 15px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #b0a79f; margin: 44px 0 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 28px; }
+  .tile { display: block; text-decoration: none; color: inherit; background: #fff; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 28px rgba(196,124,86,0.12); transition: transform .16s ease, box-shadow .16s ease; }
+  .tile:hover { transform: translateY(-4px); box-shadow: 0 16px 44px rgba(196,124,86,0.2); }
+  .thumb { width: 100%; height: 320px; overflow: hidden; position: relative; border-bottom: 1px solid #efe7dc; background: #faf6f0; }
+  .thumb iframe { width: 1000px; height: 762px; transform: scale(0.42); transform-origin: top left; border: 0; pointer-events: none; }
+  .thumb--screen iframe { width: 1480px; height: 3000px; transform: scale(0.284); }
+  .cap { padding: 18px 22px; }
+  .cap b { font-size: 19px; }
+  .cap span { display: block; margin-top: 4px; font-size: 14px; color: #8a7f77; }
+</style>
+</head>
+<body>
+  <h1>PetsLog 设计系统镜像</h1>
+  <p class="lead">温暖治愈设计体系，逐字镜像 mp-weixin（App.vue 令牌 + 各页 WXSS + petCard.js）。这是同步到 Claude Design 前的本地总览，也可独立当可视真相源用。</p>
+  <p class="meta">23 张卡 · 5 基础令牌 + 12 组件 + 6 页面整屏 · 点任意卡片打开完整预览 · 收敛清单见 DRIFT.md</p>
+
+  <div class="sec">Foundations · 基础令牌</div>
+  <div class="grid">
+    <a class="tile" href="tokens/colors.html"><div class="thumb"><iframe src="tokens/colors.html" scrolling="no"></iframe></div><div class="cap"><b>色彩令牌</b><span>主色阶 + 背景 / 文字 / 语义 / 四类提醒色对</span></div></a>
+    <a class="tile" href="tokens/typography.html"><div class="thumb"><iframe src="tokens/typography.html" scrolling="no"></iframe></div><div class="cap"><b>字阶令牌</b><span>7 级字号样张</span></div></a>
+    <a class="tile" href="tokens/spacing-radius.html"><div class="thumb"><iframe src="tokens/spacing-radius.html" scrolling="no"></iframe></div><div class="cap"><b>间距与圆角</b><span>8 基准间距 + xs→pill 圆角</span></div></a>
+    <a class="tile" href="tokens/elevation.html"><div class="thumb"><iframe src="tokens/elevation.html" scrolling="no"></iframe></div><div class="cap"><b>阴影与高度</b><span>暖棕投影 5 档</span></div></a>
+    <a class="tile" href="tokens/icons.html"><div class="thumb"><iframe src="tokens/icons.html" scrolling="no"></iframe></div><div class="cap"><b>图标系统</b><span>Fluent 彩 + Phosphor 暖染双档</span></div></a>
+  </div>
+
+  <div class="sec">Components · 组件</div>
+  <div class="grid">
+    <a class="tile" href="components/buttons.html"><div class="thumb"><iframe src="components/buttons.html" scrolling="no"></iframe></div><div class="cap"><b>按钮</b><span>主 / 次 + 按下态</span></div></a>
+    <a class="tile" href="components/cards.html"><div class="thumb"><iframe src="components/cards.html" scrolling="no"></iframe></div><div class="cap"><b>卡片基座</b><span>全站白卡统一配方</span></div></a>
+    <a class="tile" href="components/chips.html"><div class="thumb"><iframe src="components/chips.html" scrolling="no"></iframe></div><div class="cap"><b>标签与 chip</b><span>事件色对 + note + 病程 tag</span></div></a>
+    <a class="tile" href="components/empty.html"><div class="thumb"><iframe src="components/empty.html" scrolling="no"></iframe></div><div class="cap"><b>空状态</b><span>光晕 + 图标 + 引导</span></div></a>
+    <a class="tile" href="components/timeline-item.html"><div class="thumb"><iframe src="components/timeline-item.html" scrolling="no"></iframe></div><div class="cap"><b>时间线条目</b><span>色点 + chip + 引述 + note</span></div></a>
+    <a class="tile" href="components/reminder-card.html"><div class="thumb"><iframe src="components/reminder-card.html" scrolling="no"></iframe></div><div class="cap"><b>提醒卡</b><span>类型彩条 + 到期态 + 三联操作</span></div></a>
+    <a class="tile" href="components/medicine-card.html"><div class="thumb"><iframe src="components/medicine-card.html" scrolling="no"></iframe></div><div class="cap"><b>药品卡</b><span>图标 + 余量 + 临期</span></div></a>
+    <a class="tile" href="components/food-card.html"><div class="thumb"><iframe src="components/food-card.html" scrolling="no"></iframe></div><div class="cap"><b>主粮卡</b><span>物种分组 + 在喂 + 对象 chip</span></div></a>
+    <a class="tile" href="components/segmented.html"><div class="thumb"><iframe src="components/segmented.html" scrolling="no"></iframe></div><div class="cap"><b>分段控件</b><span>三段切换</span></div></a>
+    <a class="tile" href="components/form-sheet.html"><div class="thumb thumb--screen"><iframe src="components/form-sheet.html" scrolling="no"></iframe></div><div class="cap"><b>弹层表单</b><span>底部滑起编辑 sheet</span></div></a>
+    <a class="tile" href="components/tabbar.html"><div class="thumb"><iframe src="components/tabbar.html" scrolling="no"></iframe></div><div class="cap"><b>底部导航</b><span>4 tab + 中央 FAB</span></div></a>
+    <a class="tile" href="components/pet-card.html"><div class="thumb thumb--screen"><iframe src="components/pet-card.html" scrolling="no"></iframe></div><div class="cap"><b>宠物档案卡</b><span>可分享海报（canvas 参照）</span></div></a>
+  </div>
+
+  <div class="sec">Screens · 页面整屏</div>
+  <div class="grid">
+    <a class="tile" href="screens/home.html"><div class="thumb thumb--screen"><iframe src="screens/home.html" scrolling="no"></iframe></div><div class="cap"><b>首页 · 宠物</b><span>问候 + 提醒条 + 档案卡轮播</span></div></a>
+    <a class="tile" href="screens/timeline.html"><div class="thumb thumb--screen"><iframe src="screens/timeline.html" scrolling="no"></iframe></div><div class="cap"><b>时间线</b><span>病程筛选 + 记录流</span></div></a>
+    <a class="tile" href="screens/health.html"><div class="thumb thumb--screen"><iframe src="screens/health.html" scrolling="no"></iframe></div><div class="cap"><b>健康</b><span>分段 + 提醒 / 药品 / 主粮</span></div></a>
+    <a class="tile" href="screens/record.html"><div class="thumb thumb--screen"><iframe src="screens/record.html" scrolling="no"></iframe></div><div class="cap"><b>录入 · 记一笔</b><span>自然语言 + 三入口</span></div></a>
+    <a class="tile" href="screens/pet-detail.html"><div class="thumb thumb--screen"><iframe src="screens/pet-detail.html" scrolling="no"></iframe></div><div class="cap"><b>宠物详情</b><span>档案头 + 体重曲线 + 记录</span></div></a>
+    <a class="tile" href="screens/course.html"><div class="thumb thumb--screen"><iframe src="screens/course.html" scrolling="no"></iframe></div><div class="cap"><b>病程视图</b><span>概览聚合 + 趋势 + 记录轴</span></div></a>
+  </div>
+</body>
+</html>

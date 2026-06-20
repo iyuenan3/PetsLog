@@ -1,0 +1,75 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>时间线条目 · Timeline Item</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+</head>
+<body class="ds">
+  <h1 class="ds-title">时间线条目 · Timeline Item</h1>
+  <p class="ds-desc">健康时间线的原子卡。结构：色点 + 宠名 + 类型 chip + 时间 → 记录引述 → 参数 note / 病程 tag。timeline 与 course 共用同一套全局类。</p>
+
+  <div class="ds-sec">就诊（含费用 / 医院 / 病程 tag）</div>
+  <div class="ds-stage">
+    <div class="tl-list" style="padding-bottom:0">
+      <div class="tl-item">
+        <div class="tl-item__head">
+          <span class="tl-dot ev-clinic"></span>
+          <span class="tl-item__pet">示例猫</span>
+          <span class="tl-chip ev-clinic">就诊</span>
+          <span class="tl-item__time">06-18 14:30</span>
+        </div>
+        <span class="tl-item__quote">带去医院复查皮肤，医生说恢复得不错，继续用药一周。</span>
+        <div class="tl-item__notes">
+          <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-hospital.png">幸福宠物医院</span>
+          <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-cost.png">¥320</span>
+          <span class="tl-note tl-note--tag"><img class="ic ic--sm" src="../assets/icon/fn-tag.png">皮肤病疗程 ›</span>
+        </div>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-item__head">
+          <span class="tl-dot ev-weight"></span>
+          <span class="tl-item__pet">示例猫</span>
+          <span class="tl-chip ev-weight">体重</span>
+          <span class="tl-item__time">06-15 09:00</span>
+        </div>
+        <span class="tl-item__quote">早上空腹称重 4.8kg，比上月稳了一点。</span>
+      </div>
+
+      <div class="tl-item">
+        <div class="tl-item__head">
+          <span class="tl-dot ev-care"></span>
+          <span class="tl-item__pet">示例龟</span>
+          <span class="tl-chip ev-care">养护</span>
+          <span class="tl-item__time">06-14 20:10</span>
+        </div>
+        <span class="tl-item__quote">换水 + 测水质，整体达标。</span>
+        <div class="tl-item__notes">
+          <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-param.png">水温 26℃</span>
+          <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-param.png">pH 7.2</span>
+          <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-param.png">氨 0.1</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ds-sec">按下态 · .tl-item--press</div>
+  <div class="ds-stage">
+    <div class="tl-list" style="padding-bottom:0">
+      <div class="tl-item tl-item--press">
+        <div class="tl-item__head">
+          <span class="tl-dot ev-med"></span>
+          <span class="tl-item__pet">示例犬</span>
+          <span class="tl-chip ev-med">用药</span>
+          <span class="tl-item__time">06-12 08:00</span>
+        </div>
+        <span class="tl-item__quote">早晚各喂一次心丝虫预防药。</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

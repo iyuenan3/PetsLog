@@ -1,0 +1,49 @@
+<!-- @dsCard group="Foundations" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>字阶令牌 · Typography</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<style>
+  .row { display: flex; align-items: baseline; gap: 28px; padding: 18px 0; border-bottom: 1px solid var(--c-divider); }
+  .row__sample { color: var(--c-text); flex: 1; }
+  .row__meta { width: 220px; }
+  .light { color: var(--c-text-2); font-weight: 400; }
+</style>
+</head>
+<body class="ds">
+  <h1 class="ds-title">字阶令牌 · Typography</h1>
+  <p class="ds-desc">7 级字号，系统字体族（PingFang SC / Microsoft YaHei 兜底）。逐字镜像 App.vue。</p>
+
+  <div class="row">
+    <div class="row__sample" style="font-size:var(--fs-display);font-weight:700">示例犬 18.5kg</div>
+    <div class="row__meta ds-tok"><div class="ds-tok-name">--fs-display</div><div class="ds-tok-val">48rpx · 大数字 / 身价</div></div>
+  </div>
+  <div class="row">
+    <div class="row__sample" style="font-size:var(--fs-h1);font-weight:700">温暖记录每一天</div>
+    <div class="row__meta ds-tok"><div class="ds-tok-name">--fs-h1</div><div class="ds-tok-val">40rpx · 页面主标题</div></div>
+  </div>
+  <div class="row">
+    <div class="row__sample" style="font-size:var(--fs-h2);font-weight:600">健康时间线</div>
+    <div class="row__meta ds-tok"><div class="ds-tok-name">--fs-h2</div><div class="ds-tok-val">34rpx · 卡标题 / 区块标题</div></div>
+  </div>
+  <div class="row">
+    <div class="row__sample" style="font-size:var(--fs-body)">今天给示例猫做了体检，一切正常。</div>
+    <div class="row__meta ds-tok"><div class="ds-tok-name">--fs-body</div><div class="ds-tok-val">30rpx · 正文 / 记录引述</div></div>
+  </div>
+  <div class="row">
+    <div class="row__sample light" style="font-size:var(--fs-sub)">就诊医院 · 费用 · 病程标签</div>
+    <div class="row__meta ds-tok"><div class="ds-tok-name">--fs-sub</div><div class="ds-tok-val">26rpx · 次要信息 / 宠名</div></div>
+  </div>
+  <div class="row">
+    <div class="row__sample light" style="font-size:var(--fs-cap)">2026-06-18 14:30</div>
+    <div class="row__meta ds-tok"><div class="ds-tok-name">--fs-cap</div><div class="ds-tok-val">24rpx · 标注 / chip 文字</div></div>
+  </div>
+  <div class="row">
+    <div class="row__sample light" style="font-size:var(--fs-tiny)">PetsLog · 温暖记录</div>
+    <div class="row__meta ds-tok"><div class="ds-tok-name">--fs-tiny</div><div class="ds-tok-val">22rpx · 时间戳 / 水印</div></div>
+  </div>
+</body>
+</html>

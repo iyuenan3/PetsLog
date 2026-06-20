@@ -1,0 +1,238 @@
+/* ============================================================
+   PetsLog 全局组件类 ,逐字镜像 src/App.vue 的全局 <style>（app.wxss）。
+   这些类在小程序里挂 App.vue 才全局（mp-weixin 页样式不跨页）。
+   镜像同样集中一处，组件卡 <link> 即用。rpx→px 仅换单位、数字照抄。
+   ============================================================ */
+
+/* ---- 全局按钮系统 ---- */
+.btn-primary {
+  flex: 1;
+  height: 92px;
+  line-height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--r-pill);
+  background: var(--c-primary-grad);
+  color: var(--c-text-inv);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  box-shadow: var(--sh-primary);
+}
+.btn-primary--press { transform: scale(0.97); box-shadow: var(--sh-press); }
+.btn-ghost {
+  flex: 1;
+  height: 92px;
+  line-height: 92px;
+  border-radius: var(--r-pill);
+  background: var(--c-bg-sink);
+  color: var(--c-text-2);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-ghost--press { background: var(--c-divider); }
+
+/* ---- 全局空状态 ---- */
+.empty { padding: 140px var(--pad-page); display: flex; flex-direction: column; align-items: center; }
+.empty__art {
+  width: 200px;
+  height: 200px;
+  border-radius: var(--r-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 110px;
+  background: radial-gradient(circle at 50% 40%, #fff3ec 0%, var(--c-primary-wash) 70%, var(--c-bg) 100%);
+}
+.empty__art-img { width: 124px; height: 124px; animation: float-soft 3.2s ease-in-out infinite; }
+.empty__title { margin-top: 32px; font-size: var(--fs-h2); font-weight: 600; color: var(--c-text); }
+.empty__desc { margin-top: 12px; padding: 0 20px; font-size: var(--fs-sub); color: var(--c-text-2); text-align: center; line-height: 1.6; }
+
+/* ---- 行内小图标工具类 ---- */
+.ic { width: 30px; height: 30px; flex-shrink: 0; }
+.ic--sm { width: 24px; height: 24px; }
+.ic--lg { width: 40px; height: 40px; }
+
+/* ---- 入场 / 呼吸动画 ---- */
+@keyframes rise-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+.rise-in { animation: rise-in 0.34s ease-out backwards; }
+@keyframes float-soft { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.012); } }
+
+/* ---- 时间线卡片（timeline + course 共用） ---- */
+.tl-list { padding: 24px var(--pad-page) 40px; }
+.tl-item { background: var(--c-card); border-radius: var(--r-md); padding: 28px; margin-bottom: 20px; box-shadow: var(--sh-2); transition: transform 0.14s ease, opacity 0.14s ease; }
+.tl-item--press { transform: scale(0.97); opacity: 0.94; }
+.tl-item__head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.tl-dot { width: 18px; height: 18px; border-radius: var(--r-pill); flex: none; }
+.tl-item__pet { font-size: var(--fs-sub); font-weight: 600; color: var(--c-text); }
+.tl-chip { height: 40px; padding: 0 18px; border-radius: var(--r-pill); font-size: var(--fs-tiny); font-weight: 600; display: flex; align-items: center; }
+.tl-item__time { margin-left: auto; font-size: var(--fs-tiny); color: var(--c-text-3); }
+.tl-item__quote { display: block; font-size: var(--fs-body); color: var(--c-text); line-height: 1.55; }
+.tl-item__notes { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.tl-note { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; background: var(--c-bg-sink); border-radius: var(--r-sm); font-size: var(--fs-cap); color: var(--c-text-2); }
+.tl-note--tag { padding: 10px 20px; background: var(--c-primary-wash); color: var(--c-primary-deep); border: 2px solid var(--c-primary-tint); font-weight: 500; }
+.tl-note--tag-press { background: var(--c-primary-tint); }
+
+/* 事件类型配色：点（带柔晕环）+ 标签。⚠ ev-care 为硬编码（DRIFT #1） */
+.tl-dot.ev-symptom { background: var(--c-danger); box-shadow: 0 0 0 6px var(--c-danger-tint); }
+.tl-dot.ev-med { background: var(--c-rt-med); box-shadow: 0 0 0 6px var(--c-rt-med-bg); }
+.tl-dot.ev-vaccine { background: var(--c-rt-vaccine); box-shadow: 0 0 0 6px var(--c-rt-vaccine-bg); }
+.tl-dot.ev-deworm { background: var(--c-rt-deworm); box-shadow: 0 0 0 6px var(--c-rt-deworm-bg); }
+.tl-dot.ev-weight { background: var(--c-success); box-shadow: 0 0 0 6px var(--c-success-tint); }
+.tl-dot.ev-clinic { background: var(--c-rt-other); box-shadow: 0 0 0 6px var(--c-rt-other-bg); }
+.tl-dot.ev-care { background: #4fa89b; box-shadow: 0 0 0 6px rgba(79, 168, 155, 0.16); }
+.tl-dot.ev-other { background: var(--c-text-3); box-shadow: 0 0 0 6px var(--c-bg-sink); }
+
+.tl-chip.ev-symptom { color: var(--c-danger); background: var(--c-danger-tint); }
+.tl-chip.ev-med { color: var(--c-rt-med); background: var(--c-rt-med-bg); }
+.tl-chip.ev-vaccine { color: var(--c-rt-vaccine); background: var(--c-rt-vaccine-bg); }
+.tl-chip.ev-deworm { color: var(--c-rt-deworm); background: var(--c-rt-deworm-bg); }
+.tl-chip.ev-weight { color: var(--c-success); background: var(--c-success-tint); }
+.tl-chip.ev-clinic { color: var(--c-rt-other); background: var(--c-rt-other-bg); }
+.tl-chip.ev-care { color: #3c8579; background: rgba(79, 168, 155, 0.14); }
+.tl-chip.ev-other { color: var(--c-text-2); background: var(--c-bg-sink); }
+
+/* ============================================================
+   health.vue 页内组件类 ,镜像集中存放（小程序里这些是 health 页 local，非全局）。
+   ⚠ DRIFT #1：.rm-card--care / .chip-tag--care 又一次硬编码养护色。
+   ⚠ DRIFT #2：.chip-tag--* 与全局 .tl-chip.ev-* 视觉等价但平行重复两套 chip 词汇。
+   ============================================================ */
+/* 分段控件 */
+.seg { display: flex; background: var(--c-bg-sink); border-radius: var(--r-pill); padding: 8px; margin: 24px var(--pad-page) 8px; }
+.seg__item { flex: 1; height: 76px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-pill); font-size: var(--fs-sub); color: var(--c-text-2); font-weight: 500; }
+.seg__item--on { background: var(--c-card); color: var(--c-primary-deep); font-weight: 600; box-shadow: var(--sh-1); }
+.seg__item--press { opacity: 0.7; }
+
+/* 提醒卡 */
+.rm-list { padding: 16px var(--pad-page) 8px; }
+.rm-card { position: relative; background: var(--c-card); border-radius: var(--r-md); padding: 28px; margin-bottom: 20px; box-shadow: var(--sh-2); overflow: hidden; }
+.rm-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: var(--c-rt-other); }
+.rm-card--med::before { background: var(--c-rt-med); }
+.rm-card--vaccine::before { background: var(--c-rt-vaccine); }
+.rm-card--deworm::before { background: var(--c-rt-deworm); }
+.rm-card--other::before { background: var(--c-rt-other); }
+.rm-card--care::before { background: #4fa89b; }
+.rm-card--overdue::before { background: var(--c-danger); }
+.rm-card__head { display: flex; align-items: center; gap: 14px; }
+.chip-tag { flex: none; height: 40px; padding: 0 18px; border-radius: var(--r-pill); font-size: var(--fs-tiny); font-weight: 600; display: flex; align-items: center; }
+.chip-tag--med { color: var(--c-rt-med); background: var(--c-rt-med-bg); }
+.chip-tag--vaccine { color: var(--c-rt-vaccine); background: var(--c-rt-vaccine-bg); }
+.chip-tag--deworm { color: var(--c-rt-deworm); background: var(--c-rt-deworm-bg); }
+.chip-tag--other { color: var(--c-rt-other); background: var(--c-rt-other-bg); }
+.chip-tag--care { color: #3c8579; background: rgba(79, 168, 155, 0.14); }
+.rm-card__title { font-size: var(--fs-h2); font-weight: 600; color: var(--c-text); flex: 1; }
+.rm-card__sub { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-top: 16px; }
+.rm-card__pet { font-size: var(--fs-cap); color: var(--c-text-2); background: var(--c-bg-sink); padding: 4px 16px; border-radius: var(--r-pill); }
+.rm-card__due { font-size: var(--fs-sub); font-weight: 600; }
+.rm-card__due--overdue { color: var(--c-danger); }
+.rm-card__due--today { color: var(--c-warning); }
+.rm-card__due--future { color: var(--c-text-2); font-weight: 500; }
+.rm-card__repeat { font-size: var(--fs-cap); color: var(--c-text-3); }
+.rm-card__ops { display: flex; gap: 16px; margin-top: 24px; }
+
+/* 次级操作按钮（提醒卡 + 主粮卡共用） */
+.op { flex: 1; height: 72px; border-radius: var(--r-pill); font-size: var(--fs-cap); font-weight: 500; display: flex; align-items: center; justify-content: center; }
+.op--success { background: var(--c-success-tint); color: var(--c-success); }
+.op--secondary { background: var(--c-bg-sink); color: var(--c-text-2); }
+.op--danger { background: var(--c-danger-tint); color: var(--c-danger); }
+.op--press { opacity: 0.6; }
+
+/* 药品卡 */
+.med-list { padding: 16px var(--pad-page) 8px; }
+.med-card { background: var(--c-card); border-radius: var(--r-md); padding: 28px; margin-bottom: 20px; box-shadow: var(--sh-2); display: flex; align-items: flex-start; gap: 20px; }
+.med-card__icon { width: 88px; height: 88px; flex: none; border-radius: var(--r-md); background: var(--c-primary-tint); display: flex; align-items: center; justify-content: center; }
+.med-card__icon-img { width: 56px; height: 56px; }
+.med-card__body { flex: 1; }
+.med-card__top { display: flex; align-items: center; gap: 14px; }
+.med-card__name { font-size: var(--fs-h2); font-weight: 600; color: var(--c-text); }
+.med-card__badge { height: 36px; padding: 0 14px; border-radius: var(--r-pill); background: var(--c-danger-tint); color: var(--c-danger); font-size: var(--fs-tiny); font-weight: 600; display: flex; align-items: center; }
+.med-card__qty { display: block; font-size: var(--fs-cap); color: var(--c-primary-deep); font-weight: 600; margin-top: 4px; }
+.med-card__effect { display: block; font-size: var(--fs-sub); color: var(--c-text-2); margin-top: 10px; line-height: 1.5; }
+.med-card__exp { display: block; font-size: var(--fs-cap); color: var(--c-text-3); margin-top: 12px; }
+.med-card__exp--soon { color: var(--c-danger); font-weight: 600; }
+
+/* 主粮台账 */
+.food-head { display: flex; align-items: center; justify-content: space-between; padding: 20px var(--pad-page) 4px; }
+.food-head__title { font-size: var(--fs-sub); font-weight: 600; color: var(--c-text); }
+.food-head__add { height: 56px; padding: 0 26px; display: flex; align-items: center; border-radius: var(--r-pill); background: var(--c-primary-tint); color: var(--c-primary-deep); font-size: var(--fs-cap); font-weight: 600; }
+.food-head__add--press { opacity: 0.7; }
+.food-list { padding: 12px var(--pad-page) 8px; }
+.food-grp { margin-bottom: 28px; }
+.food-grp__head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding-left: 4px; }
+.food-grp__avatar { width: 40px; height: 40px; border-radius: var(--r-pill); background: var(--c-bg-sink); flex: none; }
+.food-grp__label { font-size: var(--fs-sub); font-weight: 600; color: var(--c-text); }
+.food-grp__hint { display: block; font-size: var(--fs-cap); color: var(--c-text-3); background: var(--c-bg-sink); border-radius: var(--r-sm); padding: 14px 22px; margin-bottom: 16px; }
+.food-card { position: relative; background: var(--c-card); border-radius: var(--r-md); padding: 28px; margin-bottom: 20px; box-shadow: var(--sh-2); }
+.food-card--current::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: var(--c-success); border-radius: var(--r-pill) 0 0 var(--r-pill); }
+.food-card__top { display: flex; align-items: center; gap: 14px; }
+.food-card__name { font-size: var(--fs-h2); font-weight: 600; color: var(--c-text); }
+.food-card__scope { flex: none; height: 36px; padding: 0 16px; border-radius: var(--r-pill); font-size: var(--fs-tiny); font-weight: 600; display: flex; align-items: center; background: var(--c-bg-sink); color: var(--c-text-2); }
+.food-card__scope--solo { background: var(--c-primary-tint); color: var(--c-primary-deep); }
+.food-card__badge { height: 36px; padding: 0 14px; border-radius: var(--r-pill); background: var(--c-success-tint); color: var(--c-success); font-size: var(--fs-tiny); font-weight: 600; display: flex; align-items: center; }
+.food-card__period { display: block; font-size: var(--fs-cap); color: var(--c-text-2); margin-top: 10px; }
+.food-card__note { display: block; font-size: var(--fs-cap); color: var(--c-text-3); margin-top: 8px; }
+.food-card__ops { display: flex; gap: 16px; margin-top: 22px; }
+
+/* 弹层 sheet + 表单（主粮编辑 / 录入结构化共用形态） */
+.sheet-mask { position: fixed; inset: 0; background: rgba(58, 51, 48, 0.38); display: flex; align-items: flex-end; z-index: 50; }
+.sheet { width: 100%; background: var(--c-card); border-radius: var(--r-xl) var(--r-xl) 0 0; box-shadow: var(--sh-3); padding: 16px var(--pad-page) 180px; display: flex; flex-direction: column; max-height: 88vh; }
+.sheet__grab { width: 64px; height: 8px; border-radius: var(--r-pill); background: var(--c-divider); margin: 8px auto 24px; }
+.sheet__title { display: block; font-size: var(--fs-h2); font-weight: 700; color: var(--c-text); margin-bottom: 20px; }
+.f-form { flex: 1 1 auto; min-height: 0; background: var(--c-card-cream); border-radius: var(--r-md); padding: 4px 28px; margin-bottom: 28px; }
+.f-row { display: flex; align-items: center; min-height: 92px; border-bottom: 2px solid var(--c-divider); }
+.f-row:last-child { border-bottom: none; }
+.f-row__label { width: 150px; flex: none; font-size: var(--fs-sub); color: var(--c-text-2); }
+.f-input { flex: 1; font-size: var(--fs-body); color: var(--c-text); text-align: right; }
+.f-ph { color: var(--c-text-3); }
+.f-pick { text-align: right; }
+.f-pick--ph { color: var(--c-text-3); }
+.sheet__actions { display: flex; gap: 20px; }
+
+/* ============================================================
+   自定义 tabBar（custom-tab-bar，4 tab + 中央 FAB）
+   ============================================================ */
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; padding-top: 44px; }
+.tabbar__inner { position: relative; display: flex; height: 108px; background: var(--c-card-cream); border-top: 2px solid var(--c-border); box-shadow: 0 -6px 20px rgba(196, 124, 86, 0.06); }
+.tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.tab__ico { width: 48px; height: 48px; }
+.tab__txt { margin-top: 4px; font-size: 20px; color: var(--c-text-3); }
+.tab--on .tab__txt { color: var(--c-primary); font-weight: 600; }
+.tab--press { opacity: 0.6; }
+.tab--center { position: relative; }
+.fab { position: absolute; top: -34px; width: 100px; height: 100px; border-radius: 999px; background: var(--c-primary-grad); box-shadow: 0 10px 24px rgba(242, 130, 92, 0.36); border: 6px solid var(--c-card-cream); display: flex; align-items: center; justify-content: center; }
+.fab__plus { color: #fff; font-size: 58px; line-height: 1; font-weight: 300; margin-top: -4px; }
+.fab--press { transform: scale(0.92); }
+
+/* ============================================================
+   宠物档案卡 ,HTML 静态复刻（ADR-021/022/025）。
+   ⚠ 真相源是 canvas（src/petCard.js），此处仅作视觉参照，改它须回写 petCard.js。
+   比例 / 像素为近似，非逐点对齐。
+   ============================================================ */
+.pc { position: relative; width: 540px; height: 810px; border-radius: 36px; overflow: hidden; background: linear-gradient(180deg, #fce7da 0%, #faf1e9 52%, #faf6f0 100%); box-shadow: var(--sh-2); font-family: var(--font); color: var(--c-text); }
+.pc__deco { position: absolute; }
+.pc__body { position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; padding: 64px 44px 0; box-sizing: border-box; }
+.pc__avatar { width: 200px; height: 200px; position: relative; display: flex; align-items: center; justify-content: center; }
+.pc__avatar::before { content: ''; position: absolute; inset: -20px; border-radius: 999px; background: radial-gradient(circle at 50% 42%, rgba(248, 168, 135, 0.55) 0%, rgba(248, 168, 135, 0) 70%); }
+.pc__avatar img { width: 200px; height: 200px; border-radius: 999px; border: 6px solid #fff; box-shadow: 0 8px 22px rgba(242, 130, 92, 0.22); position: relative; object-fit: cover; }
+.pc__name { margin-top: 34px; display: flex; align-items: center; gap: 12px; }
+.pc__name b { font-size: 46px; font-weight: 700; color: var(--c-text); }
+.pc__gender { font-size: 30px; font-weight: 700; }
+.pc__gender--f { color: #e86f9e; }
+.pc__gender--m { color: #5b8def; }
+.pc__species { margin-top: 18px; height: 52px; padding: 0 26px; display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.7); border: 2px solid var(--c-primary-tint); color: var(--c-primary-deep); font-size: 24px; font-weight: 600; }
+.pc__caps { margin-top: 40px; display: flex; gap: 18px; }
+.pc__cap { width: 148px; height: 120px; border-radius: 24px; background: rgba(255, 255, 255, 0.66); border: 2px solid var(--c-primary-tint); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.pc__cap img { width: 46px; height: 46px; }
+.pc__cap-v { font-size: 30px; font-weight: 700; color: var(--c-text); }
+.pc__cap-l { font-size: 22px; color: var(--c-text-2); }
+.pc__band { margin-top: 34px; width: 100%; height: 88px; border-radius: 22px; background: rgba(255, 255, 255, 0.6); border: 2px solid var(--c-primary-tint); display: flex; align-items: center; gap: 16px; padding: 0 26px; box-sizing: border-box; }
+.pc__band svg { flex: 1; height: 52px; }
+.pc__band-tag { font-size: 26px; font-weight: 700; color: var(--c-success); }
+.pc__intro { margin-top: 30px; padding: 0 24px; font-size: 26px; color: var(--c-text); text-align: center; line-height: 1.5; }
+.pc__foot { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 21px; color: var(--c-text-3); }
+.pc__foot img { width: 30px; height: 30px; opacity: 0.7; }

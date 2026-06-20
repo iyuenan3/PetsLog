@@ -1,0 +1,78 @@
+<!-- @dsCard group="Screens" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>宠物详情 Pet Detail</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  body.ds { padding: 40px; background: #ece4da; }
+  .pd { padding: 24px var(--pad-page) 60px; }
+  .pd-head { display: flex; align-items: center; gap: 24px; padding: 16px 4px 28px; }
+  .pd-head__avatar { width: 132px; height: 132px; border-radius: var(--r-pill); border: 5px solid #fff; box-shadow: 0 8px 22px rgba(242,130,92,0.2); object-fit: cover; flex: none; }
+  .pd-head__info { flex: 1; }
+  .pd-head__name { display: flex; align-items: center; gap: 12px; }
+  .pd-head__name b { font-size: var(--fs-h1); font-weight: 700; color: var(--c-text); }
+  .pd-head__g { font-size: var(--fs-h2); font-weight: 700; color: #e86f9e; }
+  .pd-head__chip { margin-top: 12px; display: inline-flex; align-items: center; gap: 6px; height: 48px; padding: 0 22px; border-radius: var(--r-pill); background: var(--c-primary-wash); border: 2px solid var(--c-primary-tint); color: var(--c-primary-deep); font-size: var(--fs-cap); font-weight: 600; }
+  .card-block { background: var(--c-card); border-radius: var(--r-md); padding: 24px 24px 18px; box-shadow: var(--sh-2); margin-bottom: 24px; }
+  .card-block__title { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-cap); color: var(--c-text-2); }
+  .card-block__title img { width: 24px; height: 24px; }
+  .card-block svg { width: 100%; height: 240px; margin-top: 10px; display: block; }
+  .sec-title { font-size: var(--fs-sub); font-weight: 600; color: var(--c-text); margin: 8px 4px 16px; }
+  .pd-actions { display: flex; gap: 20px; margin-top: 12px; }
+</style>
+</head>
+<body class="ds">
+  <div class="phone">
+    <div class="pd">
+      <div class="pd-head">
+        <img class="pd-head__avatar" src="../assets/avatar/cat.png" alt="">
+        <div class="pd-head__info">
+          <div class="pd-head__name"><b>示例猫</b><span class="pd-head__g">♀</span></div>
+          <span class="pd-head__chip">🐱 中华田园猫 · 2岁3月 · 已绝育</span>
+        </div>
+      </div>
+
+      <div class="card-block">
+        <span class="card-block__title"><img src="../assets/icon/fn-weight.png">体重曲线</span>
+        <svg viewBox="0 0 600 240" preserveAspectRatio="none">
+          <polyline points="14,150 96,140 178,120 260,128 342,96 424,104 506,76 586,84" fill="none" stroke="#f0907a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          <circle cx="14" cy="150" r="4" fill="#f0907a"></circle>
+          <circle cx="586" cy="84" r="4" fill="#f0907a"></circle>
+        </svg>
+      </div>
+
+      <div class="sec-title">最近记录</div>
+      <div class="tl-list" style="padding:0">
+        <div class="tl-item">
+          <div class="tl-item__head">
+            <span class="tl-dot ev-clinic"></span><span class="tl-item__pet">示例猫</span>
+            <span class="tl-chip ev-clinic">就医</span><span class="tl-item__time">06-18 14:30</span>
+          </div>
+          <span class="tl-item__quote">复查皮肤，恢复不错。</span>
+          <div class="tl-item__notes">
+            <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-cost.png">¥320</span>
+            <span class="tl-note tl-note--tag"><img class="ic ic--sm" src="../assets/icon/fn-tag.png">皮肤病疗程 ›</span>
+          </div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-item__head">
+            <span class="tl-dot ev-weight"></span><span class="tl-item__pet">示例猫</span>
+            <span class="tl-chip ev-weight">体重</span><span class="tl-item__time">06-15 09:00</span>
+          </div>
+          <span class="tl-item__quote">空腹 4.8kg。</span>
+          <div class="tl-item__notes"><span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-weight.png">4.8kg</span></div>
+        </div>
+      </div>
+
+      <div class="pd-actions">
+        <div class="btn-ghost">编辑档案</div>
+        <div class="btn-primary">生成档案卡</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

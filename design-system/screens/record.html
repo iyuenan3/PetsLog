@@ -1,0 +1,59 @@
+<!-- @dsCard group="Screens" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>录入 · 记一笔 Record</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  body.ds { padding: 40px; background: #ece4da; }
+  .phone { display: flex; align-items: center; justify-content: center; background: rgba(58,51,48,0.45); }
+  .card { width: 86%; background: var(--c-card); border-radius: var(--r-xl); box-shadow: var(--sh-3); padding: 24px var(--pad-page) 32px; box-sizing: border-box; }
+  .card__head { display: flex; align-items: center; justify-content: space-between; }
+  .card__title { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-h2); font-weight: 700; color: var(--c-text); }
+  .card__title img { width: 32px; height: 32px; }
+  .card__close { width: 56px; height: 56px; line-height: 56px; text-align: center; font-size: var(--fs-body); color: var(--c-text-3); }
+  .card__hint { display: block; margin-top: 4px; font-size: var(--fs-sub); color: var(--c-text-2); line-height: 1.5; }
+  .rec__input { margin-top: 32px; min-height: 200px; padding: 28px; background: var(--c-card); border: 2px solid var(--c-border); border-radius: var(--r-lg); font-size: var(--fs-body); line-height: 1.6; color: var(--c-text-2); box-shadow: var(--sh-1); }
+  .rec__examples { margin-top: 24px; display: flex; flex-direction: column; gap: 16px; align-items: flex-start; }
+  .rec__ex { padding: 16px 28px; background: var(--c-primary-wash); border: 2px solid var(--c-primary-tint); border-radius: var(--r-pill); font-size: var(--fs-sub); color: var(--c-primary-deep); }
+  .rec__btn { margin-top: 48px; height: 96px; line-height: 96px; border-radius: var(--r-pill); background: var(--c-primary-grad); box-shadow: var(--sh-primary); color: var(--c-text-inv); font-size: var(--fs-body); font-weight: 600; letter-spacing: 4px; text-align: center; }
+  .card__alt-divider { display: flex; align-items: center; gap: 16px; margin: 28px 0 20px; }
+  .card__alt-line { flex: 1; height: 2px; background: var(--c-divider); }
+  .card__alt-text { font-size: var(--fs-cap); color: var(--c-text-3); }
+  .alt-entries { display: flex; gap: 16px; }
+  .alt-entry { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 20px 8px; background: var(--c-bg-sink); border-radius: var(--r-lg); }
+  .alt-entry img { width: 48px; height: 48px; }
+  .alt-entry__name { font-size: var(--fs-sub); font-weight: 600; color: var(--c-text); }
+  .alt-entry--soon { opacity: 0.7; }
+  .alt-entry__soon { font-size: var(--fs-tiny); color: var(--c-text-3); }
+</style>
+</head>
+<body class="ds">
+  <div class="phone">
+    <div class="card">
+      <div class="card__head">
+        <div class="card__title"><span>记录</span><img src="../assets/icon/paw.png"></div>
+        <span class="card__close">✕</span>
+      </div>
+      <span class="card__hint">用大白话说一句，AI 自动归档。可记健康、设提醒、入库药品。</span>
+      <div class="rec__input">例如「示例猫今天吐了，体重 4.2kg」</div>
+      <div class="rec__examples">
+        <span class="rec__ex">示例犬今天打了狂犬疫苗</span>
+        <span class="rec__ex">提醒我下周三给示例猫驱虫</span>
+        <span class="rec__ex">入库 美能 24 片 有效期到 2027-03</span>
+      </div>
+      <div class="rec__btn">记 录</div>
+      <div class="card__alt-divider">
+        <div class="card__alt-line"></div><span class="card__alt-text">或换种方式</span><div class="card__alt-line"></div>
+      </div>
+      <div class="alt-entries">
+        <div class="alt-entry"><img src="../assets/icon/keyboard.png"><span class="alt-entry__name">结构化逐项</span></div>
+        <div class="alt-entry alt-entry--soon"><img src="../assets/icon/mic.png"><span class="alt-entry__name">语音</span><span class="alt-entry__soon">敬请期待</span></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

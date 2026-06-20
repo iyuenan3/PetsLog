@@ -1,0 +1,85 @@
+<!-- @dsCard group="Screens" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>病程视图 Course</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  body.ds { padding: 40px; background: #ece4da; }
+  .course { padding: 24px var(--pad-page) 60px; }
+  .cv-card { background: linear-gradient(135deg, var(--c-primary-wash) 0%, var(--c-card) 70%); border-radius: var(--r-md); padding: 32px; box-shadow: var(--sh-2); margin-bottom: 24px; }
+  .cv-card__head { display: flex; align-items: baseline; gap: 16px; }
+  .cv-card__tag { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-h2); font-weight: 700; color: var(--c-text); }
+  .cv-card__tag img { width: 30px; height: 30px; }
+  .cv-card__pet { font-size: var(--fs-sub); color: var(--c-primary-deep); font-weight: 600; }
+  .cv-stats { display: flex; gap: 48px; margin-top: 28px; }
+  .cv-stat { display: flex; flex-direction: column; gap: 6px; }
+  .cv-stat__n { font-size: var(--fs-h2); font-weight: 700; color: var(--c-primary-deep); }
+  .cv-stat__l { font-size: var(--fs-cap); color: var(--c-text-2); }
+  .cv-card__range { display: block; margin-top: 22px; font-size: var(--fs-cap); color: var(--c-text-3); }
+  .cv-chart { background: var(--c-card); border-radius: var(--r-md); padding: 24px 24px 18px; box-shadow: var(--sh-2); margin-bottom: 24px; }
+  .cv-chart__title { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-cap); color: var(--c-text-2); }
+  .cv-chart__title img { width: 24px; height: 24px; }
+  .cv-chart svg { width: 100%; height: 220px; margin-top: 10px; display: block; }
+</style>
+</head>
+<body class="ds">
+  <div class="phone">
+    <div class="course">
+      <div class="cv-card">
+        <div class="cv-card__head">
+          <span class="cv-card__tag"><img src="../assets/icon/fn-tag.png">皮肤病疗程</span>
+          <span class="cv-card__pet">示例猫</span>
+        </div>
+        <div class="cv-stats">
+          <div class="cv-stat"><span class="cv-stat__n">7</span><span class="cv-stat__l">条记录</span></div>
+          <div class="cv-stat"><span class="cv-stat__n">42 天</span><span class="cv-stat__l">跨度</span></div>
+          <div class="cv-stat"><span class="cv-stat__n">¥860</span><span class="cv-stat__l">已记花费</span></div>
+        </div>
+        <span class="cv-card__range">2026-05-08 ~ 2026-06-18</span>
+      </div>
+
+      <div class="cv-chart">
+        <span class="cv-chart__title"><img src="../assets/icon/fn-weight.png">体重趋势</span>
+        <svg viewBox="0 0 600 220" preserveAspectRatio="none">
+          <polyline points="14,60 110,80 206,72 302,110 398,96 494,140 586,150" fill="none" stroke="#f0907a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+          <circle cx="14" cy="60" r="4" fill="#f0907a"></circle>
+          <circle cx="586" cy="150" r="4" fill="#f0907a"></circle>
+        </svg>
+      </div>
+
+      <div class="tl-list" style="padding:0">
+        <div class="tl-item">
+          <div class="tl-item__head">
+            <span class="tl-dot ev-clinic"></span><span class="tl-item__pet">示例猫</span>
+            <span class="tl-chip ev-clinic">就医</span><span class="tl-item__time">06-18 14:30</span>
+          </div>
+          <span class="tl-item__quote">复查皮肤，恢复不错，继续用药一周。</span>
+          <div class="tl-item__notes">
+            <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-hospital.png">幸福宠物医院</span>
+            <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-cost.png">¥320</span>
+          </div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-item__head">
+            <span class="tl-dot ev-med"></span><span class="tl-item__pet">示例猫</span>
+            <span class="tl-chip ev-med">用药</span><span class="tl-item__time">06-05 21:00</span>
+          </div>
+          <span class="tl-item__quote">开始口服 + 外用药，每日两次。</span>
+          <div class="tl-item__notes"><span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-med.png">某皮肤用药</span></div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-item__head">
+            <span class="tl-dot ev-symptom"></span><span class="tl-item__pet">示例猫</span>
+            <span class="tl-chip ev-symptom">症状</span><span class="tl-item__time">05-08 19:30</span>
+          </div>
+          <span class="tl-item__quote">脖子后面有一小块掉毛 + 红，挠得厉害。</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

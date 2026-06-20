@@ -1,0 +1,83 @@
+<!-- @dsCard group="Screens" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>首页 · 宠物 Home</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  body.ds { padding: 40px; background: #ece4da; }
+  .greeting { padding: 40px var(--pad-page) 16px; display: flex; flex-direction: column; }
+  .greeting__hi { display: flex; align-items: center; gap: 12px; font-size: var(--fs-display); line-height: 1.25; font-weight: 700; color: var(--c-text); }
+  .greeting__hi img { width: 40px; height: 40px; }
+  .greeting__sub { margin-top: 8px; font-size: var(--fs-sub); color: var(--c-text-2); }
+  .banner { margin: 8px var(--pad-page) 24px; display: flex; align-items: center; gap: 16px; padding: 24px 28px; background: var(--c-primary-wash); border: 2px solid var(--c-primary-tint); border-radius: var(--r-md); box-shadow: var(--sh-1); }
+  .banner img { width: 40px; height: 40px; }
+  .banner__text { flex: 1; font-size: var(--fs-sub); color: var(--c-primary-deep); font-weight: 500; }
+  .banner__num { font-weight: 700; }
+  .banner__arrow { font-size: 32px; color: var(--c-primary); }
+  .sw-stage { position: relative; height: 740px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .ghost { position: absolute; top: 50%; transform: translateY(-50%); width: 120px; height: 640px; border-radius: 28px; background: var(--c-card); box-shadow: var(--sh-2); opacity: 0.6; }
+  .ghost--l { left: -54px; }
+  .ghost--r { right: -54px; border: 3px dashed rgba(242,130,92,0.4); background: transparent; box-shadow: none; }
+  .sw-stage .pc { transform: scale(0.86); box-shadow: 0 16px 40px rgba(196,124,86,0.22); }
+  .dots { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 20px 0 8px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c-primary-tint); }
+  .dot--on { width: 32px; border-radius: 6px; background: var(--c-primary); }
+</style>
+</head>
+<body class="ds">
+  <div class="phone">
+    <div class="greeting">
+      <div class="greeting__hi"><span>今天，毛孩子们还好吗</span><img src="../assets/icon/paw.png"></div>
+      <span class="greeting__sub">点下面的 ＋ 说一句，我帮你记下来</span>
+    </div>
+    <div class="banner">
+      <img src="../assets/icon/bell.png">
+      <span class="banner__text">有 <span class="banner__num">2</span> 条提醒到期</span>
+      <span class="banner__arrow">›</span>
+    </div>
+
+    <div class="sw-stage">
+      <div class="ghost ghost--l"></div>
+      <div class="ghost ghost--r"></div>
+      <div class="pc">
+        <img class="pc__deco" src="../assets/icon/sparkle.png" style="top:46px;left:44px;width:50px;opacity:.55">
+        <img class="pc__deco" src="../assets/icon/paw.png" style="top:120px;right:54px;width:44px;opacity:.32">
+        <div class="pc__body">
+          <div class="pc__avatar"><img src="../assets/avatar/cat.png" alt=""></div>
+          <div class="pc__name"><b>示例猫</b><span class="pc__gender pc__gender--f">♀</span></div>
+          <div class="pc__species">🐱 中华田园猫 · 已绝育</div>
+          <div class="pc__caps">
+            <div class="pc__cap"><img src="../assets/icon/cake.png"><span class="pc__cap-v">2岁3月</span><span class="pc__cap-l">年龄</span></div>
+            <div class="pc__cap"><img src="../assets/icon/scale.png"><span class="pc__cap-v">4.8kg</span><span class="pc__cap-l">体重</span></div>
+            <div class="pc__cap"><img src="../assets/icon/heart.png"><span class="pc__cap-v">682天</span><span class="pc__cap-l">陪伴</span></div>
+          </div>
+          <div class="pc__band">
+            <svg viewBox="0 0 460 52" preserveAspectRatio="none">
+              <polyline points="6,40 66,32 126,36 186,22 246,28 306,16 366,20 446,8" fill="none" stroke="#f0907a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+              <circle cx="446" cy="8" r="5" fill="#f0907a"></circle>
+            </svg>
+            <span class="pc__band-tag">↗ 稳中有增</span>
+          </div>
+          <div class="pc__intro">爱睡懒觉的小馋猫，最喜欢窝在阳台晒太阳。</div>
+          <div class="pc__foot"><img src="../assets/icon/paw.png">PetsLog · 温暖记录</div>
+        </div>
+      </div>
+    </div>
+    <div class="dots"><span class="dot dot--on"></span><span class="dot"></span><span class="dot"></span></div>
+
+    <div class="tabbar">
+      <div class="tabbar__inner">
+        <div class="tab tab--on"><img class="tab__ico" src="../assets/icon/paw.png"><div class="tab__txt">宠物</div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/calendar.png"><div class="tab__txt">时间线</div></div>
+        <div class="tab tab--center"><div class="fab"><div class="fab__plus">+</div></div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/stetho.png"><div class="tab__txt">健康</div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/person.png"><div class="tab__txt">我的</div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

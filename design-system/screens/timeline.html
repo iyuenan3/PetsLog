@@ -1,0 +1,92 @@
+<!-- @dsCard group="Screens" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>时间线 Timeline</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  body.ds { padding: 40px; background: #ece4da; }
+  .scroll { padding-bottom: 220px; }
+  .tl-filter { white-space: nowrap; overflow-x: auto; padding: 28px 0 4px; }
+  .tl-filter__inner { display: inline-flex; gap: 14px; padding: 0 var(--pad-page); }
+  .tl-filter__chip { flex: none; height: 56px; padding: 0 26px; display: flex; align-items: center; gap: 6px; border-radius: var(--r-pill); background: var(--c-card); border: 2px solid var(--c-border); font-size: var(--fs-cap); color: var(--c-text-2); }
+  .tl-filter__chip--press { background: var(--c-primary-tint); border-color: var(--c-primary); color: var(--c-primary-deep); }
+  .tl-more { text-align: center; padding: 28px 0 8px; font-size: var(--fs-cap); color: var(--c-text-3); letter-spacing: 2px; }
+</style>
+</head>
+<body class="ds">
+  <div class="phone">
+    <div class="scroll">
+      <div class="tl-filter">
+        <div class="tl-filter__inner">
+          <div class="tl-filter__chip"><img class="ic ic--sm" src="../assets/icon/fn-tag.png">皮肤病疗程</div>
+          <div class="tl-filter__chip tl-filter__chip--press"><img class="ic ic--sm" src="../assets/icon/fn-tag.png">绝育恢复</div>
+          <div class="tl-filter__chip"><img class="ic ic--sm" src="../assets/icon/fn-tag.png">牙结石处理</div>
+        </div>
+      </div>
+
+      <div class="tl-list">
+        <div class="tl-item">
+          <div class="tl-item__head">
+            <span class="tl-dot ev-clinic"></span><span class="tl-item__pet">示例猫</span>
+            <span class="tl-chip ev-clinic">就医</span><span class="tl-item__time">06-18 14:30</span>
+          </div>
+          <span class="tl-item__quote">带去医院复查皮肤，医生说恢复得不错，继续用药一周。</span>
+          <div class="tl-item__notes">
+            <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-hospital.png">幸福宠物医院</span>
+            <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-cost.png">¥320</span>
+            <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-attach.png">2</span>
+            <span class="tl-note tl-note--tag"><img class="ic ic--sm" src="../assets/icon/fn-tag.png">皮肤病疗程 ›</span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-item__head">
+            <span class="tl-dot ev-weight"></span><span class="tl-item__pet">示例猫</span>
+            <span class="tl-chip ev-weight">体重</span><span class="tl-item__time">06-15 09:00</span>
+          </div>
+          <span class="tl-item__quote">早上空腹称重 4.8kg，比上月稳了一点。</span>
+          <div class="tl-item__notes"><span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-weight.png">4.8kg</span></div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-item__head">
+            <span class="tl-dot ev-care"></span><span class="tl-item__pet">示例龟</span>
+            <span class="tl-chip ev-care">养护</span><span class="tl-item__time">06-14 20:10</span>
+          </div>
+          <span class="tl-item__quote">换水 + 测水质，整体达标。</span>
+          <div class="tl-item__notes">
+            <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-param.png">水温 26℃</span>
+            <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-param.png">pH 7.2</span>
+            <span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-param.png">氨 0.1</span>
+          </div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-item__head">
+            <span class="tl-dot ev-med"></span><span class="tl-item__pet">示例犬</span>
+            <span class="tl-chip ev-med">用药</span><span class="tl-item__time">06-12 08:00</span>
+          </div>
+          <span class="tl-item__quote">早晚各喂一次心丝虫预防药。</span>
+          <div class="tl-item__notes"><span class="tl-note"><img class="ic ic--sm" src="../assets/icon/fn-med.png">心丝虫预防药</span></div>
+        </div>
+
+        <div class="tl-more">· 没有更多了 ·</div>
+      </div>
+    </div>
+
+    <div class="tabbar">
+      <div class="tabbar__inner">
+        <div class="tab"><img class="tab__ico" src="../assets/icon/paw.png"><div class="tab__txt">宠物</div></div>
+        <div class="tab tab--on"><img class="tab__ico" src="../assets/icon/calendar.png"><div class="tab__txt">时间线</div></div>
+        <div class="tab tab--center"><div class="fab"><div class="fab__plus">+</div></div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/stetho.png"><div class="tab__txt">健康</div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/person.png"><div class="tab__txt">我的</div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

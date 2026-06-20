@@ -1,0 +1,73 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>主粮卡 · Food Card</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+</head>
+<body class="ds">
+  <h1 class="ds-title">主粮卡 · Food Card</h1>
+  <p class="ds-desc">主粮台账，按物种分组（ADR-027 多宠化）。在喂卡左绿条 + 在喂 badge；对象 chip：全部&lt;物种&gt;（灰）/ 仅某宠（主色高亮）。</p>
+
+  <div class="ds-stage">
+    <div class="food-head" style="padding-left:0;padding-right:0;padding-top:0">
+      <span class="food-head__title">主粮台账</span>
+      <span class="food-head__add">＋ 添加</span>
+    </div>
+    <div class="food-list" style="padding-left:0;padding-right:0;padding-bottom:0">
+      <div class="food-grp">
+        <div class="food-grp__head">
+          <img class="food-grp__avatar" src="../assets/avatar/cat.png" alt="">
+          <span class="food-grp__label">猫 · 2 款</span>
+        </div>
+        <div class="food-card food-card--current">
+          <div class="food-card__top">
+            <span class="food-card__name">皇家 K36</span>
+            <span class="food-card__scope">全部猫</span>
+            <span class="food-card__badge">在喂</span>
+          </div>
+          <span class="food-card__period">2026-03 至今</span>
+          <span class="food-card__note">绝育猫粮，控制体重。</span>
+          <div class="food-card__ops">
+            <div class="op op--secondary">编辑</div>
+            <div class="op op--danger">停喂</div>
+          </div>
+        </div>
+        <div class="food-card food-card--current">
+          <div class="food-card__top">
+            <span class="food-card__name">某处方粮 c/d</span>
+            <span class="food-card__scope food-card__scope--solo">仅 示例猫</span>
+            <span class="food-card__badge">在喂</span>
+          </div>
+          <span class="food-card__period">2026-05 至今</span>
+          <span class="food-card__note">泌尿道处方，单宠覆盖默认猫粮。</span>
+          <div class="food-card__ops">
+            <div class="op op--secondary">编辑</div>
+            <div class="op op--danger">停喂</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="food-grp">
+        <div class="food-grp__head">
+          <img class="food-grp__avatar" src="../assets/avatar/dog.png" alt="">
+          <span class="food-grp__label">狗 · 1 款</span>
+        </div>
+        <div class="food-card">
+          <div class="food-card__top">
+            <span class="food-card__name">某成犬粮（已停）</span>
+            <span class="food-card__scope">全部狗</span>
+          </div>
+          <span class="food-card__period">2025-09 至 2026-02</span>
+          <div class="food-card__ops">
+            <div class="op op--secondary">编辑</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

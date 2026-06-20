@@ -288,7 +288,7 @@
 
 ## ADR-028 · 真机渲染质量对齐 HTML 镜像：canvas 导出 dest 修复（真 bug）+ 去纹理 + 字体抗锯齿 + 描边整数化 + care 令牌化 · 2026-06-20
 - Problem: 用户对比新建的「Claude Design HTML 镜像」与真机小程序，镜像精致、真机偏糙，问差距来源。复盘 = 差距≈渲染质量而非设计。多 agent 渲染审计（7 维 finder × 对抗核验，46 agent，9 真问题 / 剔 29 噪声）定位根因。
-- Context（镜像由来）: 为「在一块画布看全设计体系、收敛跨页漂移」建了 `design-system/` HTML 镜像（逐字镜像 App.vue 令牌 + 各页 WXSS + petCard.js，23 卡：5 基础令牌 + 12 组件 + 6 页面整屏）。原计划 `/design-sync` 同步到 claude.ai/design，因该登录走 Claude Code 进程、被沙箱代理绕过 Clash 致 403 / 网络受阻而未上云 → 转用本地画廊（`design-system/index.html` iframe contact sheet）+ 镜像当「质量标尺」反向校真机。**镜像是工具非产品代码，本次不纳入 commit**（PII 已扫净，待定要否进公开仓）。
+- Context（镜像由来）: 为「在一块画布看全设计体系、收敛跨页漂移」建了 `design-system/` HTML 镜像（逐字镜像 App.vue 令牌 + 各页 WXSS + petCard.js，23 卡：5 基础令牌 + 12 组件 + 6 页面整屏）。原计划 `/design-sync` 同步到 claude.ai/design，因该登录走 Claude Code 进程、被沙箱代理绕过 Clash 致 403 / 网络受阻而未上云 → 转用本地画廊（`design-system/index.html` iframe contact sheet）+ 镜像当「质量标尺」反向校真机。**镜像是设计 / 架构材料，已纳入公开仓**（PII 已扫净，符合开源放架构 / 设计 / prompt 口径）。
 - Decision（按 impact 排）:
   - **① canvas 导出补 dest 几何〔头号真 bug，渲染糊主因〕**：`index.vue` 轮播门面 + `pet.vue` 兽医小结 + 分享卡三处 `wx.canvasToTempFilePath({canvas})` 缺 `width/height/destWidth/destHeight` → type=2d 默认按 CSS 逻辑尺寸（CARD_W×CARD_H）导出、丢掉已 `ctx.scale(dpr)` 放大的 backing store → 导出图 3:1 降采样再被 `<image>` 拉回 → 档案卡 / 分享卡 / 兽医小结全糊。三处各补 `width:W,height:H,destWidth:W*dpr,destHeight:H*dpr`（值 = 既有 backing store、960×1440@3x<4096 安全，不新增白屏风险；dpr 缩放逻辑本就对，只缺导出一步）。正例反证：course/pet 体重曲线即时绘制（无 toTempFilePath 二次降采样）真机本不糊。**必须三处全改，漏一出口仍糊。**
   - **② 去宣纸纹理底**：删 App.vue page 的 base64 纹理 `background-image`（+ repeat/size/position），保留 `--c-bg` 平涂兜底 → 与镜像逐像素一致。cover 单图随长页各向异性拉伸是净增糙源；镜像本就平涂 cream 更净（用户察觉的「干净」一部分即源于此）。部分 revise b655539「全局宣纸纹理底」。

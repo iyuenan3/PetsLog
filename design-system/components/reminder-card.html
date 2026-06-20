@@ -1,0 +1,70 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>提醒卡 · Reminder Card</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+</head>
+<body class="ds">
+  <h1 class="ds-title">提醒卡 · Reminder Card</h1>
+  <p class="ds-desc">用药 / 疫苗 / 驱虫 / 养护 / 其他提醒。左侧类型彩条 + 类型 chip + 到期日（逾期红 / 今日橙 / 未来灰）+ 三联次级操作。</p>
+
+  <div class="ds-stage">
+    <div class="rm-list" style="padding-top:0;padding-bottom:0">
+      <div class="rm-card rm-card--med">
+        <div class="rm-card__head">
+          <span class="rm-card__title">心丝虫预防药</span>
+          <span class="chip-tag chip-tag--med">用药</span>
+        </div>
+        <div class="rm-card__sub">
+          <span class="rm-card__pet">示例犬</span>
+          <span class="rm-card__due rm-card__due--future">明天 06-21</span>
+          <span class="rm-card__repeat">每月一次</span>
+        </div>
+        <div class="rm-card__ops">
+          <div class="op op--success">完成</div>
+          <div class="op op--secondary">编辑</div>
+          <div class="op op--danger">删除</div>
+        </div>
+      </div>
+
+      <div class="rm-card rm-card--vaccine rm-card--overdue">
+        <div class="rm-card__head">
+          <span class="rm-card__title">狂犬疫苗</span>
+          <span class="chip-tag chip-tag--vaccine">疫苗</span>
+        </div>
+        <div class="rm-card__sub">
+          <span class="rm-card__pet">示例猫</span>
+          <span class="rm-card__due rm-card__due--overdue">已逾期 3 天</span>
+        </div>
+        <div class="rm-card__ops">
+          <div class="op op--success">完成</div>
+          <div class="op op--secondary">编辑</div>
+          <div class="op op--danger">删除</div>
+        </div>
+      </div>
+
+      <div class="rm-card rm-card--care">
+        <div class="rm-card__head">
+          <span class="rm-card__title">鱼缸换水</span>
+          <span class="chip-tag chip-tag--care">养护</span>
+        </div>
+        <div class="rm-card__sub">
+          <span class="rm-card__pet">示例鱼</span>
+          <span class="rm-card__due rm-card__due--today">今天</span>
+          <span class="rm-card__repeat">每周一次</span>
+        </div>
+        <div class="rm-card__ops">
+          <div class="op op--success">完成</div>
+          <div class="op op--secondary">编辑</div>
+          <div class="op op--danger">删除</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="ds-cap">注：养护类彩条 / chip 配色为硬编码 #4fa89b / #3c8579（DRIFT #1）。</div>
+</body>
+</html>

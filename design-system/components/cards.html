@@ -1,0 +1,42 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>卡片基座 · Card</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  .card-base { background: var(--c-card); border-radius: var(--r-md); padding: 28px; box-shadow: var(--sh-2); }
+  .card-cream { background: var(--c-card-cream); border-radius: var(--r-md); padding: 28px; box-shadow: var(--sh-2); }
+  .ph { color: var(--c-text-2); font-size: var(--fs-body); line-height: 1.5; }
+  .ph__h { color: var(--c-text); font-size: var(--fs-h2); font-weight: 600; margin-bottom: 12px; }
+  .stack { display: flex; flex-direction: column; gap: 24px; }
+</style>
+</head>
+<body class="ds">
+  <h1 class="ds-title">卡片基座 · Card</h1>
+  <p class="ds-desc">全站白卡统一配方：白底 + r-md 圆角 + sh-2 暖棕阴影 + 28rpx 内边距。时间线条 / 提醒卡 / 主粮卡 / 药品卡都从这块基座长出。</p>
+
+  <div class="ds-sec">基座 · card（白）</div>
+  <div class="ds-stage">
+    <div class="stack">
+      <div class="card-base">
+        <div class="ph__h">卡标题</div>
+        <div class="ph">白底 · 圆角 r-md(24) · 阴影 sh-2 · 内边距 28。这是 .tl-item / .food-card / .rm-card 的共同基座。</div>
+      </div>
+      <div class="card-cream">
+        <div class="ph__h">米白变体 · card-cream</div>
+        <div class="ph">表单容器 / 录入卡用米白 card-cream(#fffcf8)，比纯白更柔。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ds-sec">配方令牌</div>
+  <div class="ds-tok"><span class="ds-tok-name">background</span> <span class="ds-tok-val">var(--c-card) / var(--c-card-cream)</span></div>
+  <div class="ds-tok"><span class="ds-tok-name">border-radius</span> <span class="ds-tok-val">var(--r-md) = 24rpx</span></div>
+  <div class="ds-tok"><span class="ds-tok-name">box-shadow</span> <span class="ds-tok-val">var(--sh-2)</span></div>
+  <div class="ds-tok"><span class="ds-tok-name">padding</span> <span class="ds-tok-val">28rpx</span></div>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!-- @dsCard group="Foundations" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>间距与圆角 · Spacing & Radius</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<style>
+  .sp-row { display: flex; align-items: center; gap: 24px; padding: 11px 0; }
+  .sp-bar { height: 28px; background: var(--c-primary-soft); border-radius: 6px; }
+  .sp-meta { width: 240px; }
+  .rad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 24px; }
+  .rad { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+  .rad__box { width: 120px; height: 120px; background: var(--c-card); box-shadow: var(--sh-2); border: 1px solid var(--c-border); }
+  .rad__box--pill { width: 200px; height: 92px; }
+</style>
+</head>
+<body class="ds">
+  <h1 class="ds-title">间距与圆角 · Spacing &amp; Radius</h1>
+  <p class="ds-desc">间距 8rpx 基准等差；圆角 xs→pill 六档。逐字镜像 App.vue。</p>
+
+  <div class="ds-sec">间距 · Spacing（8 基准）</div>
+  <div class="sp-row"><div class="sp-bar" style="width:var(--sp-1)"></div><div class="sp-meta ds-tok"><span class="ds-tok-name">--sp-1</span> <span class="ds-tok-val">8rpx</span></div></div>
+  <div class="sp-row"><div class="sp-bar" style="width:var(--sp-2)"></div><div class="sp-meta ds-tok"><span class="ds-tok-name">--sp-2</span> <span class="ds-tok-val">16rpx</span></div></div>
+  <div class="sp-row"><div class="sp-bar" style="width:var(--sp-3)"></div><div class="sp-meta ds-tok"><span class="ds-tok-name">--sp-3</span> <span class="ds-tok-val">24rpx</span></div></div>
+  <div class="sp-row"><div class="sp-bar" style="width:var(--sp-4)"></div><div class="sp-meta ds-tok"><span class="ds-tok-name">--sp-4</span> <span class="ds-tok-val">32rpx</span></div></div>
+  <div class="sp-row"><div class="sp-bar" style="width:var(--sp-5)"></div><div class="sp-meta ds-tok"><span class="ds-tok-name">--sp-5</span> <span class="ds-tok-val">40rpx</span></div></div>
+  <div class="sp-row"><div class="sp-bar" style="width:var(--sp-6)"></div><div class="sp-meta ds-tok"><span class="ds-tok-name">--sp-6</span> <span class="ds-tok-val">48rpx</span></div></div>
+  <div class="sp-row"><div class="sp-bar" style="width:var(--pad-page);background:var(--c-primary)"></div><div class="sp-meta ds-tok"><span class="ds-tok-name">--pad-page</span> <span class="ds-tok-val">32rpx · 页面横向内边距</span></div></div>
+
+  <div class="ds-sec">圆角 · Radius</div>
+  <div class="rad-grid">
+    <div class="rad"><div class="rad__box" style="border-radius:var(--r-xs)"></div><div class="ds-tok"><span class="ds-tok-name">--r-xs</span> <span class="ds-tok-val">8rpx</span></div></div>
+    <div class="rad"><div class="rad__box" style="border-radius:var(--r-sm)"></div><div class="ds-tok"><span class="ds-tok-name">--r-sm</span> <span class="ds-tok-val">16rpx</span></div></div>
+    <div class="rad"><div class="rad__box" style="border-radius:var(--r-md)"></div><div class="ds-tok"><span class="ds-tok-name">--r-md</span> <span class="ds-tok-val">24rpx · 卡片</span></div></div>
+    <div class="rad"><div class="rad__box" style="border-radius:var(--r-lg)"></div><div class="ds-tok"><span class="ds-tok-name">--r-lg</span> <span class="ds-tok-val">32rpx</span></div></div>
+    <div class="rad"><div class="rad__box" style="border-radius:var(--r-xl)"></div><div class="ds-tok"><span class="ds-tok-name">--r-xl</span> <span class="ds-tok-val">40rpx · 弹层顶角</span></div></div>
+    <div class="rad"><div class="rad__box rad__box--pill" style="border-radius:var(--r-pill)"></div><div class="ds-tok"><span class="ds-tok-name">--r-pill</span> <span class="ds-tok-val">999rpx · 按钮 / chip</span></div></div>
+  </div>
+</body>
+</html>

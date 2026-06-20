@@ -1,0 +1,44 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>药品卡 · Medicine Card</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+</head>
+<body class="ds">
+  <h1 class="ds-title">药品卡 · Medicine Card</h1>
+  <p class="ds-desc">药品台账条目。珊瑚浅底图标 + 名称 + 临期 badge + 余量 + 功效 + 有效期（临期变红）。</p>
+
+  <div class="ds-stage">
+    <div class="med-list" style="padding-top:0;padding-bottom:0">
+      <div class="med-card">
+        <div class="med-card__icon"><img class="med-card__icon-img" src="../assets/icon/pill.png" alt=""></div>
+        <div class="med-card__body">
+          <div class="med-card__top">
+            <span class="med-card__name">美能（保肝片）</span>
+          </div>
+          <span class="med-card__qty">剩 24 片</span>
+          <span class="med-card__effect">护肝利胆，辅助肝指标偏高的日常调理。</span>
+          <span class="med-card__exp">有效期至 2027-03</span>
+        </div>
+      </div>
+
+      <div class="med-card">
+        <div class="med-card__icon"><img class="med-card__icon-img" src="../assets/icon/pill.png" alt=""></div>
+        <div class="med-card__body">
+          <div class="med-card__top">
+            <span class="med-card__name">某驱虫滴剂</span>
+            <span class="med-card__badge">临期</span>
+          </div>
+          <span class="med-card__qty">剩 2 支</span>
+          <span class="med-card__effect">体外驱虫，每月一次滴于颈后皮肤。</span>
+          <span class="med-card__exp med-card__exp--soon">有效期至 2026-07 · 即将过期</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

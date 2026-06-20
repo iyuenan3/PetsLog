@@ -1,0 +1,45 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>按钮 · Buttons</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  .stack { display: flex; flex-direction: column; gap: 28px; }
+  .action-row { display: flex; gap: 24px; }
+  .single { width: 360px; }
+</style>
+</head>
+<body class="ds">
+  <h1 class="ds-title">按钮 · Buttons</h1>
+  <p class="ds-desc">成对操作按钮（主 + 次），均 flex:1、高 92rpx、pill 圆角。主按钮珊瑚渐变 + 染色阴影，次按钮沉底灰。</p>
+
+  <div class="ds-sec">默认态 · 底部 / 弹层操作行</div>
+  <div class="ds-stage">
+    <div class="action-row">
+      <div class="btn-ghost">取消</div>
+      <div class="btn-primary">保存</div>
+    </div>
+  </div>
+
+  <div class="ds-sec">单主按钮（含图标槽，gap 8rpx）</div>
+  <div class="ds-stage">
+    <div class="action-row">
+      <div class="btn-primary single">＋ 记一笔</div>
+    </div>
+  </div>
+
+  <div class="ds-sec">按下态 · --press（缩 0.97 + 阴影变浅）</div>
+  <div class="ds-stage">
+    <div class="action-row">
+      <div class="btn-ghost btn-ghost--press">取消</div>
+      <div class="btn-primary btn-primary--press">保存</div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px" class="ds-tok"><span class="ds-tok-name">.btn-primary</span> <span class="ds-tok-val">/ .btn-primary--press · .btn-ghost / .btn-ghost--press</span></div>
+</body>
+</html>

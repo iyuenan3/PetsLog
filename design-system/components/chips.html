@@ -1,0 +1,52 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>标签与 chip · Chips & Tags</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  .wrap { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+</style>
+</head>
+<body class="ds">
+  <h1 class="ds-title">标签与 chip · Chips &amp; Tags</h1>
+  <p class="ds-desc">事件类型 chip（8 类色对）+ 信息 note + 可点病程 tag。pill 圆角、前景/浅底成对。</p>
+
+  <div class="ds-sec">事件类型 chip · .tl-chip.ev-*</div>
+  <div class="ds-stage">
+    <div class="wrap">
+      <span class="tl-chip ev-symptom">症状</span>
+      <span class="tl-chip ev-med">用药</span>
+      <span class="tl-chip ev-vaccine">疫苗</span>
+      <span class="tl-chip ev-deworm">驱虫</span>
+      <span class="tl-chip ev-weight">体重</span>
+      <span class="tl-chip ev-clinic">就诊</span>
+      <span class="tl-chip ev-care">养护</span>
+      <span class="tl-chip ev-other">其他</span>
+    </div>
+  </div>
+
+  <div class="ds-sec">信息 note · .tl-note（参数 / 元数据）</div>
+  <div class="ds-stage">
+    <div class="wrap">
+      <span class="tl-note">费用 ¥320</span>
+      <span class="tl-note">幸福宠物医院</span>
+      <span class="tl-note">温度 28℃</span>
+      <span class="tl-note">湿度 60%</span>
+    </div>
+  </div>
+
+  <div class="ds-sec">可点病程 tag · .tl-note--tag（跳病程视图）</div>
+  <div class="ds-stage">
+    <div class="wrap">
+      <span class="tl-note tl-note--tag">🏷️ 皮肤病疗程 ›</span>
+      <span class="tl-note tl-note--tag tl-note--tag-press">🏷️ 绝育恢复 ›</span>
+    </div>
+  </div>
+
+  <div style="margin-top:12px" class="ds-cap">注：主粮 scope / 在喂 badge chip 见「主粮卡」卡片（health 页本地类）。养护 chip 配色为硬编码，见 DRIFT #1。</div>
+</body>
+</html>

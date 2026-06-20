@@ -1,0 +1,33 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>分段控件 · Segmented</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+</head>
+<body class="ds">
+  <h1 class="ds-title">分段控件 · Segmented</h1>
+  <p class="ds-desc">健康页三段切换（提醒 / 药品 / 主粮）。沉底胶囊轨 + 选中态白卡浮起（主色深字 + sh-1）。</p>
+
+  <div class="ds-sec">提醒 选中</div>
+  <div class="ds-stage" style="padding-left:0;padding-right:0">
+    <div class="seg" style="margin-left:32px;margin-right:32px">
+      <div class="seg__item seg__item--on">提醒</div>
+      <div class="seg__item">药品</div>
+      <div class="seg__item">主粮</div>
+    </div>
+  </div>
+
+  <div class="ds-sec">主粮 选中（含按下态）</div>
+  <div class="ds-stage" style="padding-left:0;padding-right:0">
+    <div class="seg" style="margin-left:32px;margin-right:32px">
+      <div class="seg__item">提醒</div>
+      <div class="seg__item seg__item--press">药品</div>
+      <div class="seg__item seg__item--on">主粮</div>
+    </div>
+  </div>
+</body>
+</html>

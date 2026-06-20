@@ -1,0 +1,30 @@
+<!-- @dsCard group="Foundations" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>阴影与高度 · Elevation</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<style>
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 40px; padding: 12px 8px 8px; }
+  .el { display: flex; flex-direction: column; gap: 16px; align-items: center; }
+  .el__box { width: 200px; height: 130px; background: var(--c-card); border-radius: var(--r-md); }
+  .el__box--p { background: var(--c-primary-grad); }
+  .el__box--up { display: flex; align-items: flex-end; justify-content: center; }
+  .el__meta { text-align: center; }
+</style>
+</head>
+<body class="ds">
+  <h1 class="ds-title">阴影与高度 · Elevation</h1>
+  <p class="ds-desc">暖棕投影（非冷灰），与珊瑚主色同温。逐字镜像 App.vue。</p>
+
+  <div class="grid">
+    <div class="el"><div class="el__box" style="box-shadow:var(--sh-1)"></div><div class="el__meta ds-tok"><div class="ds-tok-name">--sh-1</div><div class="ds-tok-val">2/12 · 0.06 · 最轻</div></div></div>
+    <div class="el"><div class="el__box" style="box-shadow:var(--sh-2)"></div><div class="el__meta ds-tok"><div class="ds-tok-name">--sh-2</div><div class="ds-tok-val">8/28 · 0.10 · 卡片默认</div></div></div>
+    <div class="el"><div class="el__box el__box--up" style="box-shadow:var(--sh-3)"></div><div class="el__meta ds-tok"><div class="ds-tok-name">--sh-3</div><div class="ds-tok-val">上投影 · 弹层 sheet</div></div></div>
+    <div class="el"><div class="el__box" style="box-shadow:var(--sh-press)"></div><div class="el__meta ds-tok"><div class="ds-tok-name">--sh-press</div><div class="ds-tok-val">2/8 · 0.08 · 按下态</div></div></div>
+    <div class="el"><div class="el__box el__box--p" style="box-shadow:var(--sh-primary)"></div><div class="el__meta ds-tok"><div class="ds-tok-name">--sh-primary</div><div class="ds-tok-val">珊瑚染色 · 主按钮</div></div></div>
+  </div>
+</body>
+</html>

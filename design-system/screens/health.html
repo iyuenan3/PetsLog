@@ -1,0 +1,88 @@
+<!-- @dsCard group="Screens" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>健康 Health</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  body.ds { padding: 40px; background: #ece4da; }
+  .scroll { padding-bottom: 220px; }
+</style>
+</head>
+<body class="ds">
+  <div class="phone">
+    <div class="scroll">
+      <div class="seg">
+        <div class="seg__item seg__item--on">提醒</div>
+        <div class="seg__item">药品</div>
+        <div class="seg__item">主粮</div>
+      </div>
+
+      <div class="rm-list">
+        <div class="rm-card rm-card--vaccine rm-card--overdue">
+          <div class="rm-card__head">
+            <span class="rm-card__title">狂犬疫苗</span>
+            <span class="chip-tag chip-tag--vaccine">疫苗</span>
+          </div>
+          <div class="rm-card__sub">
+            <span class="rm-card__pet">示例猫</span>
+            <span class="rm-card__due rm-card__due--overdue">已逾期 3 天</span>
+          </div>
+          <div class="rm-card__ops">
+            <div class="op op--success">完成</div>
+            <div class="op op--secondary">编辑</div>
+            <div class="op op--danger">删除</div>
+          </div>
+        </div>
+
+        <div class="rm-card rm-card--med">
+          <div class="rm-card__head">
+            <span class="rm-card__title">心丝虫预防药</span>
+            <span class="chip-tag chip-tag--med">用药</span>
+          </div>
+          <div class="rm-card__sub">
+            <span class="rm-card__pet">示例犬</span>
+            <span class="rm-card__due rm-card__due--future">明天 06-21</span>
+            <span class="rm-card__repeat">每月一次</span>
+          </div>
+          <div class="rm-card__ops">
+            <div class="op op--success">完成</div>
+            <div class="op op--secondary">编辑</div>
+            <div class="op op--danger">删除</div>
+          </div>
+        </div>
+
+        <div class="rm-card rm-card--care">
+          <div class="rm-card__head">
+            <span class="rm-card__title">鱼缸换水</span>
+            <span class="chip-tag chip-tag--care">养护</span>
+          </div>
+          <div class="rm-card__sub">
+            <span class="rm-card__pet">示例鱼</span>
+            <span class="rm-card__due rm-card__due--today">今天</span>
+            <span class="rm-card__repeat">每周一次</span>
+          </div>
+          <div class="rm-card__ops">
+            <div class="op op--success">完成</div>
+            <div class="op op--secondary">编辑</div>
+            <div class="op op--danger">删除</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabbar">
+      <div class="tabbar__inner">
+        <div class="tab"><img class="tab__ico" src="../assets/icon/paw.png"><div class="tab__txt">宠物</div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/calendar.png"><div class="tab__txt">时间线</div></div>
+        <div class="tab tab--center"><div class="fab"><div class="fab__plus">+</div></div></div>
+        <div class="tab tab--on"><img class="tab__ico" src="../assets/icon/stetho.png"><div class="tab__txt">健康</div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/person.png"><div class="tab__txt">我的</div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!-- @dsCard group="Foundations" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>色彩令牌 · Colors</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<style>
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 22px; }
+  .sw { display: flex; flex-direction: column; gap: 9px; }
+  .sw__chip { height: 92px; border-radius: 16px; box-shadow: inset 0 0 0 1px rgba(58,51,48,0.06); }
+  .sw__meta { display: flex; flex-direction: column; gap: 2px; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 22px; }
+  .pair__demo { height: 92px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 600; box-shadow: inset 0 0 0 1px rgba(58,51,48,0.06); }
+  .drift { margin-top: 10px; font-size: 13px; color: #c9542f; background: #fdf2ec; border: 1px solid #fbe7dd; border-radius: 12px; padding: 12px 16px; line-height: 1.5; }
+</style>
+</head>
+<body class="ds">
+  <h1 class="ds-title">色彩令牌 · Colors</h1>
+  <p class="ds-desc">温暖治愈主色系（珊瑚 / 暖橘）+ 背景、文字、语义、四类提醒色对。逐字镜像 App.vue。</p>
+
+  <div class="ds-sec">主色 · 珊瑚 / 暖橘</div>
+  <div class="grid">
+    <div class="sw"><div class="sw__chip" style="background:var(--c-primary)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-primary</span><span class="ds-tok-val">#f2825c</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-primary-strong)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-primary-strong</span><span class="ds-tok-val">#e26b43</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-primary-deep)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-primary-deep</span><span class="ds-tok-val">#c9542f</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-primary-soft)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-primary-soft</span><span class="ds-tok-val">#f8a887</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-primary-tint)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-primary-tint</span><span class="ds-tok-val">#fbe7dd</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-primary-wash)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-primary-wash</span><span class="ds-tok-val">#fdf2ec</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-primary-grad)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-primary-grad</span><span class="ds-tok-val">135° soft→deep</span></div></div>
+  </div>
+
+  <div class="ds-sec">背景与卡片</div>
+  <div class="grid">
+    <div class="sw"><div class="sw__chip" style="background:var(--c-bg)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-bg</span><span class="ds-tok-val">#faf6f0</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-bg-sink)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-bg-sink</span><span class="ds-tok-val">#f3ece2</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-card)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-card</span><span class="ds-tok-val">#ffffff</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-card-cream)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-card-cream</span><span class="ds-tok-val">#fffcf8</span></div></div>
+  </div>
+
+  <div class="ds-sec">文字</div>
+  <div class="grid">
+    <div class="sw"><div class="sw__chip" style="background:var(--c-text)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-text</span><span class="ds-tok-val">#3a3330</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-text-2)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-text-2</span><span class="ds-tok-val">#8a7f77</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-text-3)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-text-3</span><span class="ds-tok-val">#b5aba2</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-text-inv)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-text-inv</span><span class="ds-tok-val">#ffffff</span></div></div>
+  </div>
+
+  <div class="ds-sec">描边与分隔</div>
+  <div class="grid">
+    <div class="sw"><div class="sw__chip" style="background:var(--c-border)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-border</span><span class="ds-tok-val">#efe7dc</span></div></div>
+    <div class="sw"><div class="sw__chip" style="background:var(--c-divider)"></div><div class="sw__meta ds-tok"><span class="ds-tok-name">--c-divider</span><span class="ds-tok-val">#f2eae0</span></div></div>
+  </div>
+
+  <div class="ds-sec">语义色（前景 / 浅底）</div>
+  <div class="pair">
+    <div class="sw"><div class="pair__demo" style="background:var(--c-success-tint);color:var(--c-success)">成功 Success</div><div class="ds-tok"><span class="ds-tok-name">--c-success</span> <span class="ds-tok-val">#5bb98c / -tint #e5f4ec</span></div></div>
+    <div class="sw"><div class="pair__demo" style="background:var(--c-warning-tint);color:var(--c-warning)">提醒 Warning</div><div class="ds-tok"><span class="ds-tok-name">--c-warning</span> <span class="ds-tok-val">#e8a33d / -tint #fbf0dc</span></div></div>
+    <div class="sw"><div class="pair__demo" style="background:var(--c-danger-tint);color:var(--c-danger)">异常 Danger</div><div class="ds-tok"><span class="ds-tok-name">--c-danger</span> <span class="ds-tok-val">#e05d4e / -tint #fce8e4</span></div></div>
+  </div>
+
+  <div class="ds-sec">四类提醒色对（前景 / 浅底）</div>
+  <div class="pair">
+    <div class="sw"><div class="pair__demo" style="background:var(--c-rt-med-bg);color:var(--c-rt-med)">用药 Med</div><div class="ds-tok"><span class="ds-tok-name">--c-rt-med</span> <span class="ds-tok-val">#f2825c / -bg #fbe7dd</span></div></div>
+    <div class="sw"><div class="pair__demo" style="background:var(--c-rt-vaccine-bg);color:var(--c-rt-vaccine)">疫苗 Vaccine</div><div class="ds-tok"><span class="ds-tok-name">--c-rt-vaccine</span> <span class="ds-tok-val">#5ba9c9 / -bg #e4f0f5</span></div></div>
+    <div class="sw"><div class="pair__demo" style="background:var(--c-rt-deworm-bg);color:var(--c-rt-deworm)">驱虫 Deworm</div><div class="ds-tok"><span class="ds-tok-name">--c-rt-deworm</span> <span class="ds-tok-val">#6fb48a / -bg #e6f2eb</span></div></div>
+    <div class="sw"><div class="pair__demo" style="background:var(--c-rt-other-bg);color:var(--c-rt-other)">其他 Other</div><div class="ds-tok"><span class="ds-tok-name">--c-rt-other</span> <span class="ds-tok-val">#b08fcb / -bg #f0e9f6</span></div></div>
+  </div>
+
+  <div class="ds-sec">养护 Care · ⚠ 漂移</div>
+  <div class="pair">
+    <div class="sw"><div class="pair__demo" style="background:rgba(79,168,155,0.14);color:#3c8579">养护 Care</div><div class="ds-tok"><span class="ds-tok-name">硬编码</span> <span class="ds-tok-val">#4fa89b / #3c8579</span></div></div>
+  </div>
+  <div class="drift"><strong>DRIFT #1：</strong>养护色在 App.vue 里是硬编码 <code>#4fa89b</code>（点）/ <code>#3c8579</code>（chip 文字），未归令牌，与其它四类提醒色对不齐。建议补 <code>--c-rt-care</code> / <code>--c-rt-care-bg</code> 令牌，统一成第五类色对。</div>
+</body>
+</html>

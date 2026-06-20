@@ -1,0 +1,94 @@
+/* ============================================================
+   PetsLog 设计令牌 ,Claude Design 镜像真相源副本
+   逐字镜像 src/App.vue `page {}`（温暖治愈设计系统）。
+   单位约定：HTML 里 1px ≙ App.vue 里 1rpx（画布按 750px 逻辑宽 = 全屏宽绘制，
+   数值与 App.vue 原样一致、零换算 → 双向翻译不引入换算误差）。
+   颜色/渐变值不变；rpx → px 仅换单位、数字照抄。
+   改主题只改这一处，与 App.vue 同步维护。
+   ============================================================ */
+:root {
+  /* 主色：珊瑚 / 暖橘 */
+  --c-primary: #f2825c;
+  --c-primary-strong: #e26b43;
+  --c-primary-deep: #c9542f;
+  --c-primary-soft: #f8a887;
+  --c-primary-tint: #fbe7dd;
+  --c-primary-wash: #fdf2ec;
+  --c-primary-grad: linear-gradient(135deg, #f8a887 0%, #f2825c 55%, #e26b43 100%);
+
+  /* 背景与卡片 */
+  --c-bg: #faf6f0;
+  --c-bg-sink: #f3ece2;
+  --c-card: #ffffff;
+  --c-card-cream: #fffcf8;
+
+  /* 文字 */
+  --c-text: #3a3330;
+  --c-text-2: #8a7f77;
+  --c-text-3: #b5aba2;
+  --c-text-inv: #ffffff;
+
+  /* 描边与分隔 */
+  --c-border: #efe7dc;
+  --c-divider: #f2eae0;
+
+  /* 语义色 */
+  --c-success: #5bb98c;
+  --c-success-tint: #e5f4ec;
+  --c-warning: #e8a33d;
+  --c-warning-tint: #fbf0dc;
+  --c-danger: #e05d4e;
+  --c-danger-tint: #fce8e4;
+
+  /* 四个提醒类型色对 */
+  --c-rt-med: #f2825c;
+  --c-rt-med-bg: #fbe7dd;
+  --c-rt-vaccine: #5ba9c9;
+  --c-rt-vaccine-bg: #e4f0f5;
+  --c-rt-deworm: #6fb48a;
+  --c-rt-deworm-bg: #e6f2eb;
+  --c-rt-other: #b08fcb;
+  --c-rt-other-bg: #f0e9f6;
+
+  /* 养护（care）色 ,⚠ DRIFT：App.vue 里是硬编码 #4fa89b / #3c8579，未归令牌。
+     镜像如实保留硬编码（见各组件卡），收敛方案见 DRIFT.md #1（建议补 --c-rt-care/-bg）。
+     下面两行是「建议令牌」，仅供 DRIFT 对照，组件卡当前仍用硬编码值保持忠实。 */
+  --c-rt-care-proposed: #4fa89b;
+  --c-rt-care-bg-proposed: rgba(79, 168, 155, 0.16);
+
+  /* 阴影（暖棕投影，非冷灰）, rpx→px */
+  --sh-1: 0 2px 12px rgba(196, 124, 86, 0.06);
+  --sh-2: 0 8px 28px rgba(196, 124, 86, 0.1);
+  --sh-3: 0 -10px 40px rgba(120, 70, 40, 0.14);
+  --sh-press: 0 2px 8px rgba(196, 124, 86, 0.08);
+  --sh-primary: 0 10px 24px rgba(242, 130, 92, 0.32);
+
+  /* 圆角, rpx→px */
+  --r-xs: 8px;
+  --r-sm: 16px;
+  --r-md: 24px;
+  --r-lg: 32px;
+  --r-xl: 40px;
+  --r-pill: 999px;
+
+  /* 间距（8 基准）, rpx→px */
+  --sp-1: 8px;
+  --sp-2: 16px;
+  --sp-3: 24px;
+  --sp-4: 32px;
+  --sp-5: 40px;
+  --sp-6: 48px;
+  --pad-page: 32px;
+
+  /* 字号, rpx→px */
+  --fs-display: 48px;
+  --fs-h1: 40px;
+  --fs-h2: 34px;
+  --fs-body: 30px;
+  --fs-sub: 26px;
+  --fs-cap: 24px;
+  --fs-tiny: 22px;
+
+  /* 字体族（逐字镜像 App.vue page font-family） */
+  --font: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}

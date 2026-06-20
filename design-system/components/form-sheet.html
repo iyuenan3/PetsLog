@@ -1,0 +1,41 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>弹层表单 · Sheet & Form</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  /* 用相对容器模拟「页面态 + 半透明遮罩 + 底部滑起 sheet」 */
+  .sheet-demo { position: relative; height: 980px; border-radius: 20px; overflow: hidden; background: var(--c-bg); border: 1px solid #ece4da; }
+  .sheet-demo .scrim { position: absolute; inset: 0; background: rgba(58, 51, 48, 0.38); }
+  .sheet-demo .sheet { position: absolute; left: 0; bottom: 0; padding-bottom: 28px; max-height: 86%; }
+</style>
+</head>
+<body class="ds">
+  <h1 class="ds-title">弹层表单 · Sheet &amp; Form</h1>
+  <p class="ds-desc">底部滑起编辑 sheet（主粮编辑 / 结构化录入共用形态）。抓手 + 标题 + 米白表单区（标签左 / 值右，行分隔）+ 底部主次按钮。真机 padding-bottom 抬 180rpx 清原生 tabBar，表单区内部滚动保「保存」常驻。</p>
+
+  <div class="sheet-demo">
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="sheet__grab"></div>
+      <span class="sheet__title">编辑主粮</span>
+      <div class="f-form">
+        <div class="f-row"><span class="f-row__label">品牌</span><span class="f-input">皇家</span></div>
+        <div class="f-row"><span class="f-row__label">型号</span><span class="f-input">K36</span></div>
+        <div class="f-row"><span class="f-row__label">物种</span><span class="f-pick">猫 ›</span></div>
+        <div class="f-row"><span class="f-row__label">喂给谁</span><span class="f-pick f-pick--ph">全部猫 ›</span></div>
+        <div class="f-row"><span class="f-row__label">起始</span><span class="f-pick">2026-03 ›</span></div>
+        <div class="f-row"><span class="f-row__label">备注</span><span class="f-input f-ph">选填</span></div>
+      </div>
+      <div class="sheet__actions">
+        <div class="btn-ghost">取消</div>
+        <div class="btn-primary">保存</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

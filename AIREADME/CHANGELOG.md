@@ -4,7 +4,7 @@
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
 ## 真机渲染质量对齐 HTML 镜像 · canvas 导出 dest 修复 + 去纹理 + 抗锯齿 + 描边整数化 + care 令牌化 · 2026-06-20（ADR-028，待 commit）
-- Context: 建 Claude Design HTML 镜像（`design-system/`，23 卡逐字镜像 App.vue 令牌 / 各页 WXSS / petCard.js）当「质量标尺」反向校真机；claude.ai/design 登录受网络阻未上云，转本地 iframe 画廊。多 agent 渲染审计（46 agent，9 真问题 / 剔 29）定位差距≈渲染非设计。镜像为工具，本次不入 commit。
+- Context: 建 Claude Design HTML 镜像（`design-system/`，23 卡逐字镜像 App.vue 令牌 / 各页 WXSS / petCard.js）当「质量标尺」反向校真机；claude.ai/design 登录受网络阻未上云，转本地 iframe 画廊。多 agent 渲染审计（46 agent，9 真问题 / 剔 29）定位差距≈渲染非设计。镜像作为设计 / 架构材料已纳入公开仓（PII 已扫净）。
 - Fixed（头号真 bug）: **档案卡 / 分享卡 / 兽医小结导出糊**：`index.vue` + `pet.vue×2` 三处 `wx.canvasToTempFilePath({canvas})` 缺 dest 几何，type=2d 默认按 CSS 逻辑尺寸导出、丢 dpr backing store → 3:1 降采样再被 `<image>` 拉回。补 `width/height/destWidth/destHeight`（=既有 backing store，<4096 安全）。
 - Changed: 去 App.vue 宣纸 base64 纹理底（留 `--c-bg` 平涂、对齐镜像干净，部分 revise b655539）；page 加 `-webkit-/-moz-` font-smoothing；描边整数化（9 闭合框 + tabbar 顶边 + 9 border-bottom 的 `2rpx→1px`，整数物理 px 才锐）；`rec__btn` 96→92。
 - Refactored: care 养护色硬编码 → `--c-rt-care/-bg/-ink` 令牌，**6 处全令牌化**（含 `record-detail` 2 处审计漏报的 latent 同根因点）。

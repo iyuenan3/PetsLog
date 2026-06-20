@@ -1,0 +1,47 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>宠物档案卡 · Pet Card</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  .pc-wrap { display: flex; justify-content: center; padding: 12px; }
+</style>
+</head>
+<body class="ds">
+  <h1 class="ds-title">宠物档案卡 · Pet Card</h1>
+  <p class="ds-desc">可分享海报卡（ADR-021/022/025）+ 首页轮播门面。头像光晕 / 名 + 性别 / 物种 chip / 年龄·体重·陪伴胶囊 / 体重趋势 band / 简介 / 水印。萌宠 + 轻健康，绝不含费用 / 病史。</p>
+  <p class="ds-cap" style="margin:-24px 0 28px">⚠ 真相源是 canvas（src/petCard.js）；此卡为 HTML 静态参照，比例近似、改它须回写 petCard.js。</p>
+
+  <div class="pc-wrap">
+    <div class="pc">
+      <img class="pc__deco" src="../assets/icon/sparkle.png" style="top:46px;left:44px;width:50px;opacity:.55">
+      <img class="pc__deco" src="../assets/icon/paw.png" style="top:120px;right:54px;width:44px;opacity:.32">
+      <img class="pc__deco" src="../assets/icon/sparkle.png" style="bottom:150px;right:60px;width:38px;opacity:.4">
+      <img class="pc__deco" src="../assets/icon/paw.png" style="bottom:120px;left:56px;width:40px;opacity:.28">
+      <div class="pc__body">
+        <div class="pc__avatar"><img src="../assets/avatar/cat.png" alt=""></div>
+        <div class="pc__name"><b>示例猫</b><span class="pc__gender pc__gender--f">♀</span></div>
+        <div class="pc__species">🐱 中华田园猫 · 已绝育</div>
+        <div class="pc__caps">
+          <div class="pc__cap"><img src="../assets/icon/cake.png"><span class="pc__cap-v">2岁3月</span><span class="pc__cap-l">年龄</span></div>
+          <div class="pc__cap"><img src="../assets/icon/scale.png"><span class="pc__cap-v">4.8kg</span><span class="pc__cap-l">体重</span></div>
+          <div class="pc__cap"><img src="../assets/icon/heart.png"><span class="pc__cap-v">682天</span><span class="pc__cap-l">陪伴</span></div>
+        </div>
+        <div class="pc__band">
+          <svg viewBox="0 0 460 52" preserveAspectRatio="none">
+            <polyline points="6,40 66,32 126,36 186,22 246,28 306,16 366,20 446,8" fill="none" stroke="#f0907a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+            <circle cx="446" cy="8" r="5" fill="#f0907a"></circle>
+          </svg>
+          <span class="pc__band-tag">↗ 稳中有增</span>
+        </div>
+        <div class="pc__intro">爱睡懒觉的小馋猫，最喜欢窝在阳台晒太阳。</div>
+        <div class="pc__foot"><img src="../assets/icon/paw.png">PetsLog · 温暖记录</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

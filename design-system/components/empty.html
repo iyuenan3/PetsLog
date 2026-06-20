@@ -1,0 +1,30 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>空状态 · Empty State</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  /* 镜像里用 emoji 占位 .empty__art-img 的 kawaii PNG（真机走透明 PNG，见图标卡） */
+  .empty__art-emoji { font-size: 110px; line-height: 1; }
+</style>
+</head>
+<body class="ds">
+  <h1 class="ds-title">空状态 · Empty State</h1>
+  <p class="ds-desc">珊瑚光晕圆 + kawaii 图标（呼吸浮动）+ 标题 + 引导文案。index / timeline / health 三页共用，padding 已归一 140。</p>
+
+  <div class="ds-sec">时间线空状态</div>
+  <div class="ds-stage" style="padding:0">
+    <div class="empty">
+      <div class="empty__art"><span class="empty__art-emoji">📋</span></div>
+      <div class="empty__title">还没有记录</div>
+      <div class="empty__desc">点底部「＋」用一句话记下示例猫的第一条健康日常吧</div>
+    </div>
+  </div>
+
+  <div class="ds-cap">注：真机 .empty__art 内为 124rpx 透明 PNG（.empty__art-img，含 float-soft 呼吸动画）；此处用 emoji 占位。</div>
+</body>
+</html>

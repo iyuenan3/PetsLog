@@ -1,0 +1,60 @@
+/* ============================================================
+   设计系统镜像「外壳」(chrome) ,非 PetsLog 产品样式。
+   只放规范卡的标注/舞台/手机框脚手架，刻意中性（暖灰标注）以区别于产品 UI。
+   产品真值全在 tokens.css + 各卡 <style> 内的产品 class。
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; }
+
+/* 规范卡：白纸底 + 暖灰标注，承载令牌/组件展示 */
+body.ds {
+  background: #f7f3ee;
+  color: var(--c-text);
+  font-family: var(--font);
+  padding: 48px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 卡标题区 */
+.ds-title { font-size: 30px; font-weight: 700; color: var(--c-text); margin: 0 0 4px; }
+.ds-desc { font-size: 16px; color: #98908a; margin: 0 0 36px; line-height: 1.5; }
+.ds-sec { font-size: 14px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #b0a79f; margin: 36px 0 16px; }
+.ds-sec:first-of-type { margin-top: 0; }
+
+/* 令牌标注：名 + 值（等宽，暖灰，读作「规范」非「产品」） */
+.ds-tok { font-family: 'SF Mono', 'Roboto Mono', ui-monospace, monospace; font-size: 13px; }
+.ds-tok-name { color: var(--c-text); font-weight: 600; }
+.ds-tok-val { color: #a89e95; }
+.ds-cap { font-size: 13px; color: #a89e95; }
+
+/* 通用网格 */
+.ds-grid { display: grid; gap: 20px; }
+
+/* 组件舞台：产品背景上摆单个组件（模拟页内环境，含页边距） */
+.ds-stage {
+  background: var(--c-bg);
+  border-radius: 20px;
+  padding: 40px var(--pad-page);
+  border: 1px solid #ece4da;
+}
+
+/* 手机整屏框：750px 逻辑宽 = 全屏宽，产品底色，圆角裁切 */
+.phone {
+  width: 750px;
+  min-height: 1624px;
+  margin: 0 auto;
+  background: var(--c-bg);
+  border-radius: 48px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 24px 80px rgba(120, 70, 40, 0.18);
+  font-family: var(--font);
+  color: var(--c-text);
+}
+/* 手机框内：把产品里 position:fixed 的 tabBar / 弹层遮罩锚到手机底，而非浏览器视口 */
+.phone .tabbar { position: absolute; }
+.phone .sheet-mask { position: absolute; }
+/* 屏内顶部标题区（页面 header 通用脚手架） */
+.phone__head { padding: 40px var(--pad-page) 8px; }
+.phone__title { font-size: var(--fs-h1); font-weight: 700; color: var(--c-text); }
+.phone__sub { margin-top: 6px; font-size: var(--fs-sub); color: var(--c-text-2); }

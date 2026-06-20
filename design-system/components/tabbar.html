@@ -1,0 +1,45 @@
+<!-- @dsCard group="Components" -->
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>底部导航 · Tab Bar</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../_frame.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  .bar-demo { position: relative; height: 240px; border-radius: 20px; background: var(--c-bg); border: 1px solid #ece4da; overflow: visible; }
+  .bar-demo .tabbar { position: absolute; }
+</style>
+</head>
+<body class="ds">
+  <h1 class="ds-title">底部导航 · Tab Bar</h1>
+  <p class="ds-desc">自定义 tabBar（ADR-010）：4 真 tab（宠物 / 时间线 / 健康 / 我的）+ 中央凸起珊瑚渐变「＋」录入键。彩色图标恒定，选中态仅文字变主色。</p>
+
+  <div class="ds-sec">默认（宠物 选中）</div>
+  <div class="bar-demo">
+    <div class="tabbar">
+      <div class="tabbar__inner">
+        <div class="tab tab--on"><img class="tab__ico" src="../assets/icon/paw.png"><div class="tab__txt">宠物</div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/calendar.png"><div class="tab__txt">时间线</div></div>
+        <div class="tab tab--center"><div class="fab"><div class="fab__plus">+</div></div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/stetho.png"><div class="tab__txt">健康</div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/person.png"><div class="tab__txt">我的</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ds-sec">健康 选中 · FAB 按下态</div>
+  <div class="bar-demo">
+    <div class="tabbar">
+      <div class="tabbar__inner">
+        <div class="tab"><img class="tab__ico" src="../assets/icon/paw.png"><div class="tab__txt">宠物</div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/calendar.png"><div class="tab__txt">时间线</div></div>
+        <div class="tab tab--center"><div class="fab fab--press"><div class="fab__plus">+</div></div></div>
+        <div class="tab tab--on"><img class="tab__ico" src="../assets/icon/stetho.png"><div class="tab__txt">健康</div></div>
+        <div class="tab"><img class="tab__ico" src="../assets/icon/person.png"><div class="tab__txt">我的</div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
