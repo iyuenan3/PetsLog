@@ -215,7 +215,7 @@ export default {
   display: flex;
   align-items: center;
   height: 96rpx;
-  border-bottom: 2rpx solid var(--c-divider);
+  border-bottom: 1px solid var(--c-divider);
 }
 .menu__row:last-child {
   border-bottom: none;

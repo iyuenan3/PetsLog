@@ -1,6 +1,12 @@
 # MEMORY — PetsLog
 <!-- 踩坑/失败/事故，append-only。别重复踩坑。决策→DECISIONS。 -->
 
+## type=2d canvas 导出必须显式给 dest 几何，否则按 CSS 逻辑尺寸降采样 · 2026-06-20（ADR-028）
+`wx.canvasToTempFilePath({ canvas })` 对 **type=2d canvas（createSelectorQuery 拿 node）**，若不传 `width/height/destWidth/destHeight`，**默认按 canvas 的 CSS 逻辑尺寸导出**，而非你 `canvas.width = W*dpr` 设的 backing store。于是高 dpr 下：`ctx.scale(dpr)` 画得很清的 backing store（如 960×1440@3x）被导成 320×480 临时图、再被 `<image>` 拉回显示尺寸 → **整张糊**。PetsLog 档案卡 / 分享卡 / 兽医小结（`index.vue` + `pet.vue×2`）三处都犯，是「真机档案卡比 HTML 镜像糊」的真根因（dpr 缩放逻辑本就对，只漏导出一步）。
+- **修法**：导出补 `width:W, height:H, destWidth:W*dpr, destHeight:H*dpr`（值 = 既有 backing store，已 <4096 不触发白屏）。
+- **反证定位**：course / pet 的体重曲线 canvas 即时绘制、无 `toTempFilePath` 二次降采样，真机本就不糊 → 锁定问题只在「canvas → 临时图」这一步，不必重写 paintPetCard 的 dpr 逻辑。
+- **教训**：canvas 出图糊先查导出 dest 参数（最易漏），别误归因到 font-smoothing（对 canvas 零作用）或 backing store（那步通常对）；多一处出图出口就多一处漏 dest 风险，三处必须全改。
+
 ## 微信云函数首跑一串部署坑（一次踩穿）· 2026-06-07
 真机跑录入主链路时，按出现顺序踩了 5 个坑，逐一根治：
 - **FUNCTION_NOT_FOUND（-501000）**：函数没部署。须在 DevTools 部署云函数。

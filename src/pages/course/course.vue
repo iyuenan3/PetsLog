@@ -264,7 +264,7 @@ export default {
   align-items: center;
   border-radius: var(--r-pill);
   background: var(--c-card);
-  border: 2rpx solid var(--c-border);
+  border: 1px solid var(--c-border);
   font-size: var(--fs-cap);
   color: var(--c-text);
 }

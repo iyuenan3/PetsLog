@@ -292,7 +292,7 @@ export default {
   display: flex;
   align-items: center;
   height: 104rpx;
-  border-bottom: 2rpx solid var(--c-divider);
+  border-bottom: 1px solid var(--c-divider);
 }
 .fam-row:last-child {
   border-bottom: none;
@@ -338,7 +338,7 @@ export default {
   line-height: 84rpx;
   border-radius: var(--r-pill);
   background: var(--c-card);
-  border: 2rpx solid var(--c-border);
+  border: 1px solid var(--c-border);
   color: var(--c-text);
   font-size: var(--fs-sub);
   font-weight: 500;
@@ -352,7 +352,7 @@ export default {
   align-items: center;
   min-height: 110rpx;
   padding: 18rpx 0;
-  border-bottom: 2rpx solid var(--c-divider);
+  border-bottom: 1px solid var(--c-divider);
 }
 .mem-row:last-child {
   border-bottom: none;

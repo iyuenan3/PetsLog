@@ -86,7 +86,7 @@ export default {
   align-items: center;
   min-height: 120rpx;
   padding: 20rpx 0;
-  border-bottom: 2rpx solid var(--c-divider);
+  border-bottom: 1px solid var(--c-divider);
 }
 .frow:last-child {
   border-bottom: none;

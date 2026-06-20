@@ -238,7 +238,7 @@ export default {
 .row {
   display: flex;
   padding: 22rpx 0;
-  border-bottom: 2rpx solid var(--c-divider);
+  border-bottom: 1px solid var(--c-divider);
 }
 .row:last-child {
   border-bottom: none;
@@ -356,7 +356,7 @@ export default {
   color: var(--c-danger);
   font-size: var(--fs-body);
   font-weight: 500;
-  border: 2rpx solid var(--c-danger-tint);
+  border: 1px solid var(--c-danger-tint);
 }
 .del-btn--press {
   background: var(--c-danger-tint);
@@ -381,7 +381,7 @@ export default {
 .head__dot.ev-deworm { background: var(--c-rt-deworm); }
 .head__dot.ev-weight { background: var(--c-success); }
 .head__dot.ev-clinic { background: var(--c-rt-other); }
-.head__dot.ev-care { background: #4fa89b; }
+.head__dot.ev-care { background: var(--c-rt-care); }
 .head__dot.ev-other { background: var(--c-text-3); }
 .head__chip.ev-symptom { color: var(--c-danger); background: var(--c-danger-tint); }
 .head__chip.ev-med { color: var(--c-rt-med); background: var(--c-rt-med-bg); }
@@ -389,6 +389,6 @@ export default {
 .head__chip.ev-deworm { color: var(--c-rt-deworm); background: var(--c-rt-deworm-bg); }
 .head__chip.ev-weight { color: var(--c-success); background: var(--c-success-tint); }
 .head__chip.ev-clinic { color: var(--c-rt-other); background: var(--c-rt-other-bg); }
-.head__chip.ev-care { color: #3c8579; background: rgba(79, 168, 155, 0.14); }
+.head__chip.ev-care { color: var(--c-rt-care-ink); background: var(--c-rt-care-bg); }
 .head__chip.ev-other { color: var(--c-text-2); background: var(--c-bg-sink); }
 </style>

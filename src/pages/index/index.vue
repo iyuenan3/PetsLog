@@ -202,6 +202,12 @@ export default {
             paintPetCard(ctx, CARD_W, CARD_H, p, avatarImg, p.weight_spark, cardIcons)
             wx.canvasToTempFilePath({
               canvas,
+              // type=2d 导出须显式给 dest 几何，否则默认按 CSS 逻辑尺寸(CARD_W×CARD_H)导出、
+              // 丢掉 dpr 放大后的 backing store(CARD_W*dpr×CARD_H*dpr)→ 卡面被降采样再拉回发糊。
+              width: CARD_W,
+              height: CARD_H,
+              destWidth: CARD_W * dpr,
+              destHeight: CARD_H * dpr,
               success: (r) => resolve(r.tempFilePath),
               fail: () => resolve(''),
             })
@@ -292,7 +298,7 @@ export default {
   gap: 16rpx;
   padding: 24rpx 28rpx;
   background: var(--c-primary-wash);
-  border: 2rpx solid var(--c-primary-tint);
+  border: 1px solid var(--c-primary-tint);
   border-radius: var(--r-md);
   box-shadow: var(--sh-1);
 }

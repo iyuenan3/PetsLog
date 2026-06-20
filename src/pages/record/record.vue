@@ -680,7 +680,7 @@ export default {
   min-height: 200rpx;
   padding: 28rpx;
   background: var(--c-card);
-  border: 2rpx solid var(--c-border);
+  border: 1px solid var(--c-border);
   border-radius: var(--r-lg);
   font-size: var(--fs-body);
   line-height: 1.6;
@@ -705,7 +705,7 @@ export default {
   max-width: 100%;
   padding: 16rpx 28rpx;
   background: var(--c-primary-wash);
-  border: 2rpx solid var(--c-primary-tint);
+  border: 1px solid var(--c-primary-tint);
   border-radius: var(--r-pill);
   font-size: var(--fs-sub);
   color: var(--c-primary-deep);
@@ -715,8 +715,8 @@ export default {
 }
 .rec__btn {
   margin-top: 48rpx;
-  height: 96rpx;
-  line-height: 96rpx;
+  height: 92rpx;
+  line-height: 92rpx;
   border-radius: var(--r-pill);
   background: var(--c-primary-grad);
   box-shadow: var(--sh-primary);
@@ -814,7 +814,7 @@ export default {
   align-items: center;
   min-height: 88rpx;
   padding: 18rpx 0;
-  border-bottom: 2rpx solid var(--c-divider);
+  border-bottom: 1px solid var(--c-divider);
 }
 .field-row:last-child {
   border-bottom: none;

@@ -566,7 +566,7 @@ export default {
 .rm-card--vaccine::before { background: var(--c-rt-vaccine); }
 .rm-card--deworm::before { background: var(--c-rt-deworm); }
 .rm-card--other::before { background: var(--c-rt-other); }
-.rm-card--care::before { background: #4fa89b; }
+.rm-card--care::before { background: var(--c-rt-care); }
 .rm-card--overdue::before { background: var(--c-danger); }
 .rm-card__head {
   display: flex;
@@ -587,7 +587,7 @@ export default {
 .chip-tag--vaccine { color: var(--c-rt-vaccine); background: var(--c-rt-vaccine-bg); }
 .chip-tag--deworm { color: var(--c-rt-deworm); background: var(--c-rt-deworm-bg); }
 .chip-tag--other { color: var(--c-rt-other); background: var(--c-rt-other-bg); }
-.chip-tag--care { color: #3c8579; background: rgba(79, 168, 155, 0.14); }
+.chip-tag--care { color: var(--c-rt-care-ink); background: var(--c-rt-care-bg); }
 .rm-card__title {
   font-size: var(--fs-h2);
   font-weight: 600;
@@ -900,7 +900,7 @@ export default {
   display: flex;
   align-items: center;
   min-height: 92rpx;
-  border-bottom: 2rpx solid var(--c-divider);
+  border-bottom: 1px solid var(--c-divider);
 }
 .f-row:last-child {
   border-bottom: none;

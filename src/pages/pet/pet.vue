@@ -853,6 +853,11 @@ export default {
           this.paintVet(ctx, W, H)
           wx.canvasToTempFilePath({
             canvas,
+            // type=2d 须显式给 dest 几何，否则丢 dpr backing store → 导出图发糊（同 index.vue 档案卡）
+            width: W,
+            height: H,
+            destWidth: W * dpr,
+            destHeight: H * dpr,
             success: (r) => {
               uni.hideLoading()
               this.exporting = false
@@ -1099,6 +1104,11 @@ export default {
           paintPetCard(ctx, W, H, this.pet || {}, avatarImg, this.series, cardIcons)
           wx.canvasToTempFilePath({
             canvas,
+            // type=2d 须显式给 dest 几何，否则丢 dpr backing store → 导出图发糊（同 index.vue 档案卡）
+            width: W,
+            height: H,
+            destWidth: W * dpr,
+            destHeight: H * dpr,
             success: (r) => {
               uni.hideLoading()
               this.cardExporting = false
@@ -1204,7 +1214,7 @@ export default {
   gap: 8rpx;
   border-radius: var(--r-pill);
   background: var(--c-card);
-  border: 2rpx solid var(--c-primary);
+  border: 1px solid var(--c-primary);
   color: var(--c-primary-deep);
   font-size: var(--fs-sub);
   font-weight: 600;
@@ -1323,7 +1333,7 @@ export default {
 .row {
   display: flex;
   padding: 24rpx 0;
-  border-bottom: 2rpx solid var(--c-divider);
+  border-bottom: 1px solid var(--c-divider);
 }
 .row:last-child {
   border-bottom: none;
@@ -1358,7 +1368,7 @@ export default {
   display: flex;
   align-items: center;
   padding: 22rpx 0;
-  border-bottom: 2rpx solid var(--c-divider);
+  border-bottom: 1px solid var(--c-divider);
 }
 .form-row:last-child {
   border-bottom: none;

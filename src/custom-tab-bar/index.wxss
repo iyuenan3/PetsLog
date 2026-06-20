@@ -14,7 +14,7 @@
   height: 108rpx;
   padding-bottom: env(safe-area-inset-bottom);
   background: var(--c-card-cream, #fffcf8);
-  border-top: 2rpx solid var(--c-border, #efe7dc);
+  border-top: 1px solid var(--c-border, #efe7dc);
   box-shadow: 0 -6rpx 20rpx rgba(196, 124, 86, 0.06);
 }
 .tab {

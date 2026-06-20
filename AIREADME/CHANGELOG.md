@@ -3,6 +3,14 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## 真机渲染质量对齐 HTML 镜像 · canvas 导出 dest 修复 + 去纹理 + 抗锯齿 + 描边整数化 + care 令牌化 · 2026-06-20（ADR-028，待 commit）
+- Context: 建 Claude Design HTML 镜像（`design-system/`，23 卡逐字镜像 App.vue 令牌 / 各页 WXSS / petCard.js）当「质量标尺」反向校真机；claude.ai/design 登录受网络阻未上云，转本地 iframe 画廊。多 agent 渲染审计（46 agent，9 真问题 / 剔 29）定位差距≈渲染非设计。镜像为工具，本次不入 commit。
+- Fixed（头号真 bug）: **档案卡 / 分享卡 / 兽医小结导出糊**：`index.vue` + `pet.vue×2` 三处 `wx.canvasToTempFilePath({canvas})` 缺 dest 几何，type=2d 默认按 CSS 逻辑尺寸导出、丢 dpr backing store → 3:1 降采样再被 `<image>` 拉回。补 `width/height/destWidth/destHeight`（=既有 backing store，<4096 安全）。
+- Changed: 去 App.vue 宣纸 base64 纹理底（留 `--c-bg` 平涂、对齐镜像干净，部分 revise b655539）；page 加 `-webkit-/-moz-` font-smoothing；描边整数化（9 闭合框 + tabbar 顶边 + 9 border-bottom 的 `2rpx→1px`，整数物理 px 才锐）；`rec__btn` 96→92。
+- Refactored: care 养护色硬编码 → `--c-rt-care/-bg/-ink` 令牌，**6 处全令牌化**（含 `record-detail` 2 处审计漏报的 latent 同根因点）。
+- 不动（复核非真漂移，详见 design-system/DRIFT.md）: chip 两套（other 紫≠灰、合并是色彩回归）/ 表单行 label 宽（内容驱动）/ sheet__title（图标驱动）/ 重导大图（dest 修后仅 ~1.3x 上采样、本地无原图）。
+- 验证: build 零错 + 10 套测试全绿 + 产物逐项核实新鲜。**待真机验观感**（dpr3 才显 canvas 变清 + 去纹理干净度）。
+
 ## 图标系统统一 · emoji → Fluent 彩 + Phosphor 暖染 · 2026-06-18（commit fbb3d1d）
 - Added: **装饰性 + 档案卡 emoji 全量换双档图标系（ADR-026）**：表达型（卡片 / 标题 / 按钮 / 空状态 / tab）用 Fluent-emoji-flat 彩色；功能型（时间线 / 病程行内信息 chip）用 Phosphor-duotone 暖染珊瑚。素材走 Iconify API 取 SVG → headless Chrome 栅格成透明 PNG（`--default-background-color` 原生透明，比 a3ea60a 的 floodfill 抠图干净），27 张入 `src/static/icon`。
 - Changed: **档案卡 canvas（petCard.js）emoji → drawImage**：`loadCardIcons` 按 canvas 节点预加载图标，年龄 / 体重 / 陪伴胶囊、点缀、水印、体重占位改 `drawImage`，每处带 emoji 兜底（图加载失败优雅降级）。陪伴胶囊用 sparkling-heart 爱心（避开与家庭卡房子混淆 + 房子隐喻陪伴偏弱，深审 should-fix 已修）。
