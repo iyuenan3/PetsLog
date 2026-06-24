@@ -282,7 +282,8 @@ async function saveMulti(familyId, records) {
     results.push({ ok: !!res.ok, code: res.code || '', id: res.id || '', pet: res.pet || String((rec && rec.pet) || '').trim() }) // pet 优先取落库规范名（res.pet=trim 后），回显与库一致
   }
   const saved = results.filter((x) => x.ok).length
-  return { ok: saved > 0, kind: 'multi', count: list.length, saved, results }
+  // 回传家庭现有宠名:multi 部分失败(并发删宠致某条 PET_UNKNOWN)时前端据此刷新失败卡可选名单（review C1）
+  return { ok: saved > 0, kind: 'multi', count: list.length, saved, results, pets: knownNames }
 }
 
 // 用户确认后落库（按家庭隔离，见 ADR-008）：

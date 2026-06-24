@@ -191,6 +191,18 @@ function assert(c, m) { if (c) pass++; else { fail++; console.log('  ❌ ' + m) 
   assert((DB_INST.data.records || []).length === recsBefore3 + 2, 'E2E-10 只新增 2 条')
   assert(mr.every((r) => r.raw === '示例猫吐了，示例狗拉稀了'), 'E2E-10 每条子记录 raw=原句（ADR-020 契约层下发，不靠前端代偿，review #5）')
 
+  // ── E2E-11：multi 含空 pet 子条（拆条无法归属）→ parse 标 pet_unknown=true（前端强制选宠的信号源，verify-the-fix #6）──
+  NEXT_LLM = JSON.stringify({ kind: 'multi', records: [
+    { pet: '示例猫', time: '2026-08-01', event_type: '症状', desc: '呕吐' },
+    { pet: '', time: '2026-08-01', event_type: '症状', desc: '还有只拉稀' },
+  ] })
+  const pe = await parseRecord.main({ text: '示例猫吐了，还有只拉稀', family_id: 'F1' })
+  assert(pe.ok === true && pe.parsed.kind === 'multi' && pe.parsed.records.length === 2, 'E2E-11 multi 2 条（空 pet 子条有 desc 故保留）')
+  const emptyRec = pe.parsed.records.find((r) => !r.pet)
+  assert(emptyRec && emptyRec.pet_unknown === true, 'E2E-11 空 pet 子条标 pet_unknown=true（前端会拦提交逼用户选宠）')
+  const namedRec = pe.parsed.records.find((r) => r.pet === '示例猫')
+  assert(namedRec && namedRec.pet_unknown === false, 'E2E-11 有主子条 pet_unknown=false')
+
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
 })()

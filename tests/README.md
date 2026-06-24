@@ -87,5 +87,6 @@ node tests/isolation.e2e.test.js  # 单跑一套（迭代时更快）
 - 云存储真实 `getTempFileURL` / HEAD 体积 / `deleteFile`；
 - 订阅消息推送、隐私接口后台声明；
 - 前端切家庭后的数据刷新 / 竞态（`ensureFamily` in-flight 去重、`callFn` 注入 active family_id）。
+- **录入页 `record.vue` 的前端竞态守卫（ADR-029/030，纯 UI 逻辑无单测，verify-the-fix 评审点名）**：① 快速双击「确认归档 N 条」/「确认归档」不重复落库（`confirmSave` 顶 `if(saving)return`）；② multi/batch 提交进行中点「删除」卡不报错、不丢数据（`delRec` saving 守卫 + 失败卡 `records.slice()` 快照）；③ multi 部分失败后失败卡显「没找到这只·请重选」且不可空转重提（per-item PET_UNKNOWN 回灌 `rec.pet_unknown`）；④ 批量服务端 PET_UNKNOWN 后失效宠名 chip 被剔除、可重选不死循环（含「全家宠物被并发删空」边界 → 退空态）。
 
 真机回归清单见 `AIREADME/DEPLOYMENT.md`。

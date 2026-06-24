@@ -12,6 +12,7 @@ function matchRow(row, where) {
   })
 }
 let SEQ = 0
+let THROW_PET_UPDATE = false // critic#1 回归:模拟 pets 派生回写(latest_weight / spark)瞬时失败(tcb 超时)
 class Coll {
   constructor(db, name) { this.db = db; this.name = name; this._where = null; this._docId = undefined; this._order = null; this._limit = undefined }
   rows() { return this.db.data[this.name] || (this.db.data[this.name] = []) }
@@ -28,6 +29,7 @@ class Coll {
     return { data: out.map(clone) }
   }
   async update({ data }) {
+    if (THROW_PET_UPDATE && this.name === 'pets') throw new Error('simulated tcb timeout on pets.update') // critic#1 注入派生回写失败
     if (this._docId !== undefined) { const d = this.rows().find((r) => r._id === this._docId); if (!d) return { stats: { updated: 0 } }; Object.assign(d, data); return { stats: { updated: 1 } } }
     let n = 0; for (const r of this.rows().filter((x) => matchRow(x, this._where))) { Object.assign(r, data); n++ } return { stats: { updated: n } }
   }
@@ -439,6 +441,25 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [{ pet: '示例猫', time: '2026-06-11', event_type: '症状', desc: '呕吐' }] } })
     assert(r.ok === true && r.saved === 1 && r.count === 1, '单子条 saved=1')
     assert(recs().length === 1 && recs()[0].pet === '示例猫', '落 1 条')
+  })
+
+  // 32. critic#1 回归(verify-the-fix 补测):record 已 add 后体重派生回写 throw → 吞掉、主写不算失败、不误报 WRITE_FAIL
+  //     变异点:若 updateExistingPetWeight 的 try/catch 被删,multi 会报 WRITE_FAIL/saved=0(record 已落)→ 前端重试重复。
+  await run('critic#1: 体重回写 throw 时 record 仍落库、不报 WRITE_FAIL', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    THROW_PET_UPDATE = true
+    try {
+      // multi 体重记录:add 成功 + 派生回写 throw → 应吞、saved=1、record 已落、无 WRITE_FAIL
+      const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [{ pet: '示例猫', time: '2026-06-11', event_type: '体重', weight: 4.5 }] } })
+      assert(r.ok === true && r.saved === 1, 'multi 派生回写失败仍 saved=1')
+      assert(recs().length === 1 && recs()[0].weight === 4.5, 'record 已落库')
+      assert(!(r.results || []).some((x) => x.code === 'WRITE_FAIL'), '不误报 WRITE_FAIL')
+      // 单条主路径同源:派生回写 throw 也不让主写抛/失败
+      const r2 = await fn.main({ family_id: 'F1', record: { pet: '示例猫', time: '2026-06-12', event_type: '体重', weight: 4.6 } })
+      assert(r2.ok === true && recs().length === 2, '单条派生回写失败仍 ok、record 落库')
+    } finally {
+      THROW_PET_UPDATE = false
+    }
   })
 
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)

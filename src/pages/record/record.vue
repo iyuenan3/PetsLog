@@ -130,7 +130,7 @@
           <text class="sheet__hint">识别出几件不同的事，逐条确认；多余的可删</text>
           <view v-for="(rec, i) in parsed.records" :key="rec._k" class="multi-card">
             <view class="multi-card__head">
-              <text class="multi-card__idx">第 {{ i + 1 }} 条</text>
+              <text class="multi-card__idx">第 {{ i + 1 }} 条<text v-if="rec.pet_unknown" class="multi-card__warn"> · 没找到这只，请重选</text></text>
               <text v-if="parsed.records.length > 1" class="multi-card__del" @click="delRec(i)">删除</text>
             </view>
             <view class="field-row"><text class="field-row__label">宠物</text>
@@ -685,7 +685,11 @@ export default {
               this.selectedPets = []
               setTimeout(() => uni.navigateBack({ delta: 1 }), 600)
             } else {
-              uni.showToast({ title: `已存 ${rr.saved}/${rr.count} 条，其余请重试`, icon: 'none' })
+              uni.showToast({ title: `已存 ${rr.saved}/${rr.count} 条，其余请重选`, icon: 'none' })
+              if (rr.pets) this.petOptions = rr.pets // 刷新可选名单（并发删宠后失败卡重选用，review C1）
+              // 把服务端 per-item PET_UNKNOWN 回灌到失败卡：标 pet_unknown 让卡进「请重选」态 + 提交守卫拦住空转重试（review #4/C1）
+              const results = rr.results || []
+              recs.forEach((rc, idx) => { if (results[idx] && !results[idx].ok && results[idx].code === 'PET_UNKNOWN') rc.pet_unknown = true })
               if (this.parsed) this.parsed.records = recs.filter((_, idx) => failedIdx.has(idx)) // 只留没存上的（快照过滤，防竞态 TypeError）
             }
           } else {
@@ -748,9 +752,11 @@ export default {
           }, 600)
         } else if (r.code === 'PET_UNKNOWN') {
           // 服务端兜底拒了（前端态被绕过 / 解析后名单变化）：批量回名单态留用户重选，单宠回错别字选择态
-          if (r.pets && r.pets.length) this.petOptions = r.pets
-          if (batch) this.selectedPets = this.selectedPets.filter((n) => this.petOptions.includes(n)) // 剔除已失效宠名（review critic#2）：否则幽灵名无 chip 可取消 → 永久卡 PET_UNKNOWN 死循环
-          else this.parsed.pet_unknown = true
+          this.petOptions = r.pets || [] // 无条件刷新（全家删空时 r.pets=[] 也要清掉幽灵 chip，否则 critic#2 在此边界失效，review #3）
+          if (batch) {
+            this.selectedPets = this.selectedPets.filter((n) => this.petOptions.includes(n)) // 剔除已失效宠名（critic#2）：否则幽灵名无 chip 可取消 → 永久卡 PET_UNKNOWN 死循环
+            this.parsed.pet = this.selectedPets[0] || '' // mirror 首只同步，消除高亮 chip 与提交 pet 的分歧（review #2）
+          } else this.parsed.pet_unknown = true
           uni.showToast({ title: r.msg || '没找到这只宠物，请选择', icon: 'none' })
         } else {
           uni.showToast({ title: r.msg || '保存失败', icon: 'none' })
@@ -1052,6 +1058,11 @@ export default {
   font-size: var(--fs-sub);
   color: var(--c-danger);
   padding: 4rpx 12rpx;
+}
+.multi-card__warn {
+  font-size: var(--fs-tiny);
+  font-weight: 500;
+  color: var(--c-danger);
 }
 
 /* 手动 kind 分段切换（ADR-017） */
