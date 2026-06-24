@@ -313,6 +313,79 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(r.ok === false && recs().length === 0, '非成员批量应拒、零写入')
   })
 
+  // ===== ADR-030 Round 2：多事件拆条 kind=multi =====
+
+  // 20. multi 多条不同内容 → 各存一条, saved/count
+  await run('multi: 两条不同内容 → 各存一条', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫', '示例狗'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [
+      { pet: '示例猫', time: '2026-06-11', event_type: '症状', desc: '呕吐' },
+      { pet: '示例狗', time: '2026-06-11', event_type: '症状', desc: '腹泻' },
+    ] } })
+    assert(r.ok === true && r.kind === 'multi' && r.saved === 2 && r.count === 2, 'saved=2 count=2')
+    assert(recs().length === 2, '落 2 条')
+    assert(recs().some((x) => x.pet === '示例猫' && x.desc === '呕吐') && recs().some((x) => x.pet === '示例狗' && x.desc === '腹泻'), '两条内容各异')
+  })
+
+  // 21. multi 某条 pet 不在库 → 只该条失败, 其它照常(部分成功,不整批拒)
+  await run('multi: 某条不在库只拒该条、其它照存', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫', '示例狗'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [
+      { pet: '示例猫', time: '2026-06-11', event_type: '症状', desc: '呕吐' },
+      { pet: '幽灵', time: '2026-06-11', event_type: '症状', desc: '拉稀' },
+    ] } })
+    assert(r.ok === true && r.saved === 1 && r.count === 2, '部分成功 saved=1/2')
+    assert(recs().length === 1 && recs()[0].pet === '示例猫', '只落在库那条')
+    assert(r.results.length === 2 && r.results[0].pet === '示例猫' && r.results[1].pet === '幽灵', 'results 与入参严格同序同长（前端按 index 留失败卡的契约）')
+    assert(r.results[0].ok === true && r.results[1].ok === false && r.results[1].code === 'PET_UNKNOWN', '在库条 ok、幽灵条 PET_UNKNOWN')
+  })
+
+  // 21b. multi 不建档（ADR-030）：0 宠家庭跑 multi → 全 PET_UNKNOWN、零写入、不建宠（与单条 0 宠首录放行建档相反）
+  await run('multi: 0 宠不建档（allowCreate=false）', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', [])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [
+      { pet: '小白', species: 'cat', event_type: '症状', desc: 'x' }, { pet: '小黑', species: 'dog', event_type: '症状', desc: 'y' },
+    ] } })
+    assert(r.ok === false && r.saved === 0, '全 PET_UNKNOWN saved=0')
+    assert(r.results.every((x) => x.code === 'PET_UNKNOWN'), '每条 PET_UNKNOWN')
+    assert(recs().length === 0 && pets().length === 0, 'multi 零写入、不建宠')
+  })
+
+  // 22. multi 体重各自回写
+  await run('multi: 体重各自回写到各宠', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫', '示例狗'])
+    await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [
+      { pet: '示例猫', time: '2026-06-11', event_type: '体重', weight: 4.5 },
+      { pet: '示例狗', time: '2026-06-11', event_type: '体重', weight: 9.2 },
+    ] } })
+    const c = pets().find((p) => p.name === '示例猫'); const d = pets().find((p) => p.name === '示例狗')
+    assert(c.latest_weight === 4.5 && d.latest_weight === 9.2, '两宠各自体重回写')
+  })
+
+  // 23. multi 全条不在库 → saved=0 ok:false
+  await run('multi: 全不在库 saved=0', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [
+      { pet: '幽灵甲', event_type: '症状', desc: 'x' }, { pet: '幽灵乙', event_type: '症状', desc: 'y' },
+    ] } })
+    assert(r.ok === false && r.saved === 0, '全失败 ok:false saved=0')
+    assert(recs().length === 0, '零写入')
+  })
+
+  // 24. multi 空 records → INVALID
+  await run('multi: 空 records → INVALID', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [] } })
+    assert(r.ok === false && r.code === 'INVALID', '空 records 拒 INVALID')
+  })
+
+  // 25. multi 隔离: 非成员拒(assertMember 在 saveMulti 之前)
+  await run('multi: 非成员拒零写入', async () => {
+    CUR_OPENID = 'uB'; seed('F1', 'uA', ['示例猫', '示例狗'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [{ pet: '示例猫', event_type: '症状', desc: 'x' }] } })
+    assert(r.ok === false && r.code === 'NOT_MEMBER' && recs().length === 0, '非成员 multi 应拒、零写入')
+  })
+
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
 })()

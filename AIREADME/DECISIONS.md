@@ -308,3 +308,13 @@
   - **批量不落养护参数**：养护参数物种特定、多只可能跨物种、语义弱 → saveBatch 一律不写 `params`（event_type 可仍为养护，仅不带参数；需养护数值就单只录）。
 - Alternatives（否决 / 推后）: ① LLM 直接返回 records[] 拆多条不同记录 → 改动大（解析返回数组 + 确认卡多张可编辑 + 失败面大）、Round 2 另起；② 前端循环调 saveRecord N 次 → N 往返 + 部分失败态难处理 + 非原子，否，改服务端一次写 N 条；③ 批量也支持建档 / 错别字逐只确认 → 建档凭意图须填名 / 选种、错别字须逐只消歧，混进批量交互复杂且易误写医疗数据，否（批量只认已有宠）；④ 批量挂附件 fan-out 到每条 → attachment 云函数按单 record id 登记、一份上传登记 N 条工作量大且语义模糊（一张驱虫照属哪只）→ 批量先不挂附件。
 - Tradeoff: ① 批量跨物种时 event_type / curSpecies 跟随首只（共享事件类型，自由 pick 不锁，可接受）；② 批量 PET_UNKNOWN 仅理论态（前端 chips 都来自 petOptions），服务端兜底守红线；③ saveRecord 抽 helper 改了单宠路径的 doc 构造与体重回写（同源化），**回归须先对旧用例证不破**（9 套全绿）+ 加批量新用例（N 条 / 部分不存在整批拒零写入 / 体重各自回写）。**真机回归重点：多选勾减 / AI 预选多只 / 批量落 N 条 / 批量隐附件 / 单只路径不回归。**
+
+## ADR-030 · 多宠批量记录 Round 2：一句话拆多条不同记录（解析 kind=multi + N 张可编辑确认卡 + saveRecord records[]）· 2026-06-24
+- Problem: Round 1（ADR-029）只解了「同一件事、多只一起」（`pets[]` fan-out 同内容）。一句话里【不同宠物各自不同的事】（「示例猫吐了，示例狗拉稀」）仍只能录一条 / 挑一只 / 拆开多次录。用户「两种都要」的第二种。
+- Constraint: 守隔离 + assertMember + PET_UNKNOWN 零写入（ADR-008/015）；**向后兼容**（单条 + Round 1 `pets[]` 批量逐字不变）；与 Round 1 `pets[]`（同事件 fan-out）**语义划清**（不同事件才 multi）；**只拆 record**（不混 reminder / med_stock 混合句）；拆出的记录 = **已有宠**（multi 内不建档，新宠走单条）。
+- Decision（Round 2 = 异构多条）:
+  - **解析层**：LLM 判定一句话含【多个不同事件】→ 返回 `{kind:'multi', valid:true, records:[<record 对象>…]}`，每个对象是普通 record 形状（pet/species/time/event_type/weight/med/hospital/cost/tag/desc）。**保守拆**：只有真不同的事才拆（同一只一件事含体重不拆，同事件多只走 Round 1 `pets[]` 不走 multi）；prompt 加【对比 few-shot】=「都驱虫」→ 单条 `pets[]` vs「A 吐 B 拉稀」→ `kind:multi`。normalize 抽 `normalizeRecordFields(o,today)` 单条 / 多条共用；main 对每条 snap pet 到已有名 + 标 `pet_unknown`（unresolvable 交前端选）。
+  - **落库层**：saveRecord 加 `event.record.records=[…]`（或顶层 `records`）异构批量路径。抽 `writeSingleRecord(familyId, r)`（校验 pet → buildDoc → add → 体重回写 / 建档）单条 / 多条共用，逐条独立写、收 per-item 结果，返回 `{ok, results:[{ok,id,pet}|{ok:false,code,pet}], count, saved}`。**部分成功可报**（不同记录相互独立，非原子可接受）；零写入红线仍逐条守（不在库该条拒、不拖累其它）。
+  - **前端**：`kind:'multi'` → 确认区渲染 **N 张精简可编辑卡**，每卡 = 宠物单选 chips + 类型 picker + 体重 + 描述 + 删卡；index 感知的 picker handler（时间默认 now、不逐卡编辑 v1）。提交一次写全部，toast「已归档 N 条」（部分失败列未成功）。**multi 不挂附件 / 不做养护**（同 Round 1）。
+- Alternatives（否决 / 推后）: ① 前端循环 N 次调 saveRecord → N 往返 + N 个 loading 闪 + 部分失败态散，否，改服务端一次收 records[]；② 总是返回 records[] 破解析契约 → back-compat 用 `kind:'multi'` 分流、单条仍扁平对象；③ multi 卡做全字段（med/hospital/cost/tag/时间逐卡）→ v1 精简到核心（pet/类型/体重/描述），详细就医单条录或详情页后补（ADR 注后续可富化）；④ 支持 record+reminder 混合拆 → 太复杂、v1 只拆 record。
+- Tradeoff: ① **拆分激进度**是主风险（LLM 过度拆把一件事拆两条）→ 保守 prompt + N 张确认卡可删可改是安全网；② multi 非事务、部分成功（可接受，记录独立）；③ saveRecord 抽 `writeSingleRecord` **改了单条主路径**（提取建档 / 体重 / PET_UNKNOWN 逻辑）→ **回归先对旧用例证不破**（Round 1 后 62 断言全绿）+ 加 multi 新用例（N 条不同内容 / 某条不在库只拒该条 / 部分成功）；④ multi 卡精简字段与单条编辑器不一致（UX 取舍，v1 够用）。**真机回归重点：「A 吐 B 拉稀」拆 2 条且内容各异 / 删卡 / 单条 + Round 1 批量不回归。**

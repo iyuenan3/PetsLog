@@ -3,7 +3,14 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
-## 多宠批量记录 Round 1 · 同事件 fan-out（多选 + saveRecord pets[] 复制 N 条）· 2026-06-24（ADR-029，待 commit）
+## 多宠批量记录 Round 2 · 一句话拆多条不同记录（解析 kind=multi + N 张可编辑确认卡 + saveRecord records[]）· 2026-06-24（ADR-030，待 commit）
+- Context: Round 1 只解了「同一件事多只」（pets[] fan-out 同内容）。一句话里【不同宠物各自不同的事】（「示例猫吐了，示例狗拉稀」）仍只能录一条 / 挑一只。用户「两种都要」的第二种。**只拆 record**（不混 reminder / med_stock）；拆出的记录 = **已有宠**（multi 不建档，新宠走单条）；与 Round 1 `pets[]`（同事件）语义划清（不同事件才 multi）。
+- Added（解析层）: prompt 加【多事件拆条】规则 + 一条「示例猫吐了示例狗拉稀」→ kind=multi few-shot（与「都驱虫」→ pets[] 对比，教 LLM 区分）；保守拆。`parseRecord` 抽 `normalizeRecordFields` 单条 / multi 子条共用；normalize 加 multi 分支（kind=multi → records[]，丢全空子条）；main 对每条 snap pet + 标 pet_unknown（不猜不建档）。
+- Added（落库层）: `saveRecord` 抽 `writeRecordOne`（单条 record 验名 + buildDoc + add + 体重 / 建档，单条主路径 + multi 共用，防漂移）；main 重排成 med_stock → reminder（内联验名）→ record（writeRecordOne）。加 `saveMulti`（records[] 逐条独立写、**部分成功可报** `{ok,saved,count,results}`、每条守 PET_UNKNOWN 零写入、`allowCreate=false` multi 不建档、results 与入参**严格同序同长**保前端留卡 index 不错位）。`kind=multi` 分流。
+- Added（前端）: record.vue 加 `kind=multi` 确认区 = **N 张精简可编辑卡**（每卡 宠物单选 chips + 类型 picker + 体重 + 描述 + 删卡，稳定 `_k` key）；parse 时 records≥2 走 multi、=1 降级单条编辑器、=0 提示无效；提交一次写全部、**部分失败留失败卡重试**、toast「已归档 N 条」。multi 不挂附件 / 不做养护。
+- 验证: 10 套测试全绿（saveRecord 62→77 / parseRecord.prompt 29→32 / e2e.flow 25→30 加 multi 端到端 + 部分成功 + 同序契约 + 0 宠不建档）；**fail-first 证非假绿**（stash 实现对 Round-1 码跑 multi 用例 10+2 失败 + e2e 抛错，恢复全绿）；**重构 writeRecordOne 单条主路径逐字等价**（Round 1 后 62 断言先证不破）；build 零错 + 产物核实（云函数与 src 字节一致）；两轮对抗评审 0 must-fix，修 3 处收紧（0 宠不建档 allowCreate=false / results 同序契约 / 多卡稳定 key）。**待真机验**（「A 吐 B 拉稀」拆 2 条内容各异 / 删卡 / 部分失败 / 单条 + Round 1 批量不回归）。
+
+## 多宠批量记录 Round 1 · 同事件 fan-out（多选 + saveRecord pets[] 复制 N 条）· 2026-06-24（ADR-029，已 commit c568eac · 已部署 saveRecord+parseRecord）
 - Context: 真机用了两天的实测反馈「无法同时为多只宠物记录」。多宠家庭日常高频「一起驱虫 / 疫苗 / 体检 / 统一换粮 / 集体称重」，但录入链路三层全单宠（parse 抽一个对象 + record.vue 单选 picker + saveRecord 写一条）。用户「两种都要」→ 分两轮：Round 1 同事件批量（覆盖 80% 多宠日常），Round 2 另起一句话拆多条不同记录。
 - Added（落库层）: `saveRecord` 加批量分支：`record.pets=[…]` → fan-out 复制 N 条同内容。抽 `buildDoc` + `updateExistingPetWeight` 两 helper、单宠 / 批量同源（防 doc 形状 / 养护门控 / created_at 漂移）。**任一宠物不在库整批拒 PET_UNKNOWN、零写入**（沿 ADR-015）；批量不建档、不收错别字、不落养护 params；体重 / weight_spark 各自回写；返回 `{ok,ids,count}`。**不带 pets = 原单宠路径逐字不变**。
 - Added（解析层）: prompt 加 `pets:string[]` 字段说明 + 一条「给示例猫和示例狗都驱虫」few-shot；`parseRecord` normalize 收 pets、main 对每只 fuzzyMatch snap 到已有名（不猜不建档）、snap 后 <2 视作单宠清空。

@@ -175,6 +175,21 @@ function assert(c, m) { if (c) pass++; else { fail++; console.log('  ❌ ' + m) 
   assert(sbad.ok === false && sbad.code === 'PET_UNKNOWN' && Array.isArray(sbad.missing) && sbad.missing.includes('幽灵'), 'E2E-9 含不存在宠物整批拒 + missing 列幽灵')
   assert((DB_INST.data.records || []).length === recsBefore2, 'E2E-9 零写入')
 
+  // ── E2E-10：多事件拆条（ADR-030 Round 2）：NL → parse kind=multi（子条错别字 snap）→ saveMulti 各存一条不同内容 ──
+  NEXT_LLM = JSON.stringify({ kind: 'multi', records: [
+    { pet: '示例猫', species: 'cat', time: '2026-07-01', event_type: '症状', desc: '呕吐' },
+    { pet: '示列狗', species: 'dog', time: '2026-07-01', event_type: '症状', desc: '腹泻' },
+  ] })
+  const pm = await parseRecord.main({ text: '示例猫吐了，示例狗拉稀了', family_id: 'F1' })
+  assert(pm.ok === true && pm.parsed.kind === 'multi' && pm.parsed.records.length === 2, 'E2E-10 parse kind=multi 2 条')
+  assert(pm.parsed.records[1].pet === '示例狗' && pm.parsed.records.every((rc) => rc.pet_unknown === false), 'E2E-10 子条错别字「示列狗」snap 到示例狗、均在库')
+  const recsBefore3 = (DB_INST.data.records || []).length
+  const sm = await saveRecord.main({ record: pm.parsed, family_id: 'F1' })
+  assert(sm.ok === true && sm.kind === 'multi' && sm.saved === 2, 'E2E-10 saveMulti saved=2')
+  const mr = (DB_INST.data.records || []).filter((r) => r.time === '2026-07-01')
+  assert(mr.length === 2 && mr.some((r) => r.pet === '示例猫' && r.desc === '呕吐') && mr.some((r) => r.pet === '示例狗' && r.desc === '腹泻'), 'E2E-10 落 2 条不同内容')
+  assert((DB_INST.data.records || []).length === recsBefore3 + 2, 'E2E-10 只新增 2 条')
+
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
 })()

@@ -10,6 +10,8 @@ const SYSTEM = `你是宠物健康记录的结构化提取引擎，不是聊天�
 - kind: "record" | "med_stock" | "reminder"。"record" = 记录某只猫狗已发生的健康事件（症状 / 用药 / 疫苗 / 驱虫 / 体重 / 就医）；"med_stock" = 登记家庭药品库存（买药 / 囤药 / 记录药品数量与过期）；"reminder" = 为将来要做的事设提醒（约定将来打疫苗 / 驱虫 / 复诊 / 喂药，通常含未来日期或「每月 / 每年」之类周期）。
 - 区分关键：已经发生 → record；买来囤着 → med_stock；将来要做、要提醒 → reminder。
 
+【多事件拆条】当一句话描述了【多个不同宠物各自不同的事】（如「示例猫吐了，示例狗拉稀」）或【明确分开的多件不同事】时，输出 {"kind":"multi","records":[ 每条一个 record 对象 ]}，每个对象用下面 kind=record 的字段（pet/species/time/event_type/weight/med/hospital/cost/tag/desc）。【务必保守，宁可不拆】：只有真正不同的事才拆；同一只的一件事（哪怕同时记了体重）绝不拆；【同一件事给多只】（如「给示例猫和示例狗都驱虫」）不是 multi，而是下面 kind=record 的 pets 字段。multi 只拆 record，不混 med_stock / reminder。
+
 kind=record 时填：
 - valid: boolean。是否是有效的宠物健康记录。闲聊、问诊、与宠物健康无关的内容一律 valid=false。
 - pet: string。宠物名。【必须优先归一到「已有宠物」列表里的名字】：用户写了错别字、同音字、形近字、简称、漏字，只要能合理对应列表里某只，就填列表里的标准名（如列表有「示例猫」，用户写「示列猫 / 试例猫 / 例猫」都填「示例猫」）。确实无法对应任何一只时才照抄原话里的名字；没提名字填 ""。
@@ -114,6 +116,16 @@ function buildMessages(text, pets, tags, today) {
       role: 'assistant',
       content:
         '{"kind":"record","valid":true,"pet":"示例猫","pets":["示例猫","示例狗"],"new_pet":false,"species":"cat","time":"2026-01-01","event_type":"驱虫","weight":null,"med":"体外驱虫","hospital":"","cost":null,"tag":"","desc":"体外驱虫"}',
+    },
+    // 多事件拆条（ADR-030 Round 2）：不同宠物各自不同的事 → kind=multi + records[]（与上面「同一件事多只 → pets[]」严格对照）
+    {
+      role: 'user',
+      content: '今天是 2026-01-01。\n【已有宠物】示例猫(cat)、示例狗(dog)\n【用户这句话】示例猫今天吐了，示例狗拉稀了\n\n只输出 JSON。',
+    },
+    {
+      role: 'assistant',
+      content:
+        '{"kind":"multi","records":[{"pet":"示例猫","species":"cat","time":"2026-01-01","event_type":"症状","weight":null,"med":null,"hospital":"","cost":null,"tag":"","desc":"呕吐"},{"pet":"示例狗","species":"dog","time":"2026-01-01","event_type":"症状","weight":null,"med":null,"hospital":"","cost":null,"tag":"","desc":"腹泻"}]}',
     },
     // 疫苗：注射疫苗归 event_type=疫苗，tag 留空（与上面驱虫对照，事件类别不进 tag）
     {

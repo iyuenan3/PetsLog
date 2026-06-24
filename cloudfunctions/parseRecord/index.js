@@ -83,34 +83,46 @@ exports.main = async (event) => {
     return { ok: false, code: 'LLM_ERROR', msg: 'AI 解析失败', detail: String((e && e.message) || e) }
   }
 
-  // 宠物名解析（ADR-015，建档凭意图不凭名字）：
-  // ① LLM 已被提示词要求把错别字归一到已有名；② 漏网的服务端模糊兜底（唯一近似才 snap，歧义不猜）；
-  // ③ 都不中且非显式新增意图 → pet_unknown，前端确认卡片让用户从已有宠物里选。
-  // 0 宠家庭首录视同新增（无可匹配对象 = 无错别字风险；不放行则首录死端。确认卡片会显示「🆕 将建档」，点确认即同意）
-  if (parsed.kind === 'record' && parsed.pet && !petNames.length) parsed.new_pet = true
-  if (parsed.pet && !parsed.new_pet && !petNames.includes(parsed.pet)) {
-    const snapped = fuzzyMatchPet(parsed.pet, petNames)
-    if (snapped) parsed.pet = snapped
-  }
-  parsed.pet_unknown = !!parsed.pet && !parsed.new_pet && !petNames.includes(parsed.pet)
-  // is_new = 显式新增意图且名字确实是新的（确认卡片 🆕 将建档只在此时显示）
-  parsed.is_new = !!parsed.new_pet && !!parsed.pet && !petNames.includes(parsed.pet)
-
-  // 批量预选（ADR-029 Round 1）：把 LLM 列的多只逐一 snap 到已有名，只保留确定匹配的（批量不猜不建档）；
-  // snap 后去重，<2 只视作单宠清空（不触发前端多选态）。建档 / 错别字态不批量（单宠通道优先）。
-  if (Array.isArray(parsed.pets) && parsed.pets.length && !parsed.is_new) {
-    const resolved = []
-    for (const nm of parsed.pets) {
-      if (petNames.includes(nm)) resolved.push(nm)
-      else {
-        const s = fuzzyMatchPet(nm, petNames)
-        if (s) resolved.push(s)
+  if (parsed.kind === 'multi') {
+    // 多事件拆条（ADR-030 Round 2）：每条 record 各自 snap pet 到已有名（multi 不建档），
+    // unresolvable 标 pet_unknown 交前端逐卡选；歧义不猜（fuzzyMatchPet 唯一候选才 snap）。
+    for (const rec of parsed.records) {
+      if (rec.pet && !petNames.includes(rec.pet)) {
+        const s = fuzzyMatchPet(rec.pet, petNames)
+        if (s) rec.pet = s
       }
+      rec.pet_unknown = !!rec.pet && !petNames.includes(rec.pet)
     }
-    parsed.pets = [...new Set(resolved)]
-    if (parsed.pets.length < 2) parsed.pets = []
   } else {
-    parsed.pets = []
+    // 宠物名解析（ADR-015，建档凭意图不凭名字）：
+    // ① LLM 已被提示词要求把错别字归一到已有名；② 漏网的服务端模糊兜底（唯一近似才 snap，歧义不猜）；
+    // ③ 都不中且非显式新增意图 → pet_unknown，前端确认卡片让用户从已有宠物里选。
+    // 0 宠家庭首录视同新增（无可匹配对象 = 无错别字风险；不放行则首录死端。确认卡片会显示「🆕 将建档」，点确认即同意）
+    if (parsed.kind === 'record' && parsed.pet && !petNames.length) parsed.new_pet = true
+    if (parsed.pet && !parsed.new_pet && !petNames.includes(parsed.pet)) {
+      const snapped = fuzzyMatchPet(parsed.pet, petNames)
+      if (snapped) parsed.pet = snapped
+    }
+    parsed.pet_unknown = !!parsed.pet && !parsed.new_pet && !petNames.includes(parsed.pet)
+    // is_new = 显式新增意图且名字确实是新的（确认卡片 🆕 将建档只在此时显示）
+    parsed.is_new = !!parsed.new_pet && !!parsed.pet && !petNames.includes(parsed.pet)
+
+    // 批量预选（ADR-029 Round 1）：把 LLM 列的多只逐一 snap 到已有名，只保留确定匹配的（批量不猜不建档）；
+    // snap 后去重，<2 只视作单宠清空（不触发前端多选态）。建档 / 错别字态不批量（单宠通道优先）。
+    if (Array.isArray(parsed.pets) && parsed.pets.length && !parsed.is_new) {
+      const resolved = []
+      for (const nm of parsed.pets) {
+        if (petNames.includes(nm)) resolved.push(nm)
+        else {
+          const s = fuzzyMatchPet(nm, petNames)
+          if (s) resolved.push(s)
+        }
+      }
+      parsed.pets = [...new Set(resolved)]
+      if (parsed.pets.length < 2) parsed.pets = []
+    } else {
+      parsed.pets = []
+    }
   }
 
   // 记一条解析流水用于限流（落库在 saveRecord，二次确认后）
@@ -207,14 +219,10 @@ function fuzzyMatchPet(name, names) {
 const SPECIES_KEYS = ['cat', 'dog', 'rabbit', 'rodent', 'bird', 'reptile', 'fish', 'other']
 const normSpecies = (s) => (SPECIES_KEYS.includes(s) ? s : 'other')
 
-function normalize(o, raw, today) {
-  const kind = ['med_stock', 'reminder'].includes(o.kind) ? o.kind : 'record'
+// 单条 record 的字段归一（ADR-030：单条 record 与 multi 子记录共用，防字段形状漂移）。
+function normalizeRecordFields(o, today) {
   return {
-    kind,
-    valid: o.valid !== false,
     pet: String(o.pet || '').trim(), // trim 与 saveRecord 对齐，否则尾空格让精确名误判 pet_unknown；String 防 LLM 输出数字名
-    pets: Array.isArray(o.pets) ? [...new Set(o.pets.map((x) => String(x || '').trim()).filter(Boolean))] : [], // 多宠同事件（ADR-029），main 再 snap 到已有名
-    new_pet: o.new_pet === true, // 显式新增宠物意图（ADR-015），缺省 false
     species: normSpecies(o.species), // ADR-023 多物种白名单（原 dog?'dog':'cat' 二元钳制会把 rabbit 等强改回 cat）
     time: normalizeDateTime(o.time, today), // 事件时间，精确到分（缺时分则纯日期，前端补默认）
     event_type: o.event_type || '其它',
@@ -228,6 +236,25 @@ function normalize(o, raw, today) {
     desc: (o.desc || '').trim(),
     // 养护参数（ADR-024）：仅养护记录有，透传 LLM 抽取的对象（saveRecord 落库前再 sanitize）；非对象置 null
     params: o.params && typeof o.params === 'object' && !Array.isArray(o.params) ? o.params : null,
+  }
+}
+
+function normalize(o, raw, today) {
+  // 多事件拆条（ADR-030 Round 2）：LLM 判定一句话含多个不同事件 → kind=multi + records[]，每条独立 record 形状。
+  // 丢全空子条（pet/desc/event_type/weight 全空 = 噪声）；main 再对每条 snap pet + 标 pet_unknown。
+  if (o.kind === 'multi' && Array.isArray(o.records)) {
+    const records = o.records
+      .map((rec) => (rec && typeof rec === 'object' ? normalizeRecordFields(rec, today) : null))
+      .filter((r) => r && (r.pet || r.desc || r.event_type !== '其它' || r.weight != null))
+    return { kind: 'multi', valid: o.valid !== false, records, raw }
+  }
+  const kind = ['med_stock', 'reminder'].includes(o.kind) ? o.kind : 'record'
+  return {
+    kind,
+    valid: o.valid !== false,
+    ...normalizeRecordFields(o, today), // pet/species/time/event_type/weight/med/hospital/cost/tag/desc/params
+    pets: Array.isArray(o.pets) ? [...new Set(o.pets.map((x) => String(x || '').trim()).filter(Boolean))] : [], // 多宠同事件（ADR-029），main 再 snap 到已有名
+    new_pet: o.new_pet === true, // 显式新增宠物意图（ADR-015），缺省 false
     med_name: o.med_name || '',
     med_effect: o.med_effect || '',
     med_quantity: typeof o.med_quantity === 'number' ? o.med_quantity : Number(o.med_quantity) || 1,

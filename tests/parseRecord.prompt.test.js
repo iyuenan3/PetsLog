@@ -92,5 +92,17 @@ run('多宠批量: pets 字段说明在 SYSTEM + 一条多宠 few-shot', () => {
   }
 })
 
+// ADR-030：多事件拆条 kind=multi
+run('多事件: kind=multi 规则在 SYSTEM + 一条 multi few-shot（两条不同宠物）', () => {
+  assert(SYSTEM.includes('multi'), 'SYSTEM 应有 multi 拆条规则')
+  const m = buildMessages('x', [], [], '2026-01-01')
+  const multiEx = m.find((msg) => msg.role === 'assistant' && /"kind"\s*:\s*"multi"/.test(msg.content))
+  assert(!!multiEx, '应有一条 kind=multi 的 few-shot')
+  if (multiEx) {
+    const o = JSON.parse(multiEx.content)
+    assert(Array.isArray(o.records) && o.records.length === 2 && o.records[0].pet !== o.records[1].pet, 'multi few-shot 含 2 条不同宠物')
+  }
+})
+
 console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
 process.exit(fail ? 1 : 0)

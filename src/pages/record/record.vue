@@ -124,6 +124,30 @@
           </view>
         </block>
 
+        <!-- 多事件拆条（ADR-030 Round 2）：N 张精简可编辑卡，每卡 宠物单选 + 类型 + 体重 + 描述 + 删卡 -->
+        <block v-else-if="parsed.kind === 'multi'">
+          <view class="sheet__title"><text>拆成 {{ parsed.records.length }} 条记录</text><image class="ic" src="/static/icon/stetho.png" mode="aspectFit" /></view>
+          <text class="sheet__hint">识别出几件不同的事，逐条确认；多余的可删</text>
+          <view v-for="(rec, i) in parsed.records" :key="rec._k" class="multi-card">
+            <view class="multi-card__head">
+              <text class="multi-card__idx">第 {{ i + 1 }} 条</text>
+              <text v-if="parsed.records.length > 1" class="multi-card__del" @click="delRec(i)">删除</text>
+            </view>
+            <view class="field-row"><text class="field-row__label">宠物</text>
+              <view class="chips" v-if="petOptions.length"><text v-for="n in petOptions" :key="n" :class="['chip', rec.pet === n ? 'chip--active' : '']" @click="setRecPet(i, n)">{{ n }}</text></view>
+              <text v-else class="field-row__value field-row__value--empty" @click="goAddPet">还没有宠物，去添加 ›</text>
+            </view>
+            <view class="field-row"><text class="field-row__label">类型</text>
+              <picker class="field-row__pick" mode="selector" :range="multiEventTypes" :value="recEvtIdx(rec)" @change="onPickRecEvt(i, $event)">
+                <view class="pickbox"><text class="pickbox__v">{{ rec.event_type || '其它' }}</text><text class="pickbox__c">▾</text></view>
+              </picker>
+            </view>
+            <view class="field-row"><text class="field-row__label">体重</text><input class="field-row__input" type="digit" v-model="rec.weight" placeholder="选填，单位 kg" placeholder-class="ph" /></view>
+            <view class="field-row"><text class="field-row__label">描述</text><input class="field-row__input" v-model="rec.desc" placeholder="症状 / 事件描述" placeholder-class="ph" /></view>
+          </view>
+          <view v-if="!manual" class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
+        </block>
+
         <!-- 健康记录（可编辑，见 ADR-017） -->
         <block v-else>
           <view class="sheet__title"><text>{{ manual ? '手动记录' : '记录健康事件' }}</text><image class="ic" src="/static/icon/stetho.png" mode="aspectFit" /></view>
@@ -233,6 +257,7 @@ export default {
       selectedPets: [], // 正常态多选名单（ADR-029 Round 1）：>1 即批量，确认后各存一条；单一真相驱动 chips 高亮
       petsList: [], // 家庭宠物全量（含 species），选已有宠时按名查物种以驱动 event_type / 养护表单（ADR-024）
       speciesList: SPECIES, // 建档物种 chip（ADR-023 多物种）
+      multiEventTypes: ['症状', '用药', '疫苗', '驱虫', '体重', '就医', '其它'], // multi 卡类型候选（ADR-030，不含养护：multi 不做养护参数）
       atts: [], // 待上传附件（本地临时文件，确认归档后才上传，取消不留孤儿）
       attMax: ATT_MAX_PER_RECORD,
       examples: ['示例猫今天吐了，体重 4.2kg', '下月 15 号给示例狗打疫苗', '买了盒驱虫药 2 支，明年 3 月过期'],
@@ -328,6 +353,7 @@ export default {
     },
     confirmBtnText() {
       const k = this.parsed && this.parsed.kind
+      if (k === 'multi') return `确认归档 ${(this.parsed.records || []).length} 条`
       return k === 'med_stock' ? '确认入库' : k === 'reminder' ? '确认提醒' : '确认归档'
     },
     onSend() {
@@ -360,6 +386,25 @@ export default {
         this.petOptions = r.pets || []
         // 名→物种映射（ADR-023/024）：AI 流确认卡里重选已有宠时 syncSpeciesByName 据此跟随物种（否则 petsList 空、species 停在 AI 值）
         this.petsList = Object.entries(r.petSpecies || {}).map(([name, species]) => ({ name, species }))
+        // 多事件拆条（ADR-030 Round 2）：kind=multi → N 张卡；只剩 1 条降级单条编辑器；0 条视作无效
+        if (r.parsed && r.parsed.kind === 'multi') {
+          const recs = Array.isArray(r.parsed.records) ? r.parsed.records : []
+          if (recs.length >= 2) {
+            recs.forEach((rc, i) => (rc._k = 'm' + i)) // 稳定 key（ADR-030 评审）：删卡时 mp 同层 input 焦点 / 输入法不错位
+            this.parsed = r.parsed
+            this.selectedPets = []
+            return
+          }
+          if (recs.length === 1) {
+            this.parsed = { ...this.blankRecord(), ...recs[0], kind: 'record', is_new: false, new_pet: false, pet_unknown: !!recs[0].pet_unknown, raw: r.parsed.raw }
+            if (this.parsed.params == null) this.parsed.params = {}
+            this.initSelectedPets()
+            this.ensureEventClock()
+            return
+          }
+          uni.showToast({ title: '没识别出有效记录', icon: 'none' })
+          return
+        }
         this.parsed = r.parsed
         if (this.parsed && this.parsed.params == null) this.parsed.params = {} // 养护参数绑定前确保对象（AI 非养护时 params=null）
         this.initSelectedPets() // 多选名单（ADR-029）：AI 预选多只则全勾，否则单只
@@ -406,6 +451,38 @@ export default {
       if (Array.isArray(p.pets) && p.pets.length >= 2) this.selectedPets = p.pets.filter((n) => this.petOptions.includes(n))
       else if (p.pet && this.petOptions.includes(p.pet)) this.selectedPets = [p.pet]
       else this.selectedPets = []
+    },
+    // ===== 多事件拆条（ADR-030 Round 2）=====
+    recEvtIdx(rec) {
+      const i = this.multiEventTypes.indexOf(rec && rec.event_type)
+      return i < 0 ? this.multiEventTypes.length - 1 : i // 不在候选(如养护)回兜底「其它」
+    },
+    setRecPet(i, name) {
+      const rec = this.parsed && this.parsed.records && this.parsed.records[i]
+      if (!rec) return
+      rec.pet = name
+      rec.pet_unknown = false
+      const hit = this.petsList.find((p) => p.name === name) // 跟随该宠物种（multi 不展养护，仅留记录用）
+      if (hit && hit.species) rec.species = hit.species
+    },
+    onPickRecEvt(i, e) {
+      const rec = this.parsed && this.parsed.records && this.parsed.records[i]
+      const v = this.multiEventTypes[Number(e.detail.value)]
+      if (rec && v) rec.event_type = v
+    },
+    delRec(i) {
+      if (!this.parsed || !this.parsed.records) return
+      this.parsed.records.splice(i, 1)
+      if (!this.parsed.records.length) this.cancelParse() // 删空 = 等于取消
+    },
+    // 出站清洗一条 multi 子记录（拼成 saveRecord 的 record 形状；数字强转，raw 带原句留 provenance）
+    buildMultiRecord(rec) {
+      return {
+        kind: 'record', valid: true, pet: (rec.pet || '').trim(), new_pet: false, species: rec.species || 'other',
+        time: rec.time || this.nowDateTime(), event_type: rec.event_type || '其它', weight: this.numOrNull(rec.weight),
+        med: (rec.med || '').trim(), hospital: (rec.hospital || '').trim(), cost: this.numOrNull(rec.cost),
+        tag: (rec.tag || '').trim(), desc: (rec.desc || '').trim(), raw: this.parsed.raw || this.draft || '',
+      }
     },
     // ===== 入口卡（ADR-017）=====
     onScrimTap() {
@@ -581,6 +658,44 @@ export default {
     async confirmSave() {
       if (!this.parsed) return
       const kind = this.parsed.kind
+      // 多事件拆条（ADR-030 Round 2）：逐条独立写、部分成功可报；失败的卡留下供重试
+      if (kind === 'multi') {
+        const recs = this.parsed.records || []
+        if (!recs.length) return
+        if (recs.some((rc) => !(rc.pet || '').trim() || rc.pet_unknown)) {
+          uni.showToast({ title: '有记录还没选宠物', icon: 'none' })
+          return
+        }
+        this.saving = true
+        try {
+          const payload = { kind: 'multi', valid: true, raw: this.parsed.raw || this.draft, records: recs.map((rc) => this.buildMultiRecord(rc)) }
+          const res = await callFn('saveRecord', { record: payload })
+          const rr = res.result || {}
+          if (rr.saved > 0) {
+            const failedIdx = new Set()
+            ;(rr.results || []).forEach((x, idx) => { if (!x.ok) failedIdx.add(idx) })
+            if (!failedIdx.size) {
+              uni.showToast({ title: `已归档 ${rr.saved} 条`, icon: 'success' })
+              this.draft = ''
+              this.parsed = null
+              this.manual = false
+              this.atts = []
+              this.selectedPets = []
+              setTimeout(() => uni.navigateBack({ delta: 1 }), 600)
+            } else {
+              uni.showToast({ title: `已存 ${rr.saved}/${rr.count} 条，其余请重试`, icon: 'none' })
+              this.parsed.records = recs.filter((_, idx) => failedIdx.has(idx)) // 只留没存上的
+            }
+          } else {
+            uni.showToast({ title: rr.msg || '保存失败', icon: 'none' })
+          }
+        } catch (e) {
+          uni.showToast({ title: '保存出错', icon: 'none' })
+        } finally {
+          this.saving = false
+        }
+        return
+      }
       // 名字没匹配上时不放行（ADR-015，record + reminder 都拦）：先点选已有宠物（服务端 PET_UNKNOWN 双保险）
       if (kind !== 'med_stock' && this.parsed.pet_unknown) {
         uni.showToast({ title: '先选一只宠物吧', icon: 'none' })
@@ -911,6 +1026,29 @@ export default {
   text-align: right;
   font-size: var(--fs-sub);
   color: var(--c-primary-deep);
+}
+/* 多事件拆条卡（ADR-030 Round 2）：每条一张精简卡 */
+.multi-card {
+  margin-top: 20rpx;
+  padding: 12rpx 20rpx 4rpx;
+  background: var(--c-bg-sink);
+  border-radius: var(--r-lg);
+}
+.multi-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8rpx 0 4rpx;
+}
+.multi-card__idx {
+  font-size: var(--fs-sub);
+  font-weight: 600;
+  color: var(--c-text-2);
+}
+.multi-card__del {
+  font-size: var(--fs-sub);
+  color: var(--c-danger);
+  padding: 4rpx 12rpx;
 }
 
 /* 手动 kind 分段切换（ADR-017） */
