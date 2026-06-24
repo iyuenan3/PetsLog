@@ -310,7 +310,7 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
   await run('批量: 非成员拒零写入', async () => {
     CUR_OPENID = 'uB'; seed('F1', 'uA', ['示例猫', '示例狗'])
     const r = await fn.main({ family_id: 'F1', record: { kind: 'record', pets: ['示例猫', '示例狗'], event_type: '驱虫', desc: 'x' } })
-    assert(r.ok === false && recs().length === 0, '非成员批量应拒、零写入')
+    assert(r.ok === false && r.code === 'NOT_MEMBER' && recs().length === 0, '非成员批量拒 NOT_MEMBER、零写入')
   })
 
   // ===== ADR-030 Round 2：多事件拆条 kind=multi =====
@@ -384,6 +384,61 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     CUR_OPENID = 'uB'; seed('F1', 'uA', ['示例猫', '示例狗'])
     const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [{ pet: '示例猫', event_type: '症状', desc: 'x' }] } })
     assert(r.ok === false && r.code === 'NOT_MEMBER' && recs().length === 0, '非成员 multi 应拒、零写入')
+  })
+
+  // ===== review 补测：红线 / 边界回归（ADR-029/030 对抗评审揪出的覆盖缺口）=====
+
+  // 26. 批量补旧体重不回退最新(updateExistingPetWeight 守卫在 batch 路径有效)
+  await run('批量: 补更旧日期体重不回退 latest', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫', '示例狗'])
+    pets().forEach((p) => { p.latest_weight = 5.0; p.latest_weight_date = '2026-06-11' })
+    await fn.main({ family_id: 'F1', record: { kind: 'record', pets: ['示例猫', '示例狗'], time: '2026-01-01', event_type: '体重', weight: 3.0 } })
+    assert(pets().every((p) => p.latest_weight === 5.0 && p.latest_weight_date === '2026-06-11'), '旧体重不覆盖最新')
+  })
+
+  // 27. multi 补旧体重不回退(守卫在 multi 路径有效)
+  await run('multi: 补更旧日期体重不回退 latest', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    pets()[0].latest_weight = 5.0; pets()[0].latest_weight_date = '2026-06-11'
+    await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [{ pet: '示例猫', time: '2026-01-01', event_type: '体重', weight: 3.0 }] } })
+    const p = pets()[0]
+    assert(p.latest_weight === 5.0 && p.latest_weight_date === '2026-06-11', 'multi 旧体重不回退')
+  })
+
+  // 28. 批量【绝不 snap 近似名】(红线①核心):有唯一近似候选也整批拒、不静默改派
+  await run('批量: 近似名「示列龟」不 snap 到「示例龟」→ 整批拒零写入', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例龟'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'record', pets: ['示例龟', '示列龟'], time: '2026-06-11', event_type: '驱虫', desc: 'x' } })
+    assert(r.ok === false && r.code === 'PET_UNKNOWN', '近似名不在库整批拒')
+    assert(Array.isArray(r.missing) && r.missing.includes('示列龟'), 'missing 列近似名（证明未 snap）')
+    assert(recs().length === 0, '零写入（绝不写进近似宠物）')
+  })
+
+  // 29. multi 空 pet 子条服务端拒(不写无主记录, review #2):该条 PET_UNKNOWN、其它照存
+  await run('multi: 空 pet 子条拒写无主、其它照存', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [
+      { pet: '示例猫', event_type: '症状', desc: '呕吐' }, { pet: '', event_type: '症状', desc: '无主拉稀' },
+    ] } })
+    assert(r.saved === 1 && r.results[1].ok === false && r.results[1].code === 'PET_UNKNOWN', '空 pet 条 PET_UNKNOWN')
+    assert(recs().length === 1 && recs()[0].pet === '示例猫', '只落有主那条、无「无主」记录')
+    assert(!recs().some((x) => x.pet === ''), '库里无空 pet 记录')
+  })
+
+  // 30. multi 非数组畸形 → INVALID(不穿透单条写垃圾, review 硬化)
+  await run('multi: records 非数组 → INVALID', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: 'oops' } })
+    assert(r.ok === false && r.code === 'INVALID', '畸形 multi 拒 INVALID')
+    assert(recs().length === 0, '不落任何记录')
+  })
+
+  // 31. multi 仅 1 子条 → 照常按 multi 存 1 条(降级行为固化)
+  await run('multi: 仅 1 子条 saved=1', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'multi', records: [{ pet: '示例猫', time: '2026-06-11', event_type: '症状', desc: '呕吐' }] } })
+    assert(r.ok === true && r.saved === 1 && r.count === 1, '单子条 saved=1')
+    assert(recs().length === 1 && recs()[0].pet === '示例猫', '落 1 条')
   })
 
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)

@@ -471,6 +471,7 @@ export default {
       if (rec && v) rec.event_type = v
     },
     delRec(i) {
+      if (this.saving) return // 提交进行中禁止删卡（review #3）：避免与 confirmSave 的失败卡 index 竞态
       if (!this.parsed || !this.parsed.records) return
       this.parsed.records.splice(i, 1)
       if (!this.parsed.records.length) this.cancelParse() // 删空 = 等于取消
@@ -657,10 +658,11 @@ export default {
     },
     async confirmSave() {
       if (!this.parsed) return
+      if (this.saving) return // 双击 / 重入守卫（review #4）：覆盖所有 kind，防快速双击把 multi/batch 翻倍重复写
       const kind = this.parsed.kind
       // 多事件拆条（ADR-030 Round 2）：逐条独立写、部分成功可报；失败的卡留下供重试
       if (kind === 'multi') {
-        const recs = this.parsed.records || []
+        const recs = (this.parsed.records || []).slice() // 不可变快照（review #3）：提交期间用户删卡 splice 活引用会让失败卡 index 错位
         if (!recs.length) return
         if (recs.some((rc) => !(rc.pet || '').trim() || rc.pet_unknown)) {
           uni.showToast({ title: '有记录还没选宠物', icon: 'none' })
@@ -684,7 +686,7 @@ export default {
               setTimeout(() => uni.navigateBack({ delta: 1 }), 600)
             } else {
               uni.showToast({ title: `已存 ${rr.saved}/${rr.count} 条，其余请重试`, icon: 'none' })
-              this.parsed.records = recs.filter((_, idx) => failedIdx.has(idx)) // 只留没存上的
+              if (this.parsed) this.parsed.records = recs.filter((_, idx) => failedIdx.has(idx)) // 只留没存上的（快照过滤，防竞态 TypeError）
             }
           } else {
             uni.showToast({ title: rr.msg || '保存失败', icon: 'none' })
@@ -747,7 +749,8 @@ export default {
         } else if (r.code === 'PET_UNKNOWN') {
           // 服务端兜底拒了（前端态被绕过 / 解析后名单变化）：批量回名单态留用户重选，单宠回错别字选择态
           if (r.pets && r.pets.length) this.petOptions = r.pets
-          if (!batch) this.parsed.pet_unknown = true
+          if (batch) this.selectedPets = this.selectedPets.filter((n) => this.petOptions.includes(n)) // 剔除已失效宠名（review critic#2）：否则幽灵名无 chip 可取消 → 永久卡 PET_UNKNOWN 死循环
+          else this.parsed.pet_unknown = true
           uni.showToast({ title: r.msg || '没找到这只宠物，请选择', icon: 'none' })
         } else {
           uni.showToast({ title: r.msg || '保存失败', icon: 'none' })

@@ -91,7 +91,8 @@ exports.main = async (event) => {
         const s = fuzzyMatchPet(rec.pet, petNames)
         if (s) rec.pet = s
       }
-      rec.pet_unknown = !!rec.pet && !petNames.includes(rec.pet)
+      // 空 pet（拆条无法归属）也标 pet_unknown：前端 multi 卡强制选宠、服务端拒写无主记录（review #2）
+      rec.pet_unknown = !rec.pet || !petNames.includes(rec.pet)
     }
   } else {
     // 宠物名解析（ADR-015，建档凭意图不凭名字）：
@@ -246,6 +247,7 @@ function normalize(o, raw, today) {
     const records = o.records
       .map((rec) => (rec && typeof rec === 'object' ? normalizeRecordFields(rec, today) : null))
       .filter((r) => r && (r.pet || r.desc || r.event_type !== '其它' || r.weight != null))
+    records.forEach((r) => (r.raw = raw)) // 每条子记录带原句 raw（ADR-020 逐字落库契约层保证，不依赖前端 buildMultiRecord 代偿，review #5）
     return { kind: 'multi', valid: o.valid !== false, records, raw }
   }
   const kind = ['med_stock', 'reminder'].includes(o.kind) ? o.kind : 'record'

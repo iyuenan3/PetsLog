@@ -156,14 +156,21 @@ function buildDoc(familyId, r, petName, eventTime, params) {
   return doc
 }
 
-// 已有宠物体重回写 + weight_spark（ADR-025 方案 b）：单宠 / 批量同源。
+// 已有宠物体重回写 + weight_spark（ADR-025 方案 b）：单宠 / 批量 / multi 同源。
 // 仅当新记录日期 >= 已存最新体重日期时才回写，避免补录旧体重把「最新」覆盖回退。
+// 【派生数据，整体吞异常】（ADR-029/030 review critic#1）：record 已 add 成功后才回写体重，
+// 若此处 throw 会让 saveMulti 误报 WRITE_FAIL（记录其实已落库）→ 前端留卡重试 = 重复记录。
+// latest_weight / spark 都可由 records 重算，回写失败不该让主写算失败 → 与 recomputeWeightSpark 同档吞掉。
 async function updateExistingPetWeight(familyId, p, doc) {
-  const wDate = (doc.time || '').slice(0, 10) // latest_weight_date 保持纯日期语义（time 现含到分）
-  if (doc.weight && (!p.latest_weight_date || wDate >= p.latest_weight_date)) {
-    await db.collection('pets').doc(p._id).update({ data: { latest_weight: doc.weight, latest_weight_date: wDate } })
+  try {
+    const wDate = (doc.time || '').slice(0, 10) // latest_weight_date 保持纯日期语义（time 现含到分）
+    if (doc.weight && (!p.latest_weight_date || wDate >= p.latest_weight_date)) {
+      await db.collection('pets').doc(p._id).update({ data: { latest_weight: doc.weight, latest_weight_date: wDate } })
+    }
+    if (doc.weight) await recomputeWeightSpark(familyId, p._id, doc.pet) // 体重变更重算趋势点
+  } catch (e) {
+    /* 派生数据，忽略失败（主写 record 已落库） */
   }
-  if (doc.weight) await recomputeWeightSpark(familyId, p._id, doc.pet) // 体重变更重算趋势点
 }
 
 // 批量同事件落库（ADR-029 Round 1）：record.pets 多只 → 同一份内容复制 N 条。
@@ -197,6 +204,11 @@ async function saveBatch(familyId, r) {
 // knownNames = 家庭已有宠物名（调用方查一次传入，避免 multi 逐条重复查）。返回 {ok,id,pet,petCreated} 或 {ok:false,code:'PET_UNKNOWN',…}。
 async function writeRecordOne(familyId, r, knownNames, allowCreate = true) {
   const resolvedPet = String((r && r.pet) || '').trim()
+  // multi（allowCreate=false）空 pet 子条 = 无法归属的拆条产物 → 拒，绝不写「无主」记录（服务端安全边界，ADR-030 review #2）。
+  // 单条主路径（allowCreate=true）仍允许空 pet（通用 note 语义，基线行为不变）。
+  if (!resolvedPet && !allowCreate) {
+    return { ok: false, code: 'PET_UNKNOWN', msg: '这条没指定宠物', pet: '', suggest: '', pets: knownNames }
+  }
   if (resolvedPet && !knownNames.includes(resolvedPet)) {
     const explicitNew = allowCreate && r.new_pet === true
     const firstPet = allowCreate && knownNames.length === 0
@@ -267,7 +279,7 @@ async function saveMulti(familyId, records) {
     } catch (e) {
       res = { ok: false, code: 'WRITE_FAIL', msg: String((e && e.message) || e) }
     }
-    results.push({ ok: !!res.ok, code: res.code || '', id: res.id || '', pet: rec.pet || res.pet || '' })
+    results.push({ ok: !!res.ok, code: res.code || '', id: res.id || '', pet: res.pet || String((rec && rec.pet) || '').trim() }) // pet 优先取落库规范名（res.pet=trim 后），回显与库一致
   }
   const saved = results.filter((x) => x.ok).length
   return { ok: saved > 0, kind: 'multi', count: list.length, saved, results }
@@ -290,8 +302,9 @@ exports.main = async (event) => {
   }
 
   // 多事件异构批量（ADR-030 Round 2）：record.records 多条不同内容 → 逐条独立写、部分成功可报。
-  if (r.kind === 'multi' && Array.isArray(r.records)) {
-    return await saveMulti(familyId, r.records)
+  // kind=multi 但 records 非数组 = 畸形输入 → 显式 INVALID，绝不穿透到单条路径写一条空 pet 垃圾记录（review 硬化）。
+  if (r.kind === 'multi') {
+    return Array.isArray(r.records) ? await saveMulti(familyId, r.records) : { ok: false, code: 'INVALID', msg: '无效记录' }
   }
 
   // 批量同事件落库（ADR-029 Round 1）：record + pets 数组 → fan-out 复制 N 条（med_stock / reminder 不批量）。

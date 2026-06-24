@@ -1,6 +1,13 @@
 # MEMORY — PetsLog
 <!-- 踩坑/失败/事故，append-only。别重复踩坑。决策→DECISIONS。 -->
 
+## 派生数据回写 throw 不能让主写算失败，否则「写成功却报失败 → 重试重复」· 2026-06-24（ADR-030 review critic#1）
+多事件落库 `saveMulti` 逐条 `writeRecordOne`：先 `records.add(doc)` 落库**成功**，紧接着 `updateExistingPetWeight` 回写 `pets.latest_weight`（**派生数据**，可由 records 重算）。原来这步 `pets.doc().update()` **没包 try/catch**，若网络抖动 / 配额 / 并发瞬时失败 throw，会冒泡到 `saveMulti` 的 per-item catch → 该条标 `WRITE_FAIL`，**但 record 文档其实已经持久化**。前端见 `saved>0` 把这条算「失败卡」留下让用户重试 → 重试再 `add` 一条同内容 record → **库里两份**，体重曲线 / 兽医小结被污染。
+- **根因**：把「主写（不可重算、必须成功）」与「派生回写（可重算、失败无害）」放进同一个会让整条失败的 try 作用域。multi 的「部分成功 + 失败卡重试」语义把这个隐患放大成真实重复数据。
+- **修法**：`updateExistingPetWeight` **整体包 try/catch 吞掉**（与早已吞异常的 `recomputeWeightSpark` 同档）→ 主写 `add` 成功即 `ok:true`，派生回写失败静默忽略（latest_weight / spark 都能从 records 重算）。
+- **教训**：① 任何「先持久化主体、再更新派生冗余」的写序，派生那步失败绝不能反推主体失败（尤其有重试 / 幂等缺失时）；② 单 agent 评审没抓到，**完整性批判（critic）专问“写成功却报失败的窗口”才挖出**：审「部分成功」类逻辑要顺着「已落库但返回失败」这条反直觉路径查；③ 同源隐患单条主路径也有（updateExistingPetWeight 早就裸奔），一并收。
+
+
 ## type=2d canvas 导出必须显式给 dest 几何，否则按 CSS 逻辑尺寸降采样 · 2026-06-20（ADR-028）
 `wx.canvasToTempFilePath({ canvas })` 对 **type=2d canvas（createSelectorQuery 拿 node）**，若不传 `width/height/destWidth/destHeight`，**默认按 canvas 的 CSS 逻辑尺寸导出**，而非你 `canvas.width = W*dpr` 设的 backing store。于是高 dpr 下：`ctx.scale(dpr)` 画得很清的 backing store（如 960×1440@3x）被导成 320×480 临时图、再被 `<image>` 拉回显示尺寸 → **整张糊**。PetsLog 档案卡 / 分享卡 / 兽医小结（`index.vue` + `pet.vue×2`）三处都犯，是「真机档案卡比 HTML 镜像糊」的真根因（dpr 缩放逻辑本就对，只漏导出一步）。
 - **修法**：导出补 `width:W, height:H, destWidth:W*dpr, destHeight:H*dpr`（值 = 既有 backing store，已 <4096 不触发白屏）。

@@ -189,6 +189,7 @@ function assert(c, m) { if (c) pass++; else { fail++; console.log('  ❌ ' + m) 
   const mr = (DB_INST.data.records || []).filter((r) => r.time === '2026-07-01')
   assert(mr.length === 2 && mr.some((r) => r.pet === '示例猫' && r.desc === '呕吐') && mr.some((r) => r.pet === '示例狗' && r.desc === '腹泻'), 'E2E-10 落 2 条不同内容')
   assert((DB_INST.data.records || []).length === recsBefore3 + 2, 'E2E-10 只新增 2 条')
+  assert(mr.every((r) => r.raw === '示例猫吐了，示例狗拉稀了'), 'E2E-10 每条子记录 raw=原句（ADR-020 契约层下发，不靠前端代偿，review #5）')
 
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
