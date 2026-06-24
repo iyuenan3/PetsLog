@@ -3,7 +3,14 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
-## 真机渲染质量对齐 HTML 镜像 · canvas 导出 dest 修复 + 去纹理 + 抗锯齿 + 描边整数化 + care 令牌化 · 2026-06-20（ADR-028，待 commit）
+## 多宠批量记录 Round 1 · 同事件 fan-out（多选 + saveRecord pets[] 复制 N 条）· 2026-06-24（ADR-029，待 commit）
+- Context: 真机用了两天的实测反馈「无法同时为多只宠物记录」。多宠家庭日常高频「一起驱虫 / 疫苗 / 体检 / 统一换粮 / 集体称重」，但录入链路三层全单宠（parse 抽一个对象 + record.vue 单选 picker + saveRecord 写一条）。用户「两种都要」→ 分两轮：Round 1 同事件批量（覆盖 80% 多宠日常），Round 2 另起一句话拆多条不同记录。
+- Added（落库层）: `saveRecord` 加批量分支：`record.pets=[…]` → fan-out 复制 N 条同内容。抽 `buildDoc` + `updateExistingPetWeight` 两 helper、单宠 / 批量同源（防 doc 形状 / 养护门控 / created_at 漂移）。**任一宠物不在库整批拒 PET_UNKNOWN、零写入**（沿 ADR-015）；批量不建档、不收错别字、不落养护 params；体重 / weight_spark 各自回写；返回 `{ok,ids,count}`。**不带 pets = 原单宠路径逐字不变**。
+- Added（解析层）: prompt 加 `pets:string[]` 字段说明 + 一条「给示例猫和示例狗都驱虫」few-shot；`parseRecord` normalize 收 pets、main 对每只 fuzzyMatch snap 到已有名（不猜不建档）、snap 后 <2 视作单宠清空。
+- Added（前端）: record.vue 正常态选宠 单选 picker → **多选 chips**（`selectedPets` 单一真相 + `isBatch` computed + `togglePet`/`initSelectedPets`，species 跟随首只）；建档 / 错别字 / 提醒 / 药品 保持单宠不变；选 >1 只隐藏附件 + 养护参数输入行（免填了被静默丢）+ toast「已归档 N 条」。
+- 验证: 10 套测试全绿（saveRecord 45→62 / parseRecord.prompt 26→29 / e2e.flow 18→25 加批量 fan-out 端到端 + 零写入 + 去重 + 体重各写 + 非成员拒）；**fail-first 证非假绿**（stash 实现对旧码跑批量用例 15+2 失败 + e2e 抛错，恢复后全绿）；build 零错 + 产物核实（record.js 含 selectedPets/togglePet/isBatch、wxss 含 batch-hint、cloudfn 产物含 saveBatch）；两轮对抗评审（后端 + 前端各 1 agent）0 must-fix，修了 2 同根因存疑（批量 + 养护参数：隐输入行 + buildRecord 不收 params）。**待真机验**（多选勾减 / AI 预选多只 / 批量落 N 条 / 单只不回归）。
+
+## 真机渲染质量对齐 HTML 镜像 · canvas 导出 dest 修复 + 去纹理 + 抗锯齿 + 描边整数化 + care 令牌化 · 2026-06-20（ADR-028，已 commit 21f50c1 · 镜像入公开仓 1265dc4）
 - Context: 建 Claude Design HTML 镜像（`design-system/`，23 卡逐字镜像 App.vue 令牌 / 各页 WXSS / petCard.js）当「质量标尺」反向校真机；claude.ai/design 登录受网络阻未上云，转本地 iframe 画廊。多 agent 渲染审计（46 agent，9 真问题 / 剔 29）定位差距≈渲染非设计。镜像作为设计 / 架构材料已纳入公开仓（PII 已扫净）。
 - Fixed（头号真 bug）: **档案卡 / 分享卡 / 兽医小结导出糊**：`index.vue` + `pet.vue×2` 三处 `wx.canvasToTempFilePath({canvas})` 缺 dest 几何，type=2d 默认按 CSS 逻辑尺寸导出、丢 dpr backing store → 3:1 降采样再被 `<image>` 拉回。补 `width/height/destWidth/destHeight`（=既有 backing store，<4096 安全）。
 - Changed: 去 App.vue 宣纸 base64 纹理底（留 `--c-bg` 平涂、对齐镜像干净，部分 revise b655539）；page 加 `-webkit-/-moz-` font-smoothing；描边整数化（9 闭合框 + tabbar 顶边 + 9 border-bottom 的 `2rpx→1px`，整数物理 px 才锐）；`rec__btn` 96→92。

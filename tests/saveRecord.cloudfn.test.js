@@ -251,6 +251,68 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert((DB_INST.data.reminders || [])[0].type === '养护', 'rem_type=养护 保留')
   })
 
+  // ===== ADR-029 Round 1：多宠同事件批量 fan-out =====
+
+  // 13. 批量正常: pets 多只 → 各存一条同内容, count + ids
+  await run('批量: pets 两只 → 各存一条', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫', '示例狗'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'record', pet: '示例猫', pets: ['示例猫', '示例狗'], time: '2026-06-11', event_type: '驱虫', desc: '体外驱虫' } })
+    assert(r.ok === true && r.count === 2 && r.ids.length === 2, 'count=2 + ids 两个')
+    assert(recs().length === 2, '落 2 条')
+    assert(recs().some((x) => x.pet === '示例猫' && x.desc === '体外驱虫') && recs().some((x) => x.pet === '示例狗' && x.desc === '体外驱虫'), '两条分属两只、内容一致')
+    assert(pets().length === 2, '不建档')
+  })
+
+  // 14. 批量含不存在 → 整批拒 PET_UNKNOWN 零写入(沿用 ADR-015 红线)
+  await run('批量: 含不存在宠物 → 整批拒零写入', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫', '示例狗'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'record', pets: ['示例猫', '幽灵', '示例狗'], time: '2026-06-11', event_type: '驱虫', desc: 'x' } })
+    assert(r.ok === false && r.code === 'PET_UNKNOWN', '应拒 PET_UNKNOWN')
+    assert(Array.isArray(r.missing) && r.missing.length === 1 && r.missing[0] === '幽灵', 'missing 仅列幽灵')
+    assert(recs().length === 0, '整批零写入(不部分落)')
+  })
+
+  // 15. 批量去重: pets 含重名 → 只写 unique 一条/只
+  await run('批量: pets 重复名去重', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫', '示例狗'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'record', pets: ['示例猫', '示例猫 ', '示例狗'], time: '2026-06-11', event_type: '疫苗', desc: 'y' } })
+    assert(r.ok === true && r.count === 2, 'trim+去重后 count=2')
+    assert(recs().filter((x) => x.pet === '示例猫').length === 1, '示例猫只一条')
+  })
+
+  // 16. 批量体重: 每只各自回写 latest_weight + spark
+  await run('批量: 体重各自回写', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫', '示例狗'])
+    await fn.main({ family_id: 'F1', record: { kind: 'record', pets: ['示例猫', '示例狗'], time: '2026-06-11', event_type: '体重', weight: 4.5, desc: '集体称重' } })
+    const c = pets().find((p) => p.name === '示例猫'); const d = pets().find((p) => p.name === '示例狗')
+    assert(c.latest_weight === 4.5 && c.latest_weight_date === '2026-06-11', '示例猫体重回写')
+    assert(d.latest_weight === 4.5 && d.latest_weight_date === '2026-06-11', '示例狗体重回写')
+    assert(c.weight_spark.join(',') === '4.5' && d.weight_spark.join(',') === '4.5', '两只各自 spark')
+  })
+
+  // 17. 批量不落 params(养护参数物种特定,多只跨物种语义弱 → 一律不写,ADR-029)
+  await run('批量: event_type=养护 也不落 params', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例龟', '示例鱼'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'record', pets: ['示例龟', '示例鱼'], time: '2026-06-11', event_type: '养护', desc: '环境', params: { temp: 28 } } })
+    assert(r.ok === true && r.count === 2, '落 2 条')
+    assert(recs().every((x) => !('params' in x)), '批量记录均不带 params')
+  })
+
+  // 18. 批量空名单 → INVALID(防全空数组误触发)
+  await run('批量: 去空后为空 → INVALID', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'record', pets: ['', '  '], time: '2026-06-11', event_type: '驱虫', desc: 'x' } })
+    assert(r.ok === false && r.code === 'INVALID', '空名单拒 INVALID')
+    assert(recs().length === 0, '零写入')
+  })
+
+  // 19. 隔离不回归: 批量也走 assertMember(非成员拒、零写入)
+  await run('批量: 非成员拒零写入', async () => {
+    CUR_OPENID = 'uB'; seed('F1', 'uA', ['示例猫', '示例狗'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'record', pets: ['示例猫', '示例狗'], event_type: '驱虫', desc: 'x' } })
+    assert(r.ok === false && recs().length === 0, '非成员批量应拒、零写入')
+  })
+
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
 })()

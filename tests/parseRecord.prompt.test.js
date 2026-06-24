@@ -80,5 +80,17 @@ run('养护 few-shot: 存在一条 event_type=养护 且带 params 的合法示�
   }
 })
 
+// ADR-029：多宠同事件批量预选
+run('多宠批量: pets 字段说明在 SYSTEM + 一条多宠 few-shot', () => {
+  assert(SYSTEM.includes('pets'), 'SYSTEM 应有 pets 字段说明')
+  const m = buildMessages('x', [], [], '2026-01-01')
+  const multiEx = m.find((msg) => msg.role === 'assistant' && /"pets"\s*:\s*\[/.test(msg.content))
+  assert(!!multiEx, '应有一条带 pets 数组的 few-shot')
+  if (multiEx) {
+    const o = JSON.parse(multiEx.content)
+    assert(Array.isArray(o.pets) && o.pets.length === 2, '多宠 few-shot pets 含两只')
+  }
+})
+
 console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
 process.exit(fail ? 1 : 0)

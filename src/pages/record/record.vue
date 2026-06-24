@@ -145,13 +145,13 @@
                 <text v-else class="field-row__value field-row__value--empty">还没有宠物档案，先到宠物页添加</text>
               </view>
             </template>
+            <!-- 正常态（record + 已有宠）：多选 chips（ADR-029 Round 1），勾几只各存一条；建档 / 错别字仍单宠（上两态） -->
             <template v-else>
               <view class="field-row"><text class="field-row__label">宠物</text>
-                <picker v-if="petOptions.length" class="field-row__pick" mode="selector" :range="petOptions" :value="petIdx" @change="onPickPet($event)">
-                  <view class="pickbox"><text class="pickbox__v" :class="{ 'field-row__value--empty': !parsed.pet }">{{ parsed.pet || '请选择' }}</text><text class="pickbox__c">▾</text></view>
-                </picker>
+                <view class="chips" v-if="petOptions.length"><text v-for="n in petOptions" :key="n" :class="['chip', selectedPets.includes(n) ? 'chip--active' : '']" @click="togglePet(n)">{{ n }}</text></view>
                 <text v-else class="field-row__value field-row__value--empty" @click="goAddPet">还没有宠物，去添加 ›</text>
               </view>
+              <view v-if="isBatch" class="field-row"><text class="field-row__label"></text><text class="batch-hint">已选 {{ selectedPets.length }} 只 · 确认后各存一条（批量暂不挂附件）</text></view>
             </template>
             <view class="field-row"><text class="field-row__label">时间</text>
               <view class="dt-pick">
@@ -182,8 +182,8 @@
             <view v-if="!manual" class="field-row"><text class="field-row__label">原文</text><text class="field-row__value">{{ parsed.raw || draft }}</text></view>
           </view>
 
-          <!-- 附件（见 ADR-011）：确认归档前可挂图片 / 视频 / PDF，保存后上传登记 -->
-          <view class="att">
+          <!-- 附件（见 ADR-011）：确认归档前可挂图片 / 视频 / PDF，保存后上传登记。批量(>1 只)隐藏：附件按单 record 登记，多只语义模糊（ADR-029） -->
+          <view v-if="!isBatch" class="att">
             <text class="att__label">附件（病历照片 / 视频 / PDF，选填）</text>
             <scroll-view scroll-x class="att__scroll" :show-scrollbar="false">
               <view class="att__inner">
@@ -229,7 +229,8 @@ export default {
       saving: false,
       parsed: null, // 结构化结果（AI 解析 or 手动直填），待用户确认 / 编辑
       manual: false, // 手动直填态（ADR-017）：可切 kind、隐藏「原文」、标题改「手动…」
-      petOptions: [], // 家庭已有宠物名单（AI 走 parseRecord 带回，手动走 pets list），picker / 错别字点选用
+      petOptions: [], // 家庭已有宠物名单（AI 走 parseRecord 带回，手动走 pets list），多选 chips / 错别字点选用
+      selectedPets: [], // 正常态多选名单（ADR-029 Round 1）：>1 即批量，确认后各存一条；单一真相驱动 chips 高亮
       petsList: [], // 家庭宠物全量（含 species），选已有宠时按名查物种以驱动 event_type / 养护表单（ADR-024）
       speciesList: SPECIES, // 建档物种 chip（ADR-023 多物种）
       atts: [], // 待上传附件（本地临时文件，确认归档后才上传，取消不留孤儿）
@@ -266,12 +267,17 @@ export default {
       const cur = this.parsed && this.parsed.rem_type
       return cur && !base.includes(cur) ? [...base, cur] : base
     },
-    // 养护参数输入字段（ADR-024）：仅 event_type=养护 且该物种有结构化参数（爬宠 / 鱼）时非空
+    // 养护参数输入字段（ADR-024）：仅 event_type=养护 且该物种有结构化参数（爬宠 / 鱼）时非空。
+    // 批量态隐藏（ADR-029）：批量不落 params（物种特定、可能跨物种），不显输入行免用户填了被静默丢。
     husbandryFields() {
-      if (!this.parsed || this.parsed.event_type !== '养护') return []
+      if (!this.parsed || this.parsed.event_type !== '养护' || this.isBatch) return []
       return husbandryFor(this.curSpecies)
     },
-    // picker 高亮项下标（parsed 为空时回 0；值不在枚举里回兜底项）
+    // 批量态（ADR-029 Round 1）：正常态选中 >1 只 → fan-out。建档 / 错别字态不批量（selectedPets 恒空）。
+    isBatch() {
+      return this.selectedPets.length > 1
+    },
+    // 提醒块选宠 picker 高亮下标（提醒仍单宠，不批量）：值不在名单回 0
     petIdx() {
       const i = this.petOptions.indexOf(this.parsed && this.parsed.pet)
       return i < 0 ? 0 : i
@@ -356,6 +362,7 @@ export default {
         this.petsList = Object.entries(r.petSpecies || {}).map(([name, species]) => ({ name, species }))
         this.parsed = r.parsed
         if (this.parsed && this.parsed.params == null) this.parsed.params = {} // 养护参数绑定前确保对象（AI 非养护时 params=null）
+        this.initSelectedPets() // 多选名单（ADR-029）：AI 预选多只则全勾，否则单只
         this.ensureEventClock() // 事件时间精确到分（ADR-018）：AI 只给日期时补当前时刻，卡片显示=落库时间
       } catch (e) {
         uni.showModal({
@@ -377,7 +384,28 @@ export default {
       if (!this.parsed) return
       this.parsed.pet = name
       this.parsed.pet_unknown = false
+      this.selectedPets = [name] // 错别字选定后进正常态，多选名单以此只起步（ADR-029）
       this.syncSpeciesByName(name) // 跟随所选宠物物种（ADR-024）
+    },
+    // 正常态多选切换（ADR-029 Round 1）：勾/取消一只；parsed.pet 镜像首只（供 species 同步 + 单宠路径兼容）。
+    togglePet(name) {
+      if (!this.parsed) return
+      const i = this.selectedPets.indexOf(name)
+      if (i >= 0) this.selectedPets.splice(i, 1)
+      else this.selectedPets.push(name)
+      this.parsed.pet = this.selectedPets[0] || ''
+      if (this.parsed.pet) this.syncSpeciesByName(this.parsed.pet) // 物种跟随首只（批量共享 event_type）
+    },
+    // 初始化正常态多选名单（ADR-029）：AI 预选多只(parsed.pets≥2) → 全勾；否则单只(已有宠) → 勾它；建档 / 错别字 / 非 record → 空
+    initSelectedPets() {
+      const p = this.parsed
+      if (!p || p.kind !== 'record' || p.is_new || p.pet_unknown) {
+        this.selectedPets = []
+        return
+      }
+      if (Array.isArray(p.pets) && p.pets.length >= 2) this.selectedPets = p.pets.filter((n) => this.petOptions.includes(n))
+      else if (p.pet && this.petOptions.includes(p.pet)) this.selectedPets = [p.pet]
+      else this.selectedPets = []
     },
     // ===== 入口卡（ADR-017）=====
     onScrimTap() {
@@ -455,12 +483,14 @@ export default {
         this.petOptions = []
       }
       this.atts = []
+      this.selectedPets = [] // 手动直填从空起步，用户点 chips 选（ADR-029）
       this.manual = true
       this.parsed = this.blankRecord()
     },
     setManualKind(k) {
       if (this.parsed) this.parsed.kind = k
     },
+    // 提醒块选宠（提醒仍单宠，不批量）：picker 选定单只
     onPickPet(e) {
       const n = this.petOptions[Number(e.detail.value)]
       if (n != null && this.parsed) {
@@ -515,8 +545,9 @@ export default {
         ...base, time: p.time || this.nowDateTime(), event_type: p.event_type || '其它', weight: this.numOrNull(p.weight),
         med: (p.med || '').trim(), hospital: (p.hospital || '').trim(), cost: this.numOrNull(p.cost), tag: (p.tag || '').trim(), desc: (p.desc || '').trim(),
       }
-      // 养护参数（ADR-024）：有结构化 schema 的物种按 husbandryFor 键收集（数字归一）；无 schema 物种透传 LLM 抽取，saveRecord 再 sanitize
-      if (rec.event_type === '养护') {
+      // 养护参数（ADR-024）：有结构化 schema 的物种按 husbandryFor 键收集（数字归一）；无 schema 物种透传 LLM 抽取，saveRecord 再 sanitize。
+      // 批量态不收（ADR-029）：服务端 saveBatch 一律丢 params，前端同步不算，避免 rec.pets 与 rec.params 并存的语义歧义。
+      if (rec.event_type === '养护' && !this.isBatch) {
         const fields = husbandryFor(p.species)
         let params
         if (fields.length) {
@@ -531,12 +562,14 @@ export default {
         }
         if (params) rec.params = params
       }
+      if (this.isBatch) rec.pets = [...this.selectedPets] // 批量 fan-out（ADR-029）：服务端按 pets 各存一条；base.pet=首只供兼容
       return rec
     },
     cancelParse() {
       this.parsed = null
       this.manual = false
       this.atts = [] // 只是本地临时文件，丢弃即可，无云端孤儿
+      this.selectedPets = []
     },
     async addAtt() {
       const picked = await pickAttachments(this.attMax - this.atts.length)
@@ -563,14 +596,15 @@ export default {
         uni.showToast({ title: '先选一只宠物吧', icon: 'none' })
         return
       }
+      const batch = this.isBatch // 快照：成功后会清 selectedPets，toast / 附件分支按提交时态判
       const okMsg = kind === 'med_stock' ? '已入库' : kind === 'reminder' ? '已设提醒' : '已归档'
       this.saving = true
       try {
         const res = await callFn('saveRecord', { record: this.buildRecord() })
         const r = res.result || {}
         if (r.ok) {
-          // 健康记录带附件：先归档成功再上传登记（取消归档不产生云端孤儿；上传失败记录仍在，可去详情页补传）
-          if (kind !== 'med_stock' && kind !== 'reminder' && this.atts.length && r.id) {
+          // 健康记录带附件：先归档成功再上传登记（批量无单 id、不挂附件，ADR-029；取消归档不产生云端孤儿；上传失败记录仍在，可去详情页补传）
+          if (!batch && kind !== 'med_stock' && kind !== 'reminder' && this.atts.length && r.id) {
             uni.showLoading({ title: '上传附件中…', mask: true })
             const up = await uploadAndRegister(r.id, this.atts)
             uni.hideLoading()
@@ -585,19 +619,20 @@ export default {
               )
             }
           }
-          uni.showToast({ title: okMsg, icon: 'success' })
+          uni.showToast({ title: batch ? `已归档 ${r.count || this.selectedPets.length} 条` : okMsg, icon: 'success' })
           this.draft = ''
           this.parsed = null
           this.manual = false
           this.atts = []
+          this.selectedPets = []
           // 让来源 tab 在返回后 onShow 刷新；稍等 toast 露出再返回
           setTimeout(() => {
             uni.navigateBack({ delta: 1 })
           }, 600)
         } else if (r.code === 'PET_UNKNOWN') {
-          // 服务端兜底拒了（前端态被绕过 / 解析后名单变化）：回到选择态
-          this.parsed.pet_unknown = true
+          // 服务端兜底拒了（前端态被绕过 / 解析后名单变化）：批量回名单态留用户重选，单宠回错别字选择态
           if (r.pets && r.pets.length) this.petOptions = r.pets
+          if (!batch) this.parsed.pet_unknown = true
           uni.showToast({ title: r.msg || '没找到这只宠物，请选择', icon: 'none' })
         } else {
           uni.showToast({ title: r.msg || '保存失败', icon: 'none' })
@@ -869,6 +904,13 @@ export default {
   color: var(--c-primary-deep);
   font-weight: 600;
   box-shadow: inset 0 0 0 2rpx var(--c-primary);
+}
+/* 批量提示（ADR-029）：多选 >1 只时的「各存一条」说明 */
+.batch-hint {
+  flex: 1;
+  text-align: right;
+  font-size: var(--fs-sub);
+  color: var(--c-primary-deep);
 }
 
 /* 手动 kind 分段切换（ADR-017） */

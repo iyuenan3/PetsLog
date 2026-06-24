@@ -157,6 +157,24 @@ function assert(c, m) { if (c) pass++; else { fail++; console.log('  ❌ ' + m) 
   const lt2 = await timeline.main({ action: 'list_tags', family_id: 'F1' })
   assert(lt2.tags.includes('尿闭') && !lt2.tags.includes('驱虫'), 'E2E-7 治理后 list_tags 含尿闭、不含驱虫')
 
+  // ── E2E-8：多宠同事件批量（ADR-029 Round 1）：NL 点到两只 → parse snap pets[]（含错别字归一）→ saveRecord fan-out 各存一条 ──
+  NEXT_LLM = JSON.stringify({ kind: 'record', valid: true, pet: '示例猫', pets: ['示例猫', '示列狗'], new_pet: false, species: 'cat', time: '2026-05-01', event_type: '驱虫', med: '体外驱虫', desc: '体外驱虫', tag: '', raw: 'x' })
+  const pb = await parseRecord.main({ text: '给示例猫和示例狗都做了体外驱虫', family_id: 'F1' })
+  assert(pb.ok === true && Array.isArray(pb.parsed.pets) && pb.parsed.pets.length === 2, 'E2E-8 parse 返回 pets 数组(2)')
+  assert(pb.parsed.pets.includes('示例猫') && pb.parsed.pets.includes('示例狗'), 'E2E-8 pets snap：错别字「示列狗」归一到示例狗')
+  const recsBefore = (DB_INST.data.records || []).length
+  const sb = await saveRecord.main({ record: pb.parsed, family_id: 'F1' })
+  assert(sb.ok === true && sb.count === 2 && sb.ids.length === 2, 'E2E-8 saveRecord fan-out 返回 count=2 + ids')
+  const batchRecs = (DB_INST.data.records || []).filter((r) => r.time === '2026-05-01' && r.desc === '体外驱虫')
+  assert(batchRecs.length === 2 && batchRecs.some((r) => r.pet === '示例猫') && batchRecs.some((r) => r.pet === '示例狗'), 'E2E-8 落 2 条分属两只')
+  assert((DB_INST.data.records || []).length === recsBefore + 2, 'E2E-8 只新增 2 条（无多写）')
+
+  // ── E2E-9：批量含不存在的宠物 → 整批拒 PET_UNKNOWN 零写入（守 ADR-015 红线）──
+  const recsBefore2 = (DB_INST.data.records || []).length
+  const sbad = await saveRecord.main({ record: { kind: 'record', pets: ['示例猫', '幽灵'], time: '2026-05-02', event_type: '体重', weight: 5, desc: 'x', raw: 'x' }, family_id: 'F1' })
+  assert(sbad.ok === false && sbad.code === 'PET_UNKNOWN' && Array.isArray(sbad.missing) && sbad.missing.includes('幽灵'), 'E2E-9 含不存在宠物整批拒 + missing 列幽灵')
+  assert((DB_INST.data.records || []).length === recsBefore2, 'E2E-9 零写入')
+
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
 })()

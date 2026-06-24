@@ -96,6 +96,23 @@ exports.main = async (event) => {
   // is_new = 显式新增意图且名字确实是新的（确认卡片 🆕 将建档只在此时显示）
   parsed.is_new = !!parsed.new_pet && !!parsed.pet && !petNames.includes(parsed.pet)
 
+  // 批量预选（ADR-029 Round 1）：把 LLM 列的多只逐一 snap 到已有名，只保留确定匹配的（批量不猜不建档）；
+  // snap 后去重，<2 只视作单宠清空（不触发前端多选态）。建档 / 错别字态不批量（单宠通道优先）。
+  if (Array.isArray(parsed.pets) && parsed.pets.length && !parsed.is_new) {
+    const resolved = []
+    for (const nm of parsed.pets) {
+      if (petNames.includes(nm)) resolved.push(nm)
+      else {
+        const s = fuzzyMatchPet(nm, petNames)
+        if (s) resolved.push(s)
+      }
+    }
+    parsed.pets = [...new Set(resolved)]
+    if (parsed.pets.length < 2) parsed.pets = []
+  } else {
+    parsed.pets = []
+  }
+
   // 记一条解析流水用于限流（落库在 saveRecord，二次确认后）
   await db.collection('parse_log').add({ data: { family_id: familyId, day: today, at: Date.now() } })
 
@@ -196,6 +213,7 @@ function normalize(o, raw, today) {
     kind,
     valid: o.valid !== false,
     pet: String(o.pet || '').trim(), // trim 与 saveRecord 对齐，否则尾空格让精确名误判 pet_unknown；String 防 LLM 输出数字名
+    pets: Array.isArray(o.pets) ? [...new Set(o.pets.map((x) => String(x || '').trim()).filter(Boolean))] : [], // 多宠同事件（ADR-029），main 再 snap 到已有名
     new_pet: o.new_pet === true, // 显式新增宠物意图（ADR-015），缺省 false
     species: normSpecies(o.species), // ADR-023 多物种白名单（原 dog?'dog':'cat' 二元钳制会把 rabbit 等强改回 cat）
     time: normalizeDateTime(o.time, today), // 事件时间，精确到分（缺时分则纯日期，前端补默认）

@@ -133,6 +133,64 @@ async function assertMember(openid, familyId) {
   return r.data[0]
 }
 
+// records 文档构造（单宠 / 批量同源，ADR-029）：同一份事件内容 + 指定 pet → 一条 record doc。
+// 抽出复用防 doc 形状 / 养护门控 / created_at 派生在两条写入路径间漂移。params 仅养护记录落（event_type 门控）。
+function buildDoc(familyId, r, petName, eventTime, params) {
+  const doc = {
+    family_id: familyId,
+    pet: petName,
+    time: eventTime,
+    event_type: EVENT_TYPES.includes(r.event_type) ? r.event_type : '其它',
+    weight: typeof r.weight === 'number' ? r.weight : null,
+    med: r.med || null,
+    hospital: (r.hospital || '').trim(), // 就诊医院（见 ADR-012）
+    cost: numOrNull(r.cost), // 费用（元）
+    tag: (r.tag || '').trim(), // 病程标签（与 event_type 双轴）；trim 防同名病程线因首尾空格散裂
+    desc: (r.desc || '').trim(), // 干净事件描述（不含费用 / 医院），给兽医小结拼接用，不暴露 raw 原话
+    raw: r.raw || '',
+    attachments: [], // 附件列表（见 ADR-011），上传后由 attachment 云函数登记
+    att_count: 0,
+    created_at: createdAtFromTime(eventTime), // 由事件时间派生（精确到分；缺时中午），主时间线按此排
+  }
+  if (params && doc.event_type === '养护') doc.params = params // 养护参数仅落「养护」记录（event_type 门控，防 params 串到非养护记录）
+  return doc
+}
+
+// 已有宠物体重回写 + weight_spark（ADR-025 方案 b）：单宠 / 批量同源。
+// 仅当新记录日期 >= 已存最新体重日期时才回写，避免补录旧体重把「最新」覆盖回退。
+async function updateExistingPetWeight(familyId, p, doc) {
+  const wDate = (doc.time || '').slice(0, 10) // latest_weight_date 保持纯日期语义（time 现含到分）
+  if (doc.weight && (!p.latest_weight_date || wDate >= p.latest_weight_date)) {
+    await db.collection('pets').doc(p._id).update({ data: { latest_weight: doc.weight, latest_weight_date: wDate } })
+  }
+  if (doc.weight) await recomputeWeightSpark(familyId, p._id, doc.pet) // 体重变更重算趋势点
+}
+
+// 批量同事件落库（ADR-029 Round 1）：record.pets 多只 → 同一份内容复制 N 条。
+// 批量不建档、不收错别字：每只必须是已有宠物，任一不在库整批拒 PET_UNKNOWN、零写入（沿用 ADR-015 红线）。
+// 批量不落养护参数（params 物种特定、多只可能跨物种、语义弱）；需养护数值就单只录。
+async function saveBatch(familyId, r) {
+  const wanted = [...new Set((r.pets || []).map((x) => String(x || '').trim()).filter(Boolean))]
+  if (!wanted.length) return { ok: false, code: 'INVALID', msg: '批量宠物为空' }
+  const names = (await db.collection('pets').where({ family_id: familyId }).field({ name: true }).get()).data
+    .map((p) => p.name)
+    .filter(Boolean)
+  const missing = wanted.filter((n) => !names.includes(n))
+  if (missing.length) {
+    return { ok: false, code: 'PET_UNKNOWN', msg: `没找到这些宠物：${missing.join('、')}`, pets: names, missing }
+  }
+  const eventTime = normalizeDateTime(r.time, '') // 事件时间，精确到分
+  const ids = []
+  for (const petName of wanted) {
+    const doc = buildDoc(familyId, r, petName, eventTime, undefined) // 批量不落 params
+    const addRes = await db.collection('records').add({ data: doc })
+    ids.push(addRes._id)
+    const petRes = await db.collection('pets').where({ family_id: familyId, name: petName }).get()
+    if (petRes.data.length) await updateExistingPetWeight(familyId, petRes.data[0], doc)
+  }
+  return { ok: true, ids, count: ids.length, kind: 'record' }
+}
+
 // 用户确认后落库（按家庭隔离，见 ADR-008）：
 // - kind=med_stock → 写 meds（家庭药品库存，不绑单宠）
 // - kind=reminder  → 写 reminders（用药 / 疫苗 / 驱虫提醒）
@@ -147,6 +205,11 @@ exports.main = async (event) => {
     await assertMember(OPENID, familyId)
   } catch (e) {
     return { ok: false, code: e.code || 'AUTH', msg: e.msg || '无权限' }
+  }
+
+  // 批量同事件落库（ADR-029 Round 1）：record + pets 数组 → fan-out 复制 N 条（med_stock / reminder 不批量）。
+  if (r.kind !== 'med_stock' && r.kind !== 'reminder' && Array.isArray(r.pets) && r.pets.length) {
+    return await saveBatch(familyId, r)
   }
 
   // 宠物名统一解析（ADR-015 + 评审硬化）：record / reminder 都先验名（med_stock 无宠跳过），
@@ -215,23 +278,7 @@ exports.main = async (event) => {
 
   const eventTime = normalizeDateTime(r.time, '') // 事件时间，精确到分（旧 / AI 未给时为纯日期）
   const params = sanitizeParams(r.params) // 养护参数（ADR-024）：爬宠温湿度 / 鱼水质等，缺省不写
-  const doc = {
-    family_id: familyId,
-    pet: resolvedPet,
-    time: eventTime,
-    event_type: EVENT_TYPES.includes(r.event_type) ? r.event_type : '其它',
-    weight: typeof r.weight === 'number' ? r.weight : null,
-    med: r.med || null,
-    hospital: (r.hospital || '').trim(), // 就诊医院（见 ADR-012）
-    cost: numOrNull(r.cost), // 费用（元）
-    tag: (r.tag || '').trim(), // 病程标签（与 event_type 双轴）；trim 防同名病程线因首尾空格散裂
-    desc: (r.desc || '').trim(), // 干净事件描述（不含费用 / 医院），给兽医小结拼接用，不暴露 raw 原话
-    raw: r.raw || '',
-    attachments: [], // 附件列表（见 ADR-011），上传后由 attachment 云函数登记
-    att_count: 0,
-    created_at: createdAtFromTime(eventTime), // 由事件时间派生（精确到分；缺时中午），主时间线按此排
-  }
-  if (params && doc.event_type === '养护') doc.params = params // 养护参数仅落「养护」记录（event_type 门控，防 params 串到非养护记录）
+  const doc = buildDoc(familyId, r, resolvedPet, eventTime, params) // 单宠 / 批量同源（ADR-029）
   const addRes = await db.collection('records').add({ data: doc })
 
   // 宠物 upsert（按家庭）：已有的若带体重则更新最新体重；建档只剩「new_pet 显式意图 / 0 宠首录」两条路（上方守卫保证）
@@ -239,13 +286,7 @@ exports.main = async (event) => {
   if (doc.pet) {
     const petRes = await db.collection('pets').where({ family_id: familyId, name: doc.pet }).get()
     if (petRes.data.length) {
-      const p = petRes.data[0]
-      // 仅当新记录日期 >= 已存最新体重日期时才回写，避免补录旧体重把「最新」覆盖回退
-      const wDate = (doc.time || '').slice(0, 10) // latest_weight_date 保持纯日期语义（time 现含到分）
-      if (doc.weight && (!p.latest_weight_date || wDate >= p.latest_weight_date)) {
-        await db.collection('pets').doc(p._id).update({ data: { latest_weight: doc.weight, latest_weight_date: wDate } })
-      }
-      if (doc.weight) await recomputeWeightSpark(familyId, p._id, doc.pet) // 方案 b（ADR-025）：体重变更重算趋势点
+      await updateExistingPetWeight(familyId, petRes.data[0], doc) // 体重回写 + spark（单宠 / 批量同源，ADR-025/029）
     } else {
       // 字段集与 pets add 对齐（缺省值），避免后续读取 undefined 漂移
       await db.collection('pets').add({

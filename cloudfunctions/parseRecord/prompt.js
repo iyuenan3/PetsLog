@@ -13,6 +13,7 @@ const SYSTEM = `你是宠物健康记录的结构化提取引擎，不是聊天�
 kind=record 时填：
 - valid: boolean。是否是有效的宠物健康记录。闲聊、问诊、与宠物健康无关的内容一律 valid=false。
 - pet: string。宠物名。【必须优先归一到「已有宠物」列表里的名字】：用户写了错别字、同音字、形近字、简称、漏字，只要能合理对应列表里某只，就填列表里的标准名（如列表有「示例猫」，用户写「示列猫 / 试例猫 / 例猫」都填「示例猫」）。确实无法对应任何一只时才照抄原话里的名字；没提名字填 ""。
+- pets: string[]。【仅当这句话同时点到多只已有宠物做同一件事】（如「给示例猫和示例狗都驱虫」「两只一起做了体检」「示例猫、示例狗一起称重」），把涉及的【已有宠物标准名】逐一列进数组（同样把错别字 / 简称归一到已有名）。只涉及一只、或没点到多只时填空数组 []；pet 字段仍填主要 / 第一只。【不同宠物各自不同的事】（如「示例猫吐了，示例狗拉稀」）不属此项，pets 留 []。
 - new_pet: boolean。用户是否在【明确表达新增一只宠物】（如「新来的 / 新成员 / 添加宠物 / 领养了 / 捡到一只」）。只是名字不在列表里【不算】新增意图，填 false。
 - species: string。取值之一：cat（猫）/ dog（狗）/ rabbit（兔）/ rodent（仓鼠·豚鼠·龙猫等小宠）/ bird（鸟·鹦鹉）/ reptile（龟·蜥蜴·蛇等爬宠）/ fish（鱼）/ other（其他）。已有宠物列表会用 名(species) 标注物种，归一到已有宠物时跟随它的物种；新宠能判断就判断（「橘猫 / 布偶」→cat，「金毛 / 狗」→dog，「荷兰猪 / 仓鼠 / 龙猫」→rodent，「兔子 / 垂耳兔」→rabbit，「鹦鹉 / 八哥」→bird，「乌龟 / 巴西龟 / 蜥蜴」→reptile，「金鱼 / 锦鲤」→fish），判断不了填 "other"。
 - time: string。事件时间，精确到分：用户说了具体时刻（如「下午3点半 / 上午9点 / 14:20 / 晚上8点」）就输出 "YYYY-MM-DD HH:mm"（24 小时制，下午 / 晚上加 12 小时）；没说时刻只输出 "YYYY-MM-DD"。「今天 / 昨天」按相对今天算；日期没提填今天。
@@ -103,6 +104,16 @@ function buildMessages(text, pets, tags, today) {
       role: 'assistant',
       content:
         '{"kind":"record","valid":true,"pet":"示例狗","new_pet":false,"species":"dog","time":"2026-01-01","event_type":"驱虫","weight":null,"med":"体外驱虫","hospital":"","cost":null,"tag":"","desc":"体外驱虫"}',
+    },
+    // 多宠同事件（ADR-029 Round 1）：一句话点到多只已有宠物做同一件事 → pets 列全部标准名（pet 仍填第一只）
+    {
+      role: 'user',
+      content: '今天是 2026-01-01。\n【已有宠物】示例猫(cat)、示例狗(dog)\n【用户这句话】今天给示例猫和示例狗都做了体外驱虫\n\n只输出 JSON。',
+    },
+    {
+      role: 'assistant',
+      content:
+        '{"kind":"record","valid":true,"pet":"示例猫","pets":["示例猫","示例狗"],"new_pet":false,"species":"cat","time":"2026-01-01","event_type":"驱虫","weight":null,"med":"体外驱虫","hospital":"","cost":null,"tag":"","desc":"体外驱虫"}',
     },
     // 疫苗：注射疫苗归 event_type=疫苗，tag 留空（与上面驱虫对照，事件类别不进 tag）
     {
