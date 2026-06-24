@@ -10,7 +10,7 @@ async function assertMember(openid, familyId) {
 }
 
 // 提醒 CRUD（按家庭隔离）。action: list | add | done | snooze | update | delete
-const TYPES = ['用药', '疫苗', '驱虫', '其它']
+const TYPES = ['用药', '疫苗', '驱虫', '养护', '其它'] // 含养护（ADR-024 爬宠 / 鱼提醒分类）；与 saveRecord reminder 路径 TYPES 同源，避免养护提醒经此 CRUD 入口被静默降级为「其它」（E2E 揪出的契约漂移修复）
 
 function todayStr() {
   const d = new Date(Date.now() + 8 * 3600 * 1000) // 云函数 UTC，校到东八区

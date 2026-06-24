@@ -3,6 +3,12 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## 后端全链路 E2E 套件 + reminders 养护契约漂移修复 · 2026-06-24（待 commit）
+- Context: 多宠批量记录两轮 + 三轮评审收口后，建【后端全链路 E2E 旅程套件】把「录入→落库→读回」端到端契约钉死（现有 e2e.flow 只 peek DB 直查、从不经 timeline read-back）。流程 = workflow(map 5 路 → architect 设计 23 场景矩阵 → implementer 写 tests/e2e.journeys.test.js 跑到绿 → 3 视角审 + 完整性批判)。
+- Added: **tests/e2e.journeys.test.js（130 断言，11 套测试共 552 断言）**。在 e2e.flow harness 上扩 DB mock（真 orderBy 排序 / field 投影 / `_.gt`/`_.lt`/`_.gte` / `where` 丢 undefined 键退化对齐真 tcb / 故障注入开关）+ 挂入真实 reminders/foods/pets + strip-eval 真实 `src/foodsResolve.js`。覆盖完整用户旅程：单宠就医（parse→save→timeline list/get read-back，raw 逐字贯穿）/ 药品囤货 / 提醒全链 / 体重乱序不回退（spark==course.weights 一致，含纯日期+到分混域）/ 0 宠首录建档 / Round1 fan-out 聚合读回 / Round2 multi 部分失败 results 同序 + 幸存子条 raw / 多家庭隔离功能读回 / 主粮写读 seam（物种默认 vs 单宠覆盖）/ 改名级联 / 删宠保留病史经 timeline + 不级联 foods / 家庭解散级联 / dispatch 优先级 / parse 限流 / 体重派生失败被吞。
+- Fixed（E2E 揪出的真实契约漂移）: **reminders 云函数 TYPES 缺「养护」**（`['用药','疫苗','驱虫','其它']`），养护提醒经 reminders CRUD 入口被静默降级为「其它」，而 saveRecord reminder 路径含养护（ADR-024）→ 同集合两写入口枚举不一致。补 `养护` 对齐 saveRecord（5 桶同源）。
+- 验证: 11 套全绿（552 断言）；implementer 变异测试证非假绿（NO_MED 守卫 / weight_spark reverse / foods 跨物种作用域 三处变异转红）+ 我补验 reminders 养护修复变异转红 + 修评审 6 条（删去 `||true` 恒真空断言 / 补 multi 部分失败 raw read-back / matchRow undefined 键退化对齐 / 加删宠 + legacy 裸记录 + 混域 time 三旅程）；PII / 破折号清零。**待部署 reminders + 真机验。**
+
 ## 多宠批量记录 Round 2 · 一句话拆多条不同记录（解析 kind=multi + N 张可编辑确认卡 + saveRecord records[]）· 2026-06-24（ADR-030，待 commit）
 - Context: Round 1 只解了「同一件事多只」（pets[] fan-out 同内容）。一句话里【不同宠物各自不同的事】（「示例猫吐了，示例狗拉稀」）仍只能录一条 / 挑一只。用户「两种都要」的第二种。**只拆 record**（不混 reminder / med_stock）；拆出的记录 = **已有宠**（multi 不建档，新宠走单条）；与 Round 1 `pets[]`（同事件）语义划清（不同事件才 multi）。
 - Added（解析层）: prompt 加【多事件拆条】规则 + 一条「示例猫吐了示例狗拉稀」→ kind=multi few-shot（与「都驱虫」→ pets[] 对比，教 LLM 区分）；保守拆。`parseRecord` 抽 `normalizeRecordFields` 单条 / multi 子条共用；normalize 加 multi 分支（kind=multi → records[]，丢全空子条）；main 对每条 snap pet + 标 pet_unknown（不猜不建档）。

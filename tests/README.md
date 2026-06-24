@@ -33,22 +33,25 @@ node tests/isolation.e2e.test.js  # 单跑一套（迭代时更快）
 |---|---|---|---|
 | **单函数集成** | `*.cloudfn.test.js` `parseRecord.prompt.test.js` | 一个真实云函数跑在 mock 之上 | 安全闸 / 配额 / 回滚 / 并发分支 / 字段归一 / prompt 拼装 |
 | **功能契约 E2E** | `e2e.flow.test.js` | 多个真实云函数串一条链、共享一个内存 DB | 跨函数契约：parse 输出形状 ↔ save 入参 ↔ course 读取 ↔ clean_tags 治理 |
+| **全链路旅程 E2E** | `e2e.journeys.test.js` | 7 个真实云函数共享 DB + 扩 mock（真 orderBy / field 投影 / undefined 键退化 / 故障注入）+ strip-eval foodsResolve | 完整用户旅程「录入→落库→**timeline read-back**」端到端：单宠/Round1 批量/Round2 multi/体重乱序+混域/删宠保留病史/主粮写读 seam/隔离功能读回 等 |
 | **安全契约 E2E** | `isolation.e2e.test.js` | 多函数 + 可变 `CUR_OPENID` 模拟攻击者改包 | 家庭多租户四条隔离不变式 + 跨家庭越权 |
 
-单函数 mock 抓不到「parse 给的字段 save 不认」这类跨边界问题，故有 E2E 层；功能 E2E 走的是「正常用户」，抓不到「攻击者伪造 family_id」，故有隔离 E2E 层。
+单函数 mock 抓不到「parse 给的字段 save 不认」这类跨边界问题，故有 E2E 层；`e2e.flow` 只 peek DB 直查、不经读路径，故有 `e2e.journeys` 把「落库后从 timeline 真读回」钉死；功能 E2E 走「正常用户」，抓不到「攻击者伪造 family_id」，故有隔离 E2E 层。
 
-## 各套覆盖（共 292 断言，全绿）
+## 各套覆盖（11 套共 552 断言，全绿）
 
 | 套 | 断言 | 覆盖 |
 |---|---|---|
 | `attachment.cloudfn.test.js` | 40 | 附件登记 / 删除 / 配额（单条 ≤9 / 家庭 ≤1GB / 日 ≤200MB）/ 服务端体积复核 / 级联清云存储 / 归属校验 / 删体重记录两侧重算 latest_weight + weight_spark（纯日期口径，ADR-018/025）|
 | `importNotion.cloudfn.test.js` | 45 | 历史导入 / clear 级联 / clean_tags（非病程 tag 清空，trim）/ backfill_profile（gender·neutered 覆盖 / intro 仅填空 / weight_spark 升序 / admin 鉴权）/ resolveFamily 鉴权 |
-| `foods.cloudfn.test.js` | 15 | 主粮 CRUD / current 单选互斥 / family 隔离 / IDOR |
-| `saveRecord.cloudfn.test.js` | 45 | 三分支落库 / PET_UNKNOWN 零写入 / suggest / 0 宠放行 / reminder 防线 / 日期·费用·时间归一 / 物种白名单 / 养护 params 门控 + 截断 / emoji 名 / trim |
-| `pets.cloudfn.test.js` | 16 | 建宠查重 / 服务端 trim / 字段类型收紧 / 物种 8 枚举白名单 / gender sanitize |
-| `parseRecord.prompt.test.js` | 26 | buildMessages 物种标注（8 枚举）/ tag 候选喂入 / raw 移除 / 养护 few-shot / SYSTEM 收紧（ADR-020）|
+| `foods.cloudfn.test.js` | 57 | 主粮 CRUD / 物种默认 + 单宠覆盖 / current 排他作用域 (family,species,pet) / brand·model / 改名级联 + 删宠保留 / family 隔离 / IDOR（ADR-027）|
+| `foodsResolve.test.js` | 7 | resolveCurrentFood 纯函数：覆盖 > 默认 > 无 / 历史覆盖不参与 / tie-break（strip-eval 直测真实源）|
+| `saveRecord.cloudfn.test.js` | 93 | 三分支落库 / PET_UNKNOWN 零写入 / 批量 fan-out + multi 拆条（部分成功 / 同序 / 不建档 / 派生回写吞异常）/ 日期·费用·时间归一 / 养护 params 门控 / 物种白名单 / trim（ADR-015/024/029/030）|
+| `pets.cloudfn.test.js` | 27 | 建宠查重 / 服务端 trim / 字段类型收紧 / 物种 8 枚举白名单 / gender sanitize |
+| `parseRecord.prompt.test.js` | 32 | buildMessages 物种标注（8 枚举）/ tag 候选喂入 / raw 移除 / 养护 few-shot / 多宠 pets[] + multi few-shot / SYSTEM 收紧（ADR-020/029/030）|
 | `timeline.cloudfn.test.js` | 23 | list_tags 全集 / course 聚合（起止·花费·体重序列）/ 跨宠不混画 / pet 下钻 / family 隔离 / 缺 tag 拒 / 分页 skip·hasMore·去重 |
-| `e2e.flow.test.js` | 18 | 自然语言 → parse（raw 服务端逐字 / tag 候选 / 物种）→ save → course / list_tags → clean_tags，跨函数契约 |
+| `e2e.flow.test.js` | 34 | 自然语言 → parse（raw 逐字 / tag 候选 / 物种）→ save → course / list_tags → clean_tags + 批量 fan-out + multi 拆条端到端，跨函数契约 |
+| `e2e.journeys.test.js` | 130 | 完整用户旅程「录入→落库→timeline read-back」：单宠就医 / 药品 / 提醒全链 / 体重乱序+混域 / 0宠首录 / Round1 fan-out / Round2 multi 部分失败 / 多家庭隔离功能读回 / 主粮写读 seam / 改名级联 / 删宠保留病史 / 解散级联 / dispatch 优先级 / parse 限流 |
 | `isolation.e2e.test.js` | 64 | 家庭多租户隔离（下表 9 组）|
 
 ### isolation.e2e.test.js 的 9 组（安全契约）
