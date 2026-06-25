@@ -3,14 +3,15 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
-## 体验版 0.4.10 · 药品可编辑 + 删除 + 任何原话全路径落库 + 头像 1:1 裁剪 · 2026-06-26（ADR-031，**saveRecord + meds 已部署 2026-06-26** · 待上传前端体验版 + 待真机验）
+## 体验版 0.4.10 · 药品可编辑 + 删除 + 任何原话全路径落库 + 头像 1:1 裁剪 + 编辑页固定保存栏 · 2026-06-26（ADR-031，**saveRecord + meds 已部署 · 真机验过** · 待上传前端体验版）
 - Context: 真机内测反馈三处。① 药品入库后「过期 未填」改不了、名 / 数量录错也无法修正、用完 / 过期药一直堆着（药品卡是纯展示无编辑 / 删除入口）。② 用户原则:「任何原话都应记录，不只时间线」——`med_stock`/`reminder` 落库丢了 `raw`。③ 改宠物头像无法裁剪（要求强制 1:1）+ 上传后头像没变化。
 - Changed（药品可编辑，ADR-031）: meds 云函数 `list/add` → 加 `update`（仅改 name/effect/quantity/expire_date，**raw 只读不动**）+ `delete`，均先 `doc(id).get()` 校 `family_id` 再写（foods 同款隔离守卫，防越权改 / 删他家药品）；name 不可清空、quantity 可 0（用完）、过期日可补可清。健康页药品卡加底部「编辑 / 删除」op 按钮（与主粮卡一致）+ 编辑弹层（复用主粮 sheet，顶部只读展示当时原话、下面字段全可改可补）。
 - Changed（任何原话落库，ADR-031）: saveRecord 的 `med_stock`/`reminder` 两个 add 各补 `raw: r.raw||''`（前端 base 早带 raw、parseRecord 三类都挂 raw，**仅落库丢键**）；meds 直接 add 也补 raw。**旧库已入条无 raw**（从没存过）→ 优雅降级:编辑弹层原话行有则展示、无则灰提示「（此前版本未保存原话）」，往后新录才有。
-- Fixed（宠物头像）: `pickAvatar` 在 `chooseMedia` 与上传之间插 `wx.cropImage({ cropScale:'1:1' })` 强制 1:1 裁剪（取消裁剪静默 / 低版本无 cropImage 降级用原图）；「上传后头像没变化」根因判断 = `<image>` 绑刚上传的 `cloud://` fileID 在「即传即显」窗口内 CDN 未就绪短暂渲染空白（profile/index 显示的是早传好的旧头像故正常）→ 改**先用本地裁剪图路径即时预览**（`avatarLocal`，本地路径必渲染），后台上传换 fileID 供保存，保存 / 取消 / 选 emoji / 进编辑各处清 avatarLocal。
+- Fixed（宠物头像，含一段错判纠偏）: `pickAvatar` = 相册 / 拍照选图（不引用微信头像）→ `wx.cropImage({ cropScale:'1:1' })` 原生 1:1 裁剪（**真机弹裁剪框，开发者工具模拟器不显示属已知限制**，故须真机验，本版真机验过）；取消裁剪静默 / 裁剪失败降级用原图。**「上传后头像没变化」的真根因不是渲染、是用户没点保存**（保存按钮在长表单最底、够不着）→ 经 live DB 实证:`users` 多条 `chooseAvatar` 头像正常存正常显（上传 / 落库 / `cloud://` 显示链路本就 OK），而 `pets` 9 只 0 头像 = 从没保存过。修法 = 下条「编辑页固定保存栏」让保存随手可点 + `avatarLocal` 即时预览（选完立刻看到生效，不必等上传 / 保存）。中途一度误判为 `cloud://` 渲染问题、并试过 `chooseAvatar`（带微信头像建议、用户不要）均已回退。
+- Added（编辑页固定保存栏）: 宠物档案编辑 / 建档的「保存 / 取消」从表单末尾 `margin-top` 改 **`position:fixed` 固定屏幕底部**（带 `env(safe-area-inset-bottom)` 安全区 + 顶部投影），随时可保存不用滚到底；仅编辑态渲染（在 `v-else` 块内），页面 `.page--editing` 留等高 `padding-bottom`，删除链接 / 末行可滚到栏上方。直接解掉「头像没变化」的根因（够不着保存）。
 - 验证: 新建 `tests/meds.cloudfn.test.js`（13 例 25 断言:add 落 raw / update 全字段 / 仅补过期日 / **raw 只读不被改** / 数量 0 / 空名拒不改 / 清过期 / 越权改删拒零改动 / 非成员拒 / list 隔离升序）+ saveRecord 补 med_stock·reminder 落 raw 回归；**12 套 587 断言全绿** + build 零错。
-- Review（pre-commit 对抗 workflow，5 维 finder + 对抗验证 + 完整性批判，10 agent）: **0 must-fix**。收 3 should-fix + 1 nit（全在头像上传 in-flight 窗口同根因 + 药品数量）：① 上传中点保存存旧/空头像（showLoading 无 mask 点击穿透）→ 加 `uploadingAvatar` 标志守 save() + showLoading `mask:true` 挡住上传期所有点击；② 上传失败丢用户原 emoji 选择 → 失败回滚 `prevEmoji`；③ 上传中取消/选 emoji 漏删云存储孤儿（判 pre-existing latent 非本 diff 回归）→ `mask:true` 一并挡住触发；④ nit 清空数量静默写 0 → saveMed 数量留空则不传（对齐后端 undefined=不改 契约，真要标用完显式填 0）。
-- 版本: 0.4.9→**0.4.10** / versionCode 13→14。**待上传前端体验版（dist/build）+ 待真机验**（药品「过期 未填」可补 / 编辑名功效数量 / 删除 / 新录药品原话可见〔旧条灰提示〕/ 换头像出现 1:1 裁剪框 / 裁剪后即时预览 + 保存后头像更新 / 上传中点保存被挡）。
+- Review（药品 + raw + 头像 pre-commit 对抗 workflow，5 维 finder + 对抗验证 + 完整性批判，10 agent）: **0 must-fix**。收 3 should-fix + 1 nit（头像上传 in-flight 窗口同根因 + 药品数量）：① 上传中点保存存旧/空头像（showLoading 无 mask 点击穿透）→ 加 `uploadingAvatar` 标志守 save() + showLoading `mask:true`；② 上传失败丢用户原 emoji 选择 → 失败回滚 `prevEmoji`；③ 上传中取消/选 emoji 漏删云存储孤儿（pre-existing latent）→ `mask:true` 一并挡住；④ nit 清空数量静默写 0 → saveMed 数量留空则不传（对齐后端 undefined=不改）。
+- 真机验过（2026-06-26）: 药品编辑 / 删除 / 补过期 + 新录原话 + 头像相册选图 → 真机弹 1:1 裁剪框 → 保存后大头像更新 + 固定保存栏好按。版本 0.4.9→**0.4.10** / versionCode 13→14。**待上传前端体验版（dist/build）。**
 
 ## 体验版 0.4.9 · 成员头像兜底「家人」+ 个人资料头像→昵称串一步 + 版本号自读 · 2026-06-25
 - Changed（家庭页）: 成员头像无昵称兜底字从「宠」（宠物主题占位、读着像把人叫宠物）改**统一「家人」**（角色已有 chip 标识，头像不必重复表角色）；2 字在 72rpx 圆内缩 26rpx 更从容，HTML 镜像截图自验。

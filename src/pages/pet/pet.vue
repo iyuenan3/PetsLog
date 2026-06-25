@@ -1,5 +1,5 @@
 <template>
-  <view class="page" v-if="pet">
+  <view class="page" :class="{ 'page--editing': editing }" v-if="pet">
     <!-- 头部（创建模式只显示表单） -->
     <view class="profile-head" v-if="!creating">
       <view class="profile-head__avatar">
@@ -722,6 +722,9 @@ export default {
     onHomeDate(e) {
       this.form.home_date = e.detail.value
     },
+    // 头像走普通相册 / 拍照选图（不引用微信头像，用户要求）→ 原生 1:1 裁剪 cropImage。
+    // 注意：cropImage 的裁剪框在「开发者工具模拟器」里不显示（已知限制），须用真机验；
+    // 取消裁剪(cancel)静默；其它失败（含旧基础库无此 API / 真机异常）降级用原图，不阻断换头像。
     pickAvatar() {
       // #ifdef MP-WEIXIN
       wx.chooseMedia({
@@ -732,19 +735,16 @@ export default {
         success: (res) => {
           const tmp = res.tempFiles && res.tempFiles[0] && res.tempFiles[0].tempFilePath
           if (!tmp) return
-          // 强制裁剪成 1:1，与圆形头像 / 档案卡方头像一致（避免长图被 aspectFill 裁偏）
           wx.cropImage({
             src: tmp,
             cropScale: '1:1',
-            success: (c) => this.applyAvatar(c.tempFilePath || tmp),
-            // 取消裁剪(cancel)静默；低版本基础库无 cropImage 等其它失败 → 降级用原图，不阻断换头像
+            success: (c) => this.applyAvatar(c.tempFilePath || tmp), // 复用即时预览 + 上传换 fileID + in-flight 守卫
             fail: (err) => {
-              if (!String((err && err.errMsg) || '').includes('cancel')) this.applyAvatar(tmp)
+              if (!String((err && err.errMsg) || '').includes('cancel')) this.applyAvatar(tmp) // 裁剪失败降级用原图
             },
           })
         },
         fail: (err) => {
-          // 用户取消(cancel)属正常静默；其它失败（权限 / 系统）给反馈，对齐 saveVetImg 的失败处理
           if (!String((err && err.errMsg) || '').includes('cancel')) uni.showToast({ title: '选择图片失败', icon: 'none' })
         },
       })
@@ -1190,6 +1190,10 @@ export default {
   min-height: 100vh;
   padding-bottom: 48rpx;
 }
+/* 编辑态：底部留出固定操作栏的高度（按钮 + 内边距 + 安全区），让删除链接 / 末行能滚到栏上方 */
+.page--editing {
+  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
+}
 
 /* 头部：极淡主色渐变晕染 + 头像光晕 */
 .profile-head {
@@ -1515,10 +1519,19 @@ export default {
   box-shadow: inset 0 0 0 2rpx var(--c-primary);
 }
 
+/* 固定底部操作栏（随时可保存 / 取消，不用滚到底）：仅编辑态渲染（在 v-else 编辑块内）。
+   页面 .page--editing 已留出等高 padding-bottom，删除链接 / 末行可滚到栏上方。 */
 .form-actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
   display: flex;
   gap: 20rpx;
-  margin-top: 32rpx;
+  padding: 16rpx var(--pad-page) calc(16rpx + env(safe-area-inset-bottom));
+  background: var(--c-card);
+  box-shadow: 0 -4rpx 20rpx rgba(58, 51, 48, 0.08);
 }
 /* .btn-primary / .btn-ghost (+--press) 已抽到 App.vue 全局（Round 2 去重） */
 .del-link {

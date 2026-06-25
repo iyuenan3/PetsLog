@@ -319,7 +319,7 @@
 - Alternatives（否决 / 推后）: ① 前端循环 N 次调 saveRecord → N 往返 + N 个 loading 闪 + 部分失败态散，否，改服务端一次收 records[]；② 总是返回 records[] 破解析契约 → back-compat 用 `kind:'multi'` 分流、单条仍扁平对象；③ multi 卡做全字段（med/hospital/cost/tag/时间逐卡）→ v1 精简到核心（pet/类型/体重/描述），详细就医单条录或详情页后补（ADR 注后续可富化）；④ 支持 record+reminder 混合拆 → 太复杂、v1 只拆 record。
 - Tradeoff: ① **拆分激进度**是主风险（LLM 过度拆把一件事拆两条）→ 保守 prompt + N 张确认卡可删可改是安全网；② multi 非事务、部分成功（可接受，记录独立）；③ saveRecord 抽 `writeSingleRecord` **改了单条主路径**（提取建档 / 体重 / PET_UNKNOWN 逻辑）→ **回归先对旧用例证不破**（Round 1 后 62 断言全绿）+ 加 multi 新用例（N 条不同内容 / 某条不在库只拒该条 / 部分成功）；④ multi 卡精简字段与单条编辑器不一致（UX 取舍，v1 够用）。**真机回归重点：「A 吐 B 拉稀」拆 2 条且内容各异 / 删卡 / 单条 + Round 1 批量不回归。**
 
-## ADR-031 · 药品可编辑 + 删除 + 任何原话全路径落库（meds CRUD 补全 + raw provenance）· 2026-06-25（saveRecord + meds 已部署 2026-06-26 · 待上传前端体验版 + 待真机验）
+## ADR-031 · 药品可编辑 + 删除 + 任何原话全路径落库（meds CRUD 补全 + raw provenance）· 2026-06-25（saveRecord + meds 已部署 2026-06-26 · 真机验过 v0.4.10 · 待上传前端体验版）
 - Problem: 真机内测反馈，药品（健康 → 药品 tab）入库后是**纯展示卡，无任何编辑 / 删除入口**：① 录入时没给过期日的药品「过期 未填」永远改不了；② 名 / 功效 / 数量录错或用完后也无法修正、过期 / 用完的药一直堆在列表。同时用户提出更强原则:**「任何原话都应记录下来，不仅是时间线的」**——`records`（时间线）落了 `raw`（ADR-020 原文逐字落库），但 `med_stock`（药品）与 `reminder`（提醒）两条落库路径把前端一路传来的 `raw` **丢了**。
 - Constraint: 守 family 隔离 + assertMember 红线（ADR-008）；`raw` 是【当时原话 provenance】= 只读凭证，编辑只改结构化字段、绝不改 raw（改了就失去「当时怎么说的」意义）；不破现有展示 + 测试。
 - Decision:
