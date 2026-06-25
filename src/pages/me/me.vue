@@ -48,7 +48,7 @@ import { syncTab } from '@/tabSync'
 
 export default {
   data() {
-    return { profile: { nickname: '', avatar: '' }, fam: null, version: '0.4.5' }
+    return { profile: { nickname: '', avatar: '' }, fam: null, version: '0.4.9' }
   },
   onShow() {
     syncTab(this, 3)
@@ -57,6 +57,11 @@ export default {
   methods: {
     async load() {
       // #ifdef MP-WEIXIN
+      // 版本号读真实线上版本（体验版 / 正式版返回版本串，dev 返回 develop → 退回 data 默认），不再硬编码漂移
+      try {
+        const v = wx.getAccountInfoSync().miniProgram.version
+        if (v && v !== 'develop') this.version = v
+      } catch (e) {}
       // 档案优先且独立加载，避免家庭接口抖动连累头像/昵称展示
       try {
         this.profile = await getProfile(true)

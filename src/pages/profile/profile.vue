@@ -10,7 +10,7 @@
       </view>
       <view class="frow">
         <text class="frow__label">昵称</text>
-        <input class="frow__input" type="nickname" :value="nickname" @input="onNick" @blur="onNick" placeholder="点此填写昵称" placeholder-class="ph" />
+        <input class="frow__input" type="nickname" :value="nickname" :focus="nickFocus" @input="onNick" @blur="onNickBlur" placeholder="点此填写昵称" placeholder-class="ph" />
       </view>
     </view>
 
@@ -25,7 +25,7 @@ import { getProfile, updateProfile, uploadAvatar } from '@/cloud'
 
 export default {
   data() {
-    return { nickname: '', avatar: '', saving: false }
+    return { nickname: '', avatar: '', saving: false, nickFocus: false }
   },
   async onLoad() {
     // #ifdef MP-WEIXIN
@@ -39,6 +39,10 @@ export default {
       // type="nickname" 的微信昵称自动填充走 blur，v-model 只听 input 会漏，显式兜住
       this.nickname = (e.detail && e.detail.value) || ''
     },
+    onNickBlur(e) {
+      this.onNick(e)
+      this.nickFocus = false // 收键盘后复位，避免 :focus 绑定反复抢焦点
+    },
     async onChooseAvatar(e) {
       const url = e.detail && e.detail.avatarUrl
       if (!url) return
@@ -49,6 +53,10 @@ export default {
         uni.showToast({ title: '头像上传失败', icon: 'none' })
       }
       uni.hideLoading()
+      // 选完头像、昵称还空 → 自动聚焦昵称输入框（弹出「使用微信昵称」），把头像 + 昵称串成一气呵成、少点一下
+      if (this.avatar && !this.nickname) {
+        setTimeout(() => { this.nickFocus = true }, 300)
+      }
     },
     async save() {
       this.saving = true

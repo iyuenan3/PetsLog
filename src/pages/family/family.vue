@@ -36,7 +36,7 @@
         <view v-for="m in members" :key="m.openid" class="mem-row" hover-class="row--press" hover-stay-time="60" @click="memberTap(m)">
           <view class="mem-row__avatar">
             <image v-if="m.avatar" :src="m.avatar" class="mem-row__avatar-img" mode="aspectFill"></image>
-            <text v-else>{{ monogram(m) }}</text>
+            <text v-else class="mem-row__mono" :class="{ 'mem-row__mono--two': monogram(m).length > 1 }">{{ monogram(m) }}</text>
           </view>
           <view class="mem-row__main">
             <text class="mem-row__name">{{ m.nickname || ('成员 ' + m.openid.slice(-4)) }}<text v-if="m.is_me" class="mem-row__me"> (我)</text></text>
@@ -104,7 +104,7 @@ export default {
     },
     monogram(m) {
       if (m.nickname) return m.nickname.slice(0, 1)
-      return m.role === 'admin' ? '管' : '宠'
+      return '家人' // 未设昵称统一兜底「家人」(角色另有 chip 标识，头像不重复表角色)
     },
     async switchTo(id) {
       if (id === this.activeId) return
@@ -391,6 +391,10 @@ export default {
 .mem-row__avatar-img {
   width: 100%;
   height: 100%;
+}
+.mem-row__mono--two {
+  font-size: 26rpx; /* 两字「家人」缩一档,72rpx 圆内更从容 */
+  letter-spacing: -1rpx;
 }
 .mem-row__main {
   flex: 1;
