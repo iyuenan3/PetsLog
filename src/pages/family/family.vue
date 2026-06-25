@@ -45,7 +45,14 @@
           <text class="mem-row__role" :class="{ 'is-admin': m.role === 'admin' }">{{ m.role === 'admin' ? '管理员' : '成员' }}</text>
         </view>
       </view>
-      <button v-if="isAdmin" class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" @click="genInvite"><image class="ic ic--sm" src="/static/icon/key.png" mode="aspectFit" /><text>生成邀请码</text></button>
+      <view v-if="isAdmin" class="invite">
+        <text class="invite__desc">生成 6 位邀请码发给家人，对方在「输码加入」处输入即可加入本家庭，30 分钟内有效。</text>
+        <view v-if="inviteCode" class="code-card" hover-class="code-card--press" hover-stay-time="60" @click="copyInvite">
+          <text class="code-card__code">{{ inviteCode }}</text>
+          <text class="code-card__exp">{{ inviteExpiryText }} 过期 · 点此复制</text>
+        </view>
+        <button class="btn-primary invite__btn" hover-class="btn-primary--press" hover-stay-time="60" @click="genInvite"><image class="ic ic--sm" src="/static/icon/key.png" mode="aspectFit" /><text>{{ inviteCode ? '重新生成' : '生成邀请码' }}</text></button>
+      </view>
       <text class="leave" hover-class="leave--press" hover-stay-time="60" @click="leave">退出该家庭</text>
     </view>
   </view>
@@ -56,11 +63,17 @@ import { ensureFamily, refreshFamilies, getFamilyId, setActiveFamily, callFn } f
 
 export default {
   data() {
-    return { families: [], activeId: '', current: null, members: [] }
+    return { families: [], activeId: '', current: null, members: [], inviteCode: '', inviteExpiresAt: 0 }
   },
   computed: {
     isAdmin() {
       return !!(this.current && this.current.my_role === 'admin')
+    },
+    inviteExpiryText() {
+      if (!this.inviteExpiresAt) return ''
+      const d = new Date(this.inviteExpiresAt)
+      const p = (n) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
     },
   },
   onShow() {
@@ -76,6 +89,8 @@ export default {
       // #endif
     },
     async loadCurrent() {
+      this.inviteCode = '' // 邀请码随家庭走，切换 / 重载即清，避免显示上一家庭的码
+      this.inviteExpiresAt = 0
       const g = await callFn('family', { action: 'get', family_id: this.activeId })
       if (!(g.result && g.result.ok)) {
         this.current = null
@@ -167,18 +182,20 @@ export default {
     },
     genInvite() {
       callFn('family', { action: 'invite', family_id: this.activeId }).then((res) => {
-        if (res.result && res.result.ok) {
-          const code = res.result.code
-          uni.showModal({
-            title: '邀请码',
-            content: `${code}\n\n30 分钟内有效。把它发给家人，在「输码加入」处输入即可加入本家庭。`,
-            confirmText: '复制',
-            success: (r) => {
-              if (r.confirm) uni.setClipboardData({ data: code })
-            },
-          })
-        } else uni.showToast({ title: (res.result && res.result.msg) || '失败', icon: 'none' })
+        const r = res.result || {}
+        if (r.ok) {
+          this.inviteCode = r.code
+          this.inviteExpiresAt = r.expires_at || 0
+          uni.showToast({ title: '已生成', icon: 'success' })
+        } else uni.showToast({ title: r.msg || '失败', icon: 'none' })
       }).catch(() => uni.showToast({ title: '生成失败', icon: 'none' }))
+    },
+    copyInvite() {
+      if (!this.inviteCode) return
+      uni.setClipboardData({
+        data: this.inviteCode,
+        success: () => uni.showToast({ title: '邀请码已复制', icon: 'success' }),
+      })
     },
     leave() {
       uni.showModal({
@@ -432,5 +449,43 @@ export default {
 }
 .leave--press {
   opacity: 0.55;
+}
+
+.invite {
+  margin-top: 28rpx;
+}
+.invite__desc {
+  display: block;
+  font-size: var(--fs-cap);
+  color: var(--c-text-2);
+  line-height: 1.6;
+  margin: 0 8rpx 20rpx;
+}
+.code-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14rpx;
+  padding: 44rpx 24rpx;
+  border-radius: var(--r-md);
+  background: var(--c-primary-wash);
+  border: 2rpx dashed var(--c-primary-soft);
+}
+.code-card--press {
+  opacity: 0.7;
+}
+.code-card__code {
+  font-size: 76rpx;
+  font-weight: 700;
+  color: var(--c-text);
+  letter-spacing: 18rpx;
+  padding-left: 18rpx; /* 抵消末位 letter-spacing，视觉居中 */
+}
+.code-card__exp {
+  font-size: var(--fs-cap);
+  color: var(--c-text-2);
+}
+.invite__btn {
+  margin-top: 24rpx;
 }
 </style>

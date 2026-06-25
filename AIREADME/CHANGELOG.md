@@ -3,11 +3,12 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
-## 体验版 0.4.8 · 邀请码弹窗真机修复 + 邀请码有效期 7 天→30 分钟 · 2026-06-25（family 云函数已部署）
-- Context: 0.4.7 已发布（多宠批量 + 后端 E2E + npm test 补全）。真机内测反馈两点:「生成邀请码」点击无反应 + 要求邀请码短时效。
+## 体验版 0.4.8 · 邀请码内联卡片展示 + 弹窗真机 bug 修复 + 有效期 7 天→30 分钟 · 2026-06-25（family 云函数已部署）
+- Context: 0.4.7 已发布（多宠批量 + 后端 E2E + npm test 补全）。真机内测反馈:「生成邀请码」点击无反应 + 要求邀请码短时效 + 邀请码与提示需分行清晰展示（给了参考图）。
 - Fixed（真机 bug）: 家庭页「生成邀请码」点击无任何反应的根因 = `uni.showModal` 的 `confirmText:'复制邀请码'`（5 字）超微信 4 字硬上限 → 真机 `showModal:fail` 静默不弹（DevTools 模拟器宽松，故 F2「发码邀友」待真机验路径漏检）；改 `'复制'`（2 字）。经 live DB 只读核实:每次点击均成功落库（`createInvite` 写入有效码），仅结果弹窗被抑制致用户重复点积压（实测某家庭积压 14 条）。全库 `confirmText/cancelText` 复扫，仅此一处超限（其余 ≤4 字）。
-- Changed: 邀请码有效期 **7 天 → 30 分钟**（`createInvite` 的 `expires_at = Date.now() + 30*60*1000`，family 云函数；前端弹窗文案同步「30 分钟内有效」）。短时效降低邀请码外泄风险；过期 join 仍拒 `EXPIRED`。
-- 验证: build 零错 + 11 套 552 断言全绿（纯前端字串 + 后端常量、逻辑不变;无测试断言旧 7 天时效）；family 云函数已部署。版本 0.4.7→0.4.8 / versionCode 11→12。**待真机验**（生成→弹码→「复制」可用 + 30 分钟后旧码失效）。
+- Changed: 邀请码有效期 **7 天 → 30 分钟**（`createInvite` 的 `expires_at = Date.now() + 30*60*1000`，family 云函数）。短时效降低邀请码外泄风险；过期 join 仍拒 `EXPIRED`。
+- Changed（UI，按内测参考图）: 邀请码展示从系统 `uni.showModal` 改为**家庭页内联卡片**:虚线描边码卡 + 大号分隔 6 位码 + 「YYYY-MM-DD HH:mm 过期」副行 + 点卡复制 + 「生成 / 重新生成」按钮态，码与提示分行清晰（适配珊瑚暖色主题）。`genInvite` 改写内联 state（`inviteCode/inviteExpiresAt` + `inviteExpiryText` 计算属性 + `copyInvite`，切家庭 / 重载即清码）。**顺带根治**:不再走 showModal，confirmText 等系统弹窗真机怪癖彻底绕开。HTML 镜像截图自验布局对齐参考图。
+- 验证: build 零错 + 11 套 552 断言全绿（前端 UI + 后端常量、核心逻辑不变;无测试断言旧 7 天时效）；family 云函数已部署。版本 0.4.7→0.4.8 / versionCode 11→12。**待真机验**（生成→内联出码卡 + 点卡复制可用 + 30 分钟后旧码失效 + 切家庭清码）。
 
 ## 体验版 0.4.7 构建发布 · 多宠批量记录 + 后端 E2E + npm test 补全 · 2026-06-25
 - Released: 打 0.4.7 体验版构建（package.json `version` + manifest `versionName` 0.4.4→0.4.7 / `versionCode` 10→11）。mp 客户端包 920K（< 2MB 体验版限），PII 复扫客户端包 0 / tracked 0 / 提交 diff 0（真名仅在 gitignore 的 importNotion/data.json·profile_backfill.json，属本地导入数据、不进客户端包也不进库）。
