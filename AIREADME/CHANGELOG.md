@@ -3,9 +3,14 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
-## 体验版 0.4.7 构建发布 · 多宠批量记录 + 后端 E2E + 邀请码弹窗修复 + npm test 补全 · 2026-06-25
+## 体验版 0.4.8 · 邀请码弹窗真机修复 + 邀请码有效期 7 天→30 分钟 · 2026-06-25（family 云函数已部署）
+- Context: 0.4.7 已发布（多宠批量 + 后端 E2E + npm test 补全）。真机内测反馈两点:「生成邀请码」点击无反应 + 要求邀请码短时效。
+- Fixed（真机 bug）: 家庭页「生成邀请码」点击无任何反应的根因 = `uni.showModal` 的 `confirmText:'复制邀请码'`（5 字）超微信 4 字硬上限 → 真机 `showModal:fail` 静默不弹（DevTools 模拟器宽松，故 F2「发码邀友」待真机验路径漏检）；改 `'复制'`（2 字）。经 live DB 只读核实:每次点击均成功落库（`createInvite` 写入有效码），仅结果弹窗被抑制致用户重复点积压（实测某家庭积压 14 条）。全库 `confirmText/cancelText` 复扫，仅此一处超限（其余 ≤4 字）。
+- Changed: 邀请码有效期 **7 天 → 30 分钟**（`createInvite` 的 `expires_at = Date.now() + 30*60*1000`，family 云函数；前端弹窗文案同步「30 分钟内有效」）。短时效降低邀请码外泄风险；过期 join 仍拒 `EXPIRED`。
+- 验证: build 零错 + 11 套 552 断言全绿（纯前端字串 + 后端常量、逻辑不变;无测试断言旧 7 天时效）；family 云函数已部署。版本 0.4.7→0.4.8 / versionCode 11→12。**待真机验**（生成→弹码→「复制」可用 + 30 分钟后旧码失效）。
+
+## 体验版 0.4.7 构建发布 · 多宠批量记录 + 后端 E2E + npm test 补全 · 2026-06-25
 - Released: 打 0.4.7 体验版构建（package.json `version` + manifest `versionName` 0.4.4→0.4.7 / `versionCode` 10→11）。mp 客户端包 920K（< 2MB 体验版限），PII 复扫客户端包 0 / tracked 0 / 提交 diff 0（真名仅在 gitignore 的 importNotion/data.json·profile_backfill.json，属本地导入数据、不进客户端包也不进库）。
-- Fixed（真机 bug，内测反馈）: 家庭页「生成邀请码」点击无任何反应的根因 = `uni.showModal` 的 `confirmText:'复制邀请码'`（5 字）超微信 4 字硬上限 → 真机 `showModal:fail` 静默不弹（DevTools 模拟器宽松，故 F2「发码邀友」待真机验路径漏检）；改 `'复制'`（2 字）。经 live DB 只读核实：每次点击均成功落库（`createInvite` 写入有效 7 天码），仅结果弹窗被抑制致用户重复点积压多条无效操作。全库 `confirmText/cancelText` 复扫，仅此一处超限（其余 ≤4 字）。
 - Fixed: `npm test` 脚本漏挂 `e2e.journeys.test.js`（README 记 11 套、脚本实际只跑 10 套）→ 补入，11 套 552 断言一条龙全绿。
 - Note: 本体验版供真机回归，头号 A0 = 真 LLM「同事件 pets[] 同内容」vs「一句话拆 multi 各异」的区分（后端 mock 不了，见 tests/E2E-realdevice.md）；过 A0 再议提审正式版。云函数 saveRecord / parseRecord / reminders 此前已部署。
 

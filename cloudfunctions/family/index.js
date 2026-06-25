@@ -168,7 +168,7 @@ async function createInvite(openid, event) {
   const fid = event && event.family_id
   await assertAdmin(openid, fid)
   const code = genCode()
-  const expires_at = Date.now() + 7 * 86400000 // 默认 7 天有效
+  const expires_at = Date.now() + 30 * 60 * 1000 // 30 分钟有效（短时效降泄露风险）
   await db.collection('invites').add({
     data: {
       code,
