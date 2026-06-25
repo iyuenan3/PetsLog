@@ -172,7 +172,7 @@ export default {
           uni.showModal({
             title: '邀请码',
             content: `${code}\n\n7 天内有效。把它发给家人，在「输码加入」处输入即可加入本家庭。`,
-            confirmText: '复制邀请码',
+            confirmText: '复制',
             success: (r) => {
               if (r.confirm) uni.setClipboardData({ data: code })
             },

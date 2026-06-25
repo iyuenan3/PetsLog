@@ -3,8 +3,9 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
-## 体验版 0.4.7 构建发布 · 多宠批量记录 + 后端 E2E + npm test 补全 · 2026-06-25
+## 体验版 0.4.7 构建发布 · 多宠批量记录 + 后端 E2E + 邀请码弹窗修复 + npm test 补全 · 2026-06-25
 - Released: 打 0.4.7 体验版构建（package.json `version` + manifest `versionName` 0.4.4→0.4.7 / `versionCode` 10→11）。mp 客户端包 920K（< 2MB 体验版限），PII 复扫客户端包 0 / tracked 0 / 提交 diff 0（真名仅在 gitignore 的 importNotion/data.json·profile_backfill.json，属本地导入数据、不进客户端包也不进库）。
+- Fixed（真机 bug，内测反馈）: 家庭页「生成邀请码」点击无任何反应的根因 = `uni.showModal` 的 `confirmText:'复制邀请码'`（5 字）超微信 4 字硬上限 → 真机 `showModal:fail` 静默不弹（DevTools 模拟器宽松，故 F2「发码邀友」待真机验路径漏检）；改 `'复制'`（2 字）。经 live DB 只读核实：每次点击均成功落库（`createInvite` 写入有效 7 天码），仅结果弹窗被抑制致用户重复点积压多条无效操作。全库 `confirmText/cancelText` 复扫，仅此一处超限（其余 ≤4 字）。
 - Fixed: `npm test` 脚本漏挂 `e2e.journeys.test.js`（README 记 11 套、脚本实际只跑 10 套）→ 补入，11 套 552 断言一条龙全绿。
 - Note: 本体验版供真机回归，头号 A0 = 真 LLM「同事件 pets[] 同内容」vs「一句话拆 multi 各异」的区分（后端 mock 不了，见 tests/E2E-realdevice.md）；过 A0 再议提审正式版。云函数 saveRecord / parseRecord / reminders 此前已部署。
 
