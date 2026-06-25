@@ -3,6 +3,11 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## parseRecord 多 key 容错 · 主 key 配额耗尽自动切备用 key · 2026-06-25（待加备用 key + 部署 parseRecord）
+- Context: 真机内测「AI 解析失败」。直连火山方舟核实 = HTTP 429 `AccountQuotaExceeded`（Coding Plan 5 小时滚动配额耗尽）。单 key 一满，全家解析瘫痪。
+- Changed: `parseRecord` 支持多 key 轮换:`ARK_API_KEY`(主) + `ARK_API_KEY_2`(备) + `ARK_API_KEYS`(逗号分隔可多把);来源优先级 环境变量 > config.local.js。`callGatewayWithFallback` 按序尝试,遇 429/401/403(keyExhausted)切下一把;超时 / 网络 / 上游 5xx 不切(切了无意义、直接抛)。全部 key 耗尽返回 `LLM_QUOTA`「AI 额度暂时用尽，请稍后再试」(区别于一般 `LLM_ERROR`,前端提示可操作)。callGateway 改收 token 参数 + 检 statusCode。
+- 验证: e2e.flow 加 3 例(E2E-12 主 429→备接管 + 用 key 顺序 / E2E-13 全耗尽 LLM_QUOTA 两把都试过 / E2E-14 上游 500 不切只试主 key),11 套 552→558 断言全绿;**变异测试**(把 429 检测改 99999)证非假绿:E2E-12/13 转红 4 处、E2E-14 仍绿。**待用户加备用 key(config.local.js 的 `ARK_API_KEY_2`)+ 部署 parseRecord。**
+
 ## 体验版 0.4.8 · 邀请码内联卡片展示 + 弹窗真机 bug 修复 + 有效期 7 天→30 分钟 · 2026-06-25（family 云函数已部署）
 - Context: 0.4.7 已发布（多宠批量 + 后端 E2E + npm test 补全）。真机内测反馈:「生成邀请码」点击无反应 + 要求邀请码短时效 + 邀请码与提示需分行清晰展示（给了参考图）。
 - Fixed（真机 bug）: 家庭页「生成邀请码」点击无任何反应的根因 = `uni.showModal` 的 `confirmText:'复制邀请码'`（5 字）超微信 4 字硬上限 → 真机 `showModal:fail` 静默不弹（DevTools 模拟器宽松，故 F2「发码邀友」待真机验路径漏检）；改 `'复制'`（2 字）。经 live DB 只读核实:每次点击均成功落库（`createInvite` 写入有效码），仅结果弹窗被抑制致用户重复点积压（实测某家庭积压 14 条）。全库 `confirmText/cancelText` 复扫，仅此一处超限（其余 ≤4 字）。

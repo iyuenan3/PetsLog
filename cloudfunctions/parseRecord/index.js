@@ -23,7 +23,17 @@ try {
   /* 没有本地配置就用环境变量 */
 }
 const BASE_URL = process.env.ARK_BASE_URL || local.ARK_BASE_URL || 'https://ark.cn-beijing.volces.com/api/coding/v3'
-const TOKEN = process.env.ARK_API_KEY || local.ARK_API_KEY || ''
+// 多 key 容错：火山方舟 Coding Plan 是 5 小时滚动配额，主 key 耗尽（429 AccountQuotaExceeded）自动切备用 key。
+// 来源优先级 环境变量 > config.local.js；每源支持 ARK_API_KEY（主）+ ARK_API_KEY_2（备）+ ARK_API_KEYS（逗号分隔、可多把）。
+function gatherKeys(src) {
+  const out = []
+  if (src && src.ARK_API_KEY) out.push(String(src.ARK_API_KEY).trim())
+  if (src && src.ARK_API_KEY_2) out.push(String(src.ARK_API_KEY_2).trim())
+  if (src && src.ARK_API_KEYS) out.push(...String(src.ARK_API_KEYS).split(',').map((s) => s.trim()))
+  return out.filter(Boolean)
+}
+const KEYS = [...new Set([...gatherKeys(process.env), ...gatherKeys(local)])]
+const TOKEN = KEYS[0] || '' // 兼容旧引用（NO_GATEWAY 判空用）；实际调用按 KEYS 顺序轮换
 const MODEL = process.env.ARK_MODEL || local.ARK_MODEL || 'doubao-seed-2.0-pro'
 const DAILY_LIMIT = Number(process.env.DAILY_PARSE_LIMIT || local.DAILY_PARSE_LIMIT || 50)
 
@@ -78,8 +88,10 @@ exports.main = async (event) => {
 
   let parsed
   try {
-    parsed = await callGateway(text, pets, courseTags, today)
+    parsed = await callGatewayWithFallback(text, pets, courseTags, today)
   } catch (e) {
+    // 全部 key 都配额耗尽 / 鉴权失败：给可操作的提示（区别于一般解析失败）
+    if (e && e.keyExhausted) return { ok: false, code: 'LLM_QUOTA', msg: 'AI 额度暂时用尽，请稍后再试', detail: String((e && e.message) || e) }
     return { ok: false, code: 'LLM_ERROR', msg: 'AI 解析失败', detail: String((e && e.message) || e) }
   }
 
@@ -135,7 +147,24 @@ exports.main = async (event) => {
   return { ok: true, parsed, pets: petNames, petSpecies }
 }
 
-function callGateway(text, pets, tags, today) {
+// 多 key 轮换：按 KEYS 顺序尝试，遇「配额耗尽 / 鉴权失败」(keyExhausted) 切下一把；
+// 其它错误（超时 / 网络 / 上游 5xx）切 key 无意义、直接抛。全部 key 耗尽抛最后一个 keyExhausted 错。
+async function callGatewayWithFallback(text, pets, tags, today) {
+  if (!KEYS.length) throw new Error('no api key')
+  let lastErr
+  for (let i = 0; i < KEYS.length; i++) {
+    try {
+      return await callGateway(text, pets, tags, today, KEYS[i])
+    } catch (e) {
+      lastErr = e
+      if (e && e.keyExhausted && i < KEYS.length - 1) continue
+      throw e
+    }
+  }
+  throw lastErr
+}
+
+function callGateway(text, pets, tags, today, token) {
   return new Promise((resolve, reject) => {
     // 注：doubao 系上游对 response_format=json_object 支持不稳（auto-llm 时代实测 400），
     // 不依赖它，靠强提示词 + temperature 0 + 下方 extractJson 解析容错。
@@ -152,7 +181,7 @@ function callGateway(text, pets, tags, today) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + TOKEN,
+        Authorization: 'Bearer ' + token,
         'Content-Length': Buffer.byteLength(payload),
       },
       // 复杂输入 + 冷启动 + 网关延迟下，LLM 生成可达 20s+，HTTP 超时给到 45s（须 < 云函数超时 60s，
@@ -163,6 +192,12 @@ function callGateway(text, pets, tags, today) {
       let body = ''
       res.on('data', (d) => (body += d))
       res.on('end', () => {
+        // key 维度硬失败（配额耗尽 429 / 鉴权 401·403）：标 keyExhausted，让上层切备用 key
+        if (res.statusCode === 429 || res.statusCode === 401 || res.statusCode === 403) {
+          const ke = new Error('upstream ' + res.statusCode + ': ' + body.slice(0, 200))
+          ke.keyExhausted = true
+          return reject(ke)
+        }
         try {
           const j = JSON.parse(body)
           const content = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content

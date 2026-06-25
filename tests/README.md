@@ -38,7 +38,7 @@ node tests/isolation.e2e.test.js  # 单跑一套（迭代时更快）
 
 单函数 mock 抓不到「parse 给的字段 save 不认」这类跨边界问题，故有 E2E 层；`e2e.flow` 只 peek DB 直查、不经读路径，故有 `e2e.journeys` 把「落库后从 timeline 真读回」钉死；功能 E2E 走「正常用户」，抓不到「攻击者伪造 family_id」，故有隔离 E2E 层。
 
-## 各套覆盖（11 套共 552 断言，全绿）
+## 各套覆盖（11 套共 558 断言，全绿）
 
 | 套 | 断言 | 覆盖 |
 |---|---|---|
@@ -50,7 +50,7 @@ node tests/isolation.e2e.test.js  # 单跑一套（迭代时更快）
 | `pets.cloudfn.test.js` | 27 | 建宠查重 / 服务端 trim / 字段类型收紧 / 物种 8 枚举白名单 / gender sanitize |
 | `parseRecord.prompt.test.js` | 32 | buildMessages 物种标注（8 枚举）/ tag 候选喂入 / raw 移除 / 养护 few-shot / 多宠 pets[] + multi few-shot / SYSTEM 收紧（ADR-020/029/030）|
 | `timeline.cloudfn.test.js` | 23 | list_tags 全集 / course 聚合（起止·花费·体重序列）/ 跨宠不混画 / pet 下钻 / family 隔离 / 缺 tag 拒 / 分页 skip·hasMore·去重 |
-| `e2e.flow.test.js` | 34 | 自然语言 → parse（raw 逐字 / tag 候选 / 物种）→ save → course / list_tags → clean_tags + 批量 fan-out + multi 拆条端到端，跨函数契约 |
+| `e2e.flow.test.js` | 40 | 自然语言 → parse（raw 逐字 / tag 候选 / 物种）→ save → course / list_tags → clean_tags + 批量 fan-out + multi 拆条端到端，跨函数契约 + 多 key 配额轮换（主 key 429 切备用 / 全耗尽 LLM_QUOTA / 非配额 500 不切）|
 | `e2e.journeys.test.js` | 130 | 完整用户旅程「录入→落库→timeline read-back」：单宠就医 / 药品 / 提醒全链 / 体重乱序+混域 / 0宠首录 / Round1 fan-out / Round2 multi 部分失败 / 多家庭隔离功能读回 / 主粮写读 seam / 改名级联 / 删宠保留病史 / 解散级联 / dispatch 优先级 / parse 限流 |
 | `isolation.e2e.test.js` | 64 | 家庭多租户隔离（下表 9 组）|
 

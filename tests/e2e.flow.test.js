@@ -58,17 +58,23 @@ const fakeCloud = { init() {}, DYNAMIC_CURRENT_ENV: 'env', database: () => DB_IN
 // ---------- mock LLM 上游（parseRecord 走 https.request）----------
 let NEXT_LLM = '{}' // 测试在每次 parse 前设置「LLM 会返回的 assistant JSON 字符串」
 let LAST_REQ = null // 抓最近一次发给 LLM 的请求体（验 tag 候选 / 物种 喂入）
+let STATUS_SEQ = [] // 每次请求依次返回的 HTTP 状态码（空=默认 200 成功）；测多 key 配额轮换用
+let REQ_AUTHS = [] // 记录每次请求用的 Authorization（验切到了哪把 key）
 const fakeHttps = {
   request(options, cb) {
+    REQ_AUTHS.push(options && options.headers && options.headers.Authorization)
+    const status = STATUS_SEQ.length ? STATUS_SEQ.shift() : 200
     const h = {}
-    const res = { on: (ev, fn) => { h[ev] = fn; return res } }
+    const res = { statusCode: status, on: (ev, fn) => { h[ev] = fn; return res } }
     const req = {
       on: () => req,
       write: (p) => { try { LAST_REQ = JSON.parse(p) } catch (e) {} return req },
       end: () => {
         setImmediate(() => {
           cb(res) // parseRecord 在 cb 内注册 res.on('data'/'end')
-          const body = JSON.stringify({ choices: [{ message: { content: NEXT_LLM } }] })
+          const body = status === 200
+            ? JSON.stringify({ choices: [{ message: { content: NEXT_LLM } }] })
+            : JSON.stringify({ error: { code: 'AccountQuotaExceeded', message: 'quota exceeded', type: 'TooManyRequests' } })
           h.data && h.data(body)
           h.end && h.end()
         })
@@ -81,6 +87,7 @@ const fakeHttps = {
 
 // 环境：parseRecord 模块加载时读 ARK_API_KEY（设 test 让 TOKEN truthy，否则返回 NO_GATEWAY）
 process.env.ARK_API_KEY = 'test-token'
+process.env.ARK_API_KEY_2 = 'test-token-2' // 备用 key（测多 key 配额耗尽自动轮换，ADR-016 延伸）
 
 const origLoad = Module._load
 Module._load = function (request) {
@@ -202,6 +209,29 @@ function assert(c, m) { if (c) pass++; else { fail++; console.log('  ❌ ' + m) 
   assert(emptyRec && emptyRec.pet_unknown === true, 'E2E-11 空 pet 子条标 pet_unknown=true（前端会拦提交逼用户选宠）')
   const namedRec = pe.parsed.records.find((r) => r.pet === '示例猫')
   assert(namedRec && namedRec.pet_unknown === false, 'E2E-11 有主子条 pet_unknown=false')
+
+  // ── E2E-12：主 key 配额耗尽（429）自动切备用 key（多 key 容错，火山方舟 5 小时滚动配额）──
+  NEXT_LLM = JSON.stringify({ kind: 'record', valid: true, pet: '示例猫', new_pet: false, species: 'cat', time: '2026-06-01', event_type: '体重', weight: 4.9, desc: '称重', tag: '', raw: 'x' })
+  STATUS_SEQ = [429, 200] // 第 1 把 key 429 配额耗尽 → 第 2 把 200 成功
+  REQ_AUTHS = []
+  const pf = await parseRecord.main({ text: '示例猫称重4.9', family_id: 'F1' })
+  assert(pf.ok === true && pf.parsed && pf.parsed.pet === '示例猫', 'E2E-12 主 key 429 → 备用 key 接管，解析成功')
+  assert(REQ_AUTHS.length === 2 && REQ_AUTHS[0] === 'Bearer test-token' && REQ_AUTHS[1] === 'Bearer test-token-2', 'E2E-12 先用主 key，429 后切到备用 key（顺序正确）')
+
+  // ── E2E-13：所有 key 都配额耗尽 → LLM_QUOTA 可操作提示（区别于一般解析失败）──
+  STATUS_SEQ = [429, 429]
+  REQ_AUTHS = []
+  const pq = await parseRecord.main({ text: '示例猫称重5.0', family_id: 'F1' })
+  assert(pq.ok === false && pq.code === 'LLM_QUOTA', 'E2E-13 全部 key 耗尽 → code=LLM_QUOTA（非 LLM_ERROR）')
+  assert(REQ_AUTHS.length === 2, 'E2E-13 两把 key 都试过才放弃')
+
+  // ── E2E-14：非配额错误（上游 500）不切 key（切了也无意义，只试 1 把）──
+  STATUS_SEQ = [500]
+  REQ_AUTHS = []
+  const p5 = await parseRecord.main({ text: '示例猫称重5.1', family_id: 'F1' })
+  assert(p5.ok === false && p5.code === 'LLM_ERROR', 'E2E-14 上游 500 → LLM_ERROR（非配额、不是 LLM_QUOTA）')
+  assert(REQ_AUTHS.length === 1, 'E2E-14 500 不切备用 key（只试主 key）')
+  STATUS_SEQ = [] // 复位兜底
 
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
