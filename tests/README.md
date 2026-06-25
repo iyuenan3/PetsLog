@@ -38,7 +38,7 @@ node tests/isolation.e2e.test.js  # 单跑一套（迭代时更快）
 
 单函数 mock 抓不到「parse 给的字段 save 不认」这类跨边界问题，故有 E2E 层；`e2e.flow` 只 peek DB 直查、不经读路径，故有 `e2e.journeys` 把「落库后从 timeline 真读回」钉死；功能 E2E 走「正常用户」，抓不到「攻击者伪造 family_id」，故有隔离 E2E 层。
 
-## 各套覆盖（11 套共 558 断言，全绿）
+## 各套覆盖（12 套共 587 断言，全绿）
 
 | 套 | 断言 | 覆盖 |
 |---|---|---|
@@ -46,7 +46,8 @@ node tests/isolation.e2e.test.js  # 单跑一套（迭代时更快）
 | `importNotion.cloudfn.test.js` | 45 | 历史导入 / clear 级联 / clean_tags（非病程 tag 清空，trim）/ backfill_profile（gender·neutered 覆盖 / intro 仅填空 / weight_spark 升序 / admin 鉴权）/ resolveFamily 鉴权 |
 | `foods.cloudfn.test.js` | 57 | 主粮 CRUD / 物种默认 + 单宠覆盖 / current 排他作用域 (family,species,pet) / brand·model / 改名级联 + 删宠保留 / family 隔离 / IDOR（ADR-027）|
 | `foodsResolve.test.js` | 7 | resolveCurrentFood 纯函数：覆盖 > 默认 > 无 / 历史覆盖不参与 / tie-break（strip-eval 直测真实源）|
-| `saveRecord.cloudfn.test.js` | 93 | 三分支落库 / PET_UNKNOWN 零写入 / 批量 fan-out + multi 拆条（部分成功 / 同序 / 不建档 / 派生回写吞异常）/ 日期·费用·时间归一 / 养护 params 门控 / 物种白名单 / trim（ADR-015/024/029/030）|
+| `meds.cloudfn.test.js` | 25 | 药品 CRUD：add 落 raw / update 全字段 + 仅补过期日 + **raw 只读不被改** + 数量 0 + 空名拒 + 清过期 / delete / family 隔离（越权改删拒零改动）/ 非成员拒 / list 隔离升序（ADR-031）|
+| `saveRecord.cloudfn.test.js` | 97 | 三分支落库 / PET_UNKNOWN 零写入 / 批量 fan-out + multi 拆条（部分成功 / 同序 / 不建档 / 派生回写吞异常）/ med_stock·reminder 落 raw（ADR-031）/ 日期·费用·时间归一 / 养护 params 门控 / 物种白名单 / trim（ADR-015/024/029/030/031）|
 | `pets.cloudfn.test.js` | 27 | 建宠查重 / 服务端 trim / 字段类型收紧 / 物种 8 枚举白名单 / gender sanitize |
 | `parseRecord.prompt.test.js` | 32 | buildMessages 物种标注（8 枚举）/ tag 候选喂入 / raw 移除 / 养护 few-shot / 多宠 pets[] + multi few-shot / SYSTEM 收紧（ADR-020/029/030）|
 | `timeline.cloudfn.test.js` | 23 | list_tags 全集 / course 聚合（起止·花费·体重序列）/ 跨宠不混画 / pet 下钻 / family 隔离 / 缺 tag 拒 / 分页 skip·hasMore·去重 |

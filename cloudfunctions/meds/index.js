@@ -9,7 +9,7 @@ async function assertMember(openid, familyId) {
   return r.data[0]
 }
 
-// 家庭药品库存 CRUD（按家庭隔离，不绑单宠）。action: list | add
+// 家庭药品库存 CRUD（按家庭隔离，不绑单宠）。action: list | add | update | delete
 exports.main = async (event) => {
   const { OPENID } = cloud.getWXContext()
   const familyId = event && event.family_id
@@ -35,10 +35,44 @@ exports.main = async (event) => {
         effect: m.effect || '',
         quantity: typeof m.quantity === 'number' ? m.quantity : 1,
         expire_date: m.expire_date || '',
+        raw: m.raw || '', // 当时原话 provenance（与 saveRecord med_stock 落库口径一致）
         created_at: Date.now(),
       },
     })
     return { ok: true, id: res._id }
+  }
+
+  // 编辑：仅改 name / effect / quantity / expire_date（raw 是当时原话 provenance，只读不改）。
+  // 家庭隔离：先 doc().get() 校 family_id 命中本家庭再写（与 foods 同款守卫，防越权改他家药品）。
+  if (action === 'update') {
+    const id = event.id
+    const m = event.med || {}
+    if (!id) return { ok: false, msg: 'id required' }
+    const cur = await db.collection('meds').doc(id).get().catch(() => null)
+    if (!cur || !cur.data || cur.data.family_id !== familyId) return { ok: false, msg: 'not found' }
+    const patch = {}
+    if (typeof m.name === 'string') {
+      if (!m.name.trim()) return { ok: false, msg: 'name required' } // 名字不可被清空，防台账空名
+      patch.name = m.name.trim()
+    }
+    if (typeof m.effect === 'string') patch.effect = m.effect.trim()
+    if (m.quantity !== undefined) {
+      const q = Number(m.quantity)
+      patch.quantity = Number.isFinite(q) && q >= 0 ? q : 0 // 允许 0（用完），非法归 0
+    }
+    if (m.expire_date !== undefined) patch.expire_date = m.expire_date || '' // 允许补填或清空过期日
+    patch.updated_at = Date.now()
+    await db.collection('meds').doc(id).update({ data: patch })
+    return { ok: true }
+  }
+
+  if (action === 'delete') {
+    const id = event.id
+    if (!id) return { ok: false, msg: 'id required' }
+    const cur = await db.collection('meds').doc(id).get().catch(() => null)
+    if (!cur || !cur.data || cur.data.family_id !== familyId) return { ok: false, msg: 'not found' }
+    await db.collection('meds').doc(id).remove()
+    return { ok: true }
   }
 
   return { ok: false, msg: 'unknown action' }

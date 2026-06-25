@@ -1,13 +1,13 @@
 {
   "name": "petslog",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "多宠家庭 AI 健康记录工具（微信小程序 · 自然语言录入 → AI 结构化归档）",
   "scripts": {
     "dev:mp-weixin": "uni -p mp-weixin",
     "build:mp-weixin": "uni build -p mp-weixin",
     "dev:h5": "uni",
     "build:h5": "uni build",
-    "test": "node tests/attachment.cloudfn.test.js && node tests/importNotion.cloudfn.test.js && node tests/foods.cloudfn.test.js && node tests/foodsResolve.test.js && node tests/saveRecord.cloudfn.test.js && node tests/pets.cloudfn.test.js && node tests/parseRecord.prompt.test.js && node tests/timeline.cloudfn.test.js && node tests/e2e.flow.test.js && node tests/e2e.journeys.test.js && node tests/isolation.e2e.test.js"
+    "test": "node tests/attachment.cloudfn.test.js && node tests/importNotion.cloudfn.test.js && node tests/foods.cloudfn.test.js && node tests/foodsResolve.test.js && node tests/meds.cloudfn.test.js && node tests/saveRecord.cloudfn.test.js && node tests/pets.cloudfn.test.js && node tests/parseRecord.prompt.test.js && node tests/timeline.cloudfn.test.js && node tests/e2e.flow.test.js && node tests/e2e.journeys.test.js && node tests/isolation.e2e.test.js"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-5000720260410001",

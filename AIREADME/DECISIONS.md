@@ -318,3 +318,13 @@
   - **前端**：`kind:'multi'` → 确认区渲染 **N 张精简可编辑卡**，每卡 = 宠物单选 chips + 类型 picker + 体重 + 描述 + 删卡；index 感知的 picker handler（时间默认 now、不逐卡编辑 v1）。提交一次写全部，toast「已归档 N 条」（部分失败列未成功）。**multi 不挂附件 / 不做养护**（同 Round 1）。
 - Alternatives（否决 / 推后）: ① 前端循环 N 次调 saveRecord → N 往返 + N 个 loading 闪 + 部分失败态散，否，改服务端一次收 records[]；② 总是返回 records[] 破解析契约 → back-compat 用 `kind:'multi'` 分流、单条仍扁平对象；③ multi 卡做全字段（med/hospital/cost/tag/时间逐卡）→ v1 精简到核心（pet/类型/体重/描述），详细就医单条录或详情页后补（ADR 注后续可富化）；④ 支持 record+reminder 混合拆 → 太复杂、v1 只拆 record。
 - Tradeoff: ① **拆分激进度**是主风险（LLM 过度拆把一件事拆两条）→ 保守 prompt + N 张确认卡可删可改是安全网；② multi 非事务、部分成功（可接受，记录独立）；③ saveRecord 抽 `writeSingleRecord` **改了单条主路径**（提取建档 / 体重 / PET_UNKNOWN 逻辑）→ **回归先对旧用例证不破**（Round 1 后 62 断言全绿）+ 加 multi 新用例（N 条不同内容 / 某条不在库只拒该条 / 部分成功）；④ multi 卡精简字段与单条编辑器不一致（UX 取舍，v1 够用）。**真机回归重点：「A 吐 B 拉稀」拆 2 条且内容各异 / 删卡 / 单条 + Round 1 批量不回归。**
+
+## ADR-031 · 药品可编辑 + 删除 + 任何原话全路径落库（meds CRUD 补全 + raw provenance）· 2026-06-25（saveRecord + meds 已部署 2026-06-26 · 待上传前端体验版 + 待真机验）
+- Problem: 真机内测反馈，药品（健康 → 药品 tab）入库后是**纯展示卡，无任何编辑 / 删除入口**：① 录入时没给过期日的药品「过期 未填」永远改不了；② 名 / 功效 / 数量录错或用完后也无法修正、过期 / 用完的药一直堆在列表。同时用户提出更强原则:**「任何原话都应记录下来，不仅是时间线的」**——`records`（时间线）落了 `raw`（ADR-020 原文逐字落库），但 `med_stock`（药品）与 `reminder`（提醒）两条落库路径把前端一路传来的 `raw` **丢了**。
+- Constraint: 守 family 隔离 + assertMember 红线（ADR-008）；`raw` 是【当时原话 provenance】= 只读凭证，编辑只改结构化字段、绝不改 raw（改了就失去「当时怎么说的」意义）；不破现有展示 + 测试。
+- Decision:
+  - **raw 全路径落库**：saveRecord 的 `med_stock` / `reminder` 两个 `add` 各补 `raw: r.raw||''`（前端 `base` 早已带 raw、parseRecord normalize 三类都挂 raw，**仅落库丢键**，补两行即通）；meds 云函数直接 `add` 也补 `raw`，口径统一。**旧库已入条无 raw**（从没存过）→ 优雅降级：编辑弹层「原话」行有则展示、无则灰提示「（此前版本未保存原话）」，只新录的才有原话可看。
+  - **meds CRUD 补全**：meds 云函数从 `list/add` 加 `update`（仅改 name/effect/quantity/expire_date，**raw 不在可写集**）+ `delete`，均**先 `doc(id).get()` 校 `family_id===familyId`** 再写（与 foods 同款隔离守卫，防越权改 / 删他家药品）；name 不可清空（防台账空名）、quantity 允许 0（用完）、expire_date 可补可清。
+  - **前端 health.vue 药品卡**：加底部「编辑 / 删除」两 op 按钮（与上方主粮卡交互一致，复用全局 `.op`）；编辑走弹层（复用主粮那套 `.sheet`/`.f-form`），顶部只读展示当时原话，下面 药品名 / 功效 / 剩余数量 / 过期日 全可改可补；删除走 `showModal` 二次确认。
+- Alternatives（否决）: ① 点整张卡进编辑 → 与主粮卡 op 按钮不一致，否（统一用 op 按钮）；② raw 也设可编辑 → 失去 provenance 意义，否（只读）；③ 旧条无 raw 时回溯重建 → 数据从没存、无源可回溯，否（优雅降级 + 往后新录有）；④ 只加编辑不加删除 → 用完 / 过期药堆积仍无解，否（用户确认编辑 + 删除都加）。
+- Tradeoff: ① 旧药品无原话（不可逆，只能往后补齐）；② meds 加了 update/delete 但仍按家庭隔离、与 foods 同模式（一致、低风险）；③ 新建 `tests/meds.cloudfn.test.js`（25 断言：raw 落库 / 补过期 / raw 只读不被改 / 数量 0 / 空名拒 / 越权改删拒零改动 / 非成员拒 / list 隔离升序）+ saveRecord 补 med_stock·reminder 落 raw 回归。**真机回归重点：药品「过期 未填」可补填 / 编辑名功效数量 / 删除 / 新录药品原话可见（旧条灰提示）。**

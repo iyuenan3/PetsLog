@@ -324,6 +324,7 @@ exports.main = async (event) => {
         effect: r.med_effect || '',
         quantity: typeof r.med_quantity === 'number' ? r.med_quantity : Number(r.med_quantity) || 1,
         expire_date: normalizeDate(r.med_expire, ''),
+        raw: r.raw || '', // 当时原话 provenance（用户决策：任何原话都落库，不止时间线 records）
         created_at: Date.now(),
       },
     })
@@ -355,6 +356,7 @@ exports.main = async (event) => {
         next_date: normalizeDate(r.rem_date, ''),
         repeat_days: typeof r.rem_repeat_days === 'number' ? r.rem_repeat_days : Number(r.rem_repeat_days) || 0,
         note: '',
+        raw: r.raw || '', // 当时原话 provenance（用户决策：任何原话都落库，不止时间线 records）
         done: false,
         created_at: Date.now(),
         updated_at: Date.now(),

@@ -117,15 +117,21 @@
     <block v-else>
       <view v-if="meds.length" class="med-list">
         <view v-for="(m, i) in meds" :key="m._id" class="med-card rise-in" :style="{ 'animation-delay': Math.min(i, 10) * 36 + 'ms' }">
-          <view class="med-card__icon"><image class="med-card__icon-img" src="/static/icon/pill.png" mode="aspectFit" /></view>
-          <view class="med-card__body">
-            <view class="med-card__top">
-              <text class="med-card__name">{{ m.name }}</text>
-              <text v-if="isExpiringSoon(m.expire_date)" class="med-card__badge">临期</text>
+          <view class="med-card__main">
+            <view class="med-card__icon"><image class="med-card__icon-img" src="/static/icon/pill.png" mode="aspectFit" /></view>
+            <view class="med-card__body">
+              <view class="med-card__top">
+                <text class="med-card__name">{{ m.name }}</text>
+                <text v-if="isExpiringSoon(m.expire_date)" class="med-card__badge">临期</text>
+              </view>
+              <text class="med-card__qty">剩余 {{ m.quantity }}</text>
+              <text v-if="m.effect" class="med-card__effect">{{ m.effect }}</text>
+              <text class="med-card__exp" :class="{ 'med-card__exp--soon': isExpiringSoon(m.expire_date) }">过期 {{ m.expire_date || '未填' }}</text>
             </view>
-            <text class="med-card__qty">剩余 {{ m.quantity }}</text>
-            <text v-if="m.effect" class="med-card__effect">{{ m.effect }}</text>
-            <text class="med-card__exp" :class="{ 'med-card__exp--soon': isExpiringSoon(m.expire_date) }">过期 {{ m.expire_date || '未填' }}</text>
+          </view>
+          <view class="med-card__ops">
+            <text class="op op--secondary" hover-class="op--press" hover-stay-time="60" @click="openMedEdit(m)">编辑</text>
+            <text class="op op--danger" hover-class="op--press" hover-stay-time="60" @click="removeMed(m)">删除</text>
           </view>
         </view>
       </view>
@@ -135,6 +141,35 @@
         <text class="empty__desc">点底部 ＋ 说一句「买了盒驱虫药，2 支，明年3月过期」，自动入库</text>
       </view>
     </block>
+
+    <!-- 药品 编辑弹层 -->
+    <view v-if="medSheet" class="sheet-mask" @click="closeMed" @touchmove.stop.prevent="noop">
+      <view class="sheet" @click.stop>
+        <view class="sheet__grab"></view>
+        <text class="sheet__title">编辑药品</text>
+        <scroll-view scroll-y class="f-form">
+          <!-- 当时原话（只读 provenance）：有则展示，旧条无原话灰提示 -->
+          <view class="f-row f-row--raw">
+            <text class="f-row__label">原话</text>
+            <text class="f-raw" :class="{ 'f-raw--empty': !medSheet.raw }">{{ medSheet.raw || '（此前版本未保存原话）' }}</text>
+          </view>
+          <view class="f-row"><text class="f-row__label">药品名</text><input class="f-input" v-model="medSheet.name" placeholder="如 海乐妙" placeholder-class="f-ph" /></view>
+          <view class="f-row"><text class="f-row__label">功效</text><input class="f-input" v-model="medSheet.effect" placeholder="如 驱虫，选填" placeholder-class="f-ph" /></view>
+          <view class="f-row"><text class="f-row__label">剩余数量</text><input class="f-input" type="number" v-model="medSheet.quantity" placeholder="0" placeholder-class="f-ph" /></view>
+          <view class="f-row">
+            <text class="f-row__label">过期日</text>
+            <picker class="f-picker" mode="date" :value="medSheet.expire_date || ''" @change="onMedExpire">
+              <view class="f-input f-pick" :class="{ 'f-pick--ph': !medSheet.expire_date }">{{ medSheet.expire_date || '点击补填' }}</view>
+            </picker>
+          </view>
+          <view v-if="medSheet.expire_date" class="f-row f-row--clear" @click="clearMedExpire"><text class="f-clear">清除过期日</text></view>
+        </scroll-view>
+        <view class="sheet__actions">
+          <button class="btn-ghost" hover-class="btn-ghost--press" hover-stay-time="60" @click="closeMed">取消</button>
+          <button class="btn-primary" hover-class="btn-primary--press" hover-stay-time="60" :loading="medSaving" @click="saveMed">保存</button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -153,6 +188,8 @@ export default {
       remLoaded: false,
       meds: [],
       medLoaded: false,
+      medSheet: null, // 编辑中的药品（null = 弹层关闭）
+      medSaving: false,
       foods: [],
       foodLoaded: false,
       foodSheet: null, // 编辑中的主粮（null = 弹层关闭）
@@ -352,6 +389,78 @@ export default {
       } catch (e) {
         console.warn('meds load failed', e)
       }
+    },
+    openMedEdit(m) {
+      // 复制成可编辑草稿（raw 只读展示，不进 patch）；quantity 转字符串供 number input 双向绑定
+      this.medSheet = {
+        _id: m._id,
+        name: m.name || '',
+        effect: m.effect || '',
+        quantity: m.quantity === 0 || m.quantity ? String(m.quantity) : '',
+        expire_date: m.expire_date || '',
+        raw: m.raw || '',
+      }
+    },
+    closeMed() {
+      this.medSheet = null
+    },
+    onMedExpire(e) {
+      this.medSheet.expire_date = e.detail.value
+    },
+    clearMedExpire() {
+      this.medSheet.expire_date = '' // 误填可清空（过期日非必填）
+    },
+    async saveMed() {
+      const m = this.medSheet
+      if (!m) return
+      if (!String(m.name || '').trim()) {
+        uni.showToast({ title: '药品名必填', icon: 'none' })
+        return
+      }
+      this.medSaving = true
+      try {
+        const med = {
+          name: m.name.trim(),
+          effect: String(m.effect || '').trim(),
+          expire_date: m.expire_date || '',
+        }
+        // 数量留空 = 「没动这项」→ 不传，后端 undefined 即保持原值（对齐 meds update 契约）；
+        // 真要标用完则显式填 0。避免编辑名 / 功效时顺手清空数量被静默写成 0（用完）。
+        if (String(m.quantity).trim() !== '') med.quantity = Number(m.quantity) || 0
+        const res = await callFn('meds', { action: 'update', id: m._id, med })
+        if (res.result && res.result.ok) {
+          uni.showToast({ title: '已保存', icon: 'success' })
+          this.medSheet = null
+          this.loadMed()
+        } else {
+          uni.showToast({ title: (res.result && res.result.msg) || '保存失败', icon: 'none' })
+        }
+      } catch (e) {
+        uni.showToast({ title: '保存出错', icon: 'none' })
+      } finally {
+        this.medSaving = false
+      }
+    },
+    removeMed(m) {
+      uni.showModal({
+        title: '删除药品',
+        content: `删除「${m.name || '该药品'}」？`,
+        confirmColor: '#e05d4e',
+        success: async (res) => {
+          if (!res.confirm) return
+          try {
+            const r = await callFn('meds', { action: 'delete', id: m._id })
+            if (r.result && r.result.ok) {
+              uni.showToast({ title: '已删除', icon: 'success' })
+              this.loadMed()
+            } else {
+              uni.showToast({ title: '删除失败', icon: 'none' })
+            }
+          } catch (e) {
+            uni.showToast({ title: '删除失败', icon: 'none' })
+          }
+        },
+      })
     },
 
     /* ===== 主粮 ===== */
@@ -650,9 +759,16 @@ export default {
   padding: 28rpx;
   margin-bottom: 20rpx;
   box-shadow: var(--sh-2);
+}
+.med-card__main {
   display: flex;
   align-items: flex-start;
   gap: 20rpx;
+}
+.med-card__ops {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 22rpx;
 }
 .med-card__icon {
   width: 88rpx;
@@ -925,6 +1041,30 @@ export default {
 }
 .f-pick--ph {
   color: var(--c-text-3);
+}
+/* 只读「原话」行：多行展示当时录入原句（provenance），右对齐随表单语言 */
+.f-row--raw {
+  align-items: flex-start;
+  padding: 18rpx 0;
+}
+.f-raw {
+  flex: 1;
+  font-size: var(--fs-cap);
+  color: var(--c-text-2);
+  text-align: right;
+  line-height: 1.5;
+}
+.f-raw--empty {
+  color: var(--c-text-3);
+}
+/* 清除过期日：整行可点的次级危险操作 */
+.f-row--clear {
+  justify-content: flex-end;
+  min-height: 72rpx;
+}
+.f-clear {
+  font-size: var(--fs-cap);
+  color: var(--c-danger);
 }
 .sheet__actions {
   display: flex;

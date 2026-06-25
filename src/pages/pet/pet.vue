@@ -74,7 +74,7 @@
         <view class="form-row">
           <text class="form-row__label">头像</text>
           <view class="avatar-edit" hover-class="avatar-edit--press" hover-stay-time="60" @click="pickAvatar">
-            <image v-if="form.avatar" :src="form.avatar" class="avatar-edit__img" mode="aspectFill"></image>
+            <image v-if="avatarLocal || form.avatar" :src="avatarLocal || form.avatar" class="avatar-edit__img" mode="aspectFill"></image>
             <text v-else-if="form.avatar_emoji" class="avatar-edit__emoji">{{ form.avatar_emoji }}</text>
             <text v-else class="avatar-edit__ph">＋</text>
           </view>
@@ -202,6 +202,9 @@ export default {
       editing: false,
       saving: false,
       form: {},
+      avatarLocal: '', // 刚选裁剪的本地图路径，仅供编辑态即时预览（本地路径必渲染，绕开 cloud:// 即传即显窗口的 CDN 未就绪空白）；保存用 form.avatar(fileID)
+      uploadingAvatar: false, // 头像上传 in-flight 标志：上传期间挡住保存（avatarLocal 已显新图但 form.avatar 尚未就位，防存旧/空头像）
+
       // 给兽医的小结
       exporting: false,
       exportRecs: [],
@@ -661,6 +664,7 @@ export default {
         avatar: p.avatar || '',
         avatar_emoji: p.avatar_emoji || '',
       }
+      this.avatarLocal = '' // 进编辑态清掉上次会话的本地预览残留
       this.editing = true
     },
     // 丢弃本编辑会话新传未落库的头像文件（头像是即选即传，ADR-011「取消不留孤儿」要求显式清理）。
@@ -676,6 +680,7 @@ export default {
     },
     cancelEdit() {
       this.discardTempAvatar()
+      this.avatarLocal = ''
       // 创建模式取消 = 放弃建档返回上一页
       if (this.creating) {
         uni.navigateBack({ delta: 1 })
@@ -689,6 +694,7 @@ export default {
       this.discardTempAvatar()
       this.form.avatar_emoji = e
       this.form.avatar = ''
+      this.avatarLocal = '' // 改用 emoji → 撤回照片本地预览
     },
     pickSpecies(s) {
       this.form.species = s
@@ -723,19 +729,19 @@ export default {
         mediaType: ['image'],
         sizeType: ['compressed'],
         sourceType: ['album', 'camera'],
-        success: async (res) => {
+        success: (res) => {
           const tmp = res.tempFiles && res.tempFiles[0] && res.tempFiles[0].tempFilePath
           if (!tmp) return
-          uni.showLoading({ title: '上传中…' })
-          try {
-            const next = await uploadAvatar(tmp)
-            this.discardTempAvatar() // 同会话反复换图：新图传成后再删上一张未落库的（先删后传若上传失败会指向已删文件）
-            this.form.avatar = next
-          } catch (e) {
-            uni.showToast({ title: '头像上传失败', icon: 'none' })
-          } finally {
-            uni.hideLoading()
-          }
+          // 强制裁剪成 1:1，与圆形头像 / 档案卡方头像一致（避免长图被 aspectFill 裁偏）
+          wx.cropImage({
+            src: tmp,
+            cropScale: '1:1',
+            success: (c) => this.applyAvatar(c.tempFilePath || tmp),
+            // 取消裁剪(cancel)静默；低版本基础库无 cropImage 等其它失败 → 降级用原图，不阻断换头像
+            fail: (err) => {
+              if (!String((err && err.errMsg) || '').includes('cancel')) this.applyAvatar(tmp)
+            },
+          })
         },
         fail: (err) => {
           // 用户取消(cancel)属正常静默；其它失败（权限 / 系统）给反馈，对齐 saveVetImg 的失败处理
@@ -744,7 +750,34 @@ export default {
       })
       // #endif
     },
+    // 选定（裁剪后）本地图：先即时本地预览，再后台上传换 fileID 供保存。
+    async applyAvatar(filePath) {
+      this.avatarLocal = filePath // 即时预览本地裁剪图（必渲染，绕开 cloud:// 即传即显窗口的渲染空白）
+      const prevEmoji = this.form.avatar_emoji // 上传失败要回滚（否则把用户原 emoji 选择丢成空）
+      this.form.avatar_emoji = '' // 用了照片 → 清掉之前选的 emoji（显示优先级 照片 > emoji）
+      this.uploadingAvatar = true
+      // mask:true 在上传期间挡住保存 / 取消 / 选 emoji 的点击（avatarLocal 已显新图但 form.avatar 尚未就位，
+      // 此窗口内点保存会存旧/空头像、点取消会漏删刚传的孤儿）。showLoading 默认无 mask、点击会穿透。
+      uni.showLoading({ title: '上传中…', mask: true })
+      try {
+        const next = await uploadAvatar(filePath)
+        this.discardTempAvatar() // 同会话反复换图：新图传成后再删上一张未落库的（先删后传若上传失败会指向已删文件）
+        this.form.avatar = next
+      } catch (e) {
+        this.avatarLocal = '' // 上传失败 → 撤回预览，避免显示未真正落库的图
+        this.form.avatar_emoji = prevEmoji // 回滚 emoji 选择
+        uni.showToast({ title: '头像上传失败', icon: 'none' })
+      } finally {
+        this.uploadingAvatar = false
+        uni.hideLoading()
+      }
+    },
     async save() {
+      if (this.uploadingAvatar) {
+        // 头像还在上传（form.avatar 未就位）：此刻存会落旧/空头像，但 avatarLocal 已显新图 → 显示与落库背离。挡住等传完。
+        uni.showToast({ title: '头像上传中，请稍候', icon: 'none' })
+        return
+      }
       if (!String(this.form.name || '').trim()) {
         uni.showToast({ title: '名字必填', icon: 'none' })
         return
@@ -766,6 +799,7 @@ export default {
             uni.setNavigationBarTitle({ title: pet.name })
           }
           this.editing = false
+          this.avatarLocal = '' // 已落库，回退到 fileID 渲染（header / 详情走 pet.avatar）
           this.load()
         } else {
           uni.showToast({ title: (res.result && res.result.msg) || '保存失败', icon: 'none' })

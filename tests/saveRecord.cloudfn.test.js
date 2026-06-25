@@ -253,6 +253,23 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert((DB_INST.data.reminders || [])[0].type === '养护', 'rem_type=养护 保留')
   })
 
+  // 12b. med_stock 落库带 raw（用户决策：任何原话都落库，不止时间线 records）
+  await run('med_stock: 落库带 raw 原话', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', [])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'med_stock', med_name: '海乐妙', med_effect: '驱虫', med_quantity: 2, med_expire: '2027-03-01', raw: '买了盒海乐妙2支明年3月过期' } })
+    assert(r.ok === true && r.kind === 'med_stock', '入库成功')
+    const m = (DB_INST.data.meds || [])[0]
+    assert(m && m.raw === '买了盒海乐妙2支明年3月过期', 'meds.raw 落库')
+  })
+
+  // 12c. reminder 落库带 raw 原话
+  await run('reminder: 落库带 raw 原话', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])
+    const r = await fn.main({ family_id: 'F1', record: { kind: 'reminder', pet: '示例猫', rem_title: '疫苗', rem_type: '疫苗', rem_date: '2026-07-01', raw: '下月1号给示例猫打疫苗' } })
+    assert(r.ok === true, '提醒落库')
+    assert((DB_INST.data.reminders || [])[0].raw === '下月1号给示例猫打疫苗', 'reminders.raw 落库')
+  })
+
   // ===== ADR-029 Round 1：多宠同事件批量 fan-out =====
 
   // 13. 批量正常: pets 多只 → 各存一条同内容, count + ids
