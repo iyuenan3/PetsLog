@@ -117,7 +117,7 @@
 目标 = 三入口卡「语音」占位转正（按住说话 → 转文字 → 落 NL 输入框走现有 parseRecord，后端零改）。一整轮做下来三条路全堵，最终**回退全部代码**（record.vue / manifest / `cloudfunctions/asr` 都还原，git 工作树回到 0.4.10 干净态），教训记此供未来重启：
 - **三路全堵**：
   - ① **微信「同声传译」插件**（`getRecordRecognitionManager`，曾选）：**个人主体小程序加不了** ,插件类目「IT科技 > 软件服务提供商」个人主体无此类目，后台「插件管理」搜「微信同声传译 / 同声传译 / WechatSI / 插件 ID」全无结果（开放社区多帖证）。
-  - ② **微信服务市场「一句话识别」接口能力**（client `wx.serviceMarket.invokeService`）：已购免费档（1000 次 / 月），但调用恒返 `errMsg:"invokeService:ok"` + `data:""` **opaque 空**，requestId 前缀半固定。逐项验尺全排除（外网 curl 验音频确是 16k 单声道 mp3 + URL 公网可下载、`afinfo` 验格式对、URL 编码 / 不编码都试、`SourceType:0`(URL) 与 `SourceType:1`(base64) 都试、`DataLen` 从 0 改真实字节也试）→ 客户端不可定位（服务端吞成空、零错误码）。疑个人主体墙 or 我猜的 `service`/`api`（`wxa8386175898e12c9`/`SentenceASR`，接口能力无显式 service/api）不对。
+  - ② **微信服务市场「一句话识别」接口能力**（client `wx.serviceMarket.invokeService`）：已购免费档（1000 次 / 月），但调用恒返 `errMsg:"invokeService:ok"` + `data:""` **opaque 空**，requestId 前缀半固定。逐项验尺全排除（外网 curl 验音频确是 16k 单声道 mp3 + URL 公网可下载、`afinfo` 验格式对、URL 编码 / 不编码都试、`SourceType:0`(URL) 与 `SourceType:1`(base64) 都试、`DataLen` 从 0 改真实字节也试）→ 客户端不可定位（服务端吞成空、零错误码）。疑个人主体墙 or 我从博客猜的 `service`/`api`（接口能力文档无显式 service/api，真值我没查到）不对。
   - ③ **腾讯云直连 ASR**（云函数 + `tencentcloud-sdk-nodejs-asr` + SecretId/Key）：**搭通到「只差开通」** ,本地冒烟（真机那段录音 base64 + SDK `SentenceRecognition`）一把拿到真实错误 `FailedOperation.UserNotRegistered / User is unopened [biz:ASR_OneSentence]` = 腾讯云一句话识别产品**未开通**；而开通要付费（无免费额度，虽单价极低约 ¥0.002 / 次）→ 用户选暂缓。
 - **教训**：
   - **个人主体在微信插件 / 服务市场这套上反复撞墙**（插件按类目加不了、接口能力 opaque 返空），做依赖微信生态第三方能力的功能前**先验「个人主体能不能用」**（同 cropImage / showModal 那类先验尺）。
