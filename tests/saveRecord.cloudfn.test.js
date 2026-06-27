@@ -262,6 +262,17 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(m && m.raw === '买了盒海乐妙2支明年3月过期', 'meds.raw 落库')
   })
 
+  // 12b-2. med_stock 落 type（ADR-035）：显式给 + 缺省默认用药
+  await run('med_stock: 落库带 type（缺省默认用药）', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u', [])
+    const r1 = await fn.main({ family_id: 'F1', record: { kind: 'med_stock', med_name: '海乐妙', med_effect: '驱虫', med_type: '驱虫' } })
+    assert(r1.ok === true && (DB_INST.data.meds || [])[0].type === '驱虫', 'med_type 落库')
+    const r2 = await fn.main({ family_id: 'F1', record: { kind: 'med_stock', med_name: '消炎药' } })
+    assert(r2.ok === true && (DB_INST.data.meds || [])[1].type === '用药', '缺 med_type 默认用药')
+    const r3 = await fn.main({ family_id: 'F1', record: { kind: 'med_stock', med_name: 'x', med_type: '乱填' } })
+    assert(r3.ok === true && (DB_INST.data.meds || [])[2].type === '用药', '非法 med_type 钳用药')
+  })
+
   // 12c. reminder 落库带 raw 原话
   await run('reminder: 落库带 raw 原话', async () => {
     CUR_OPENID = 'u'; seed('F1', 'u', ['示例猫'])

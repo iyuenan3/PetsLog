@@ -48,7 +48,7 @@ import { syncTab } from '@/tabSync'
 
 export default {
   data() {
-    return { profile: { nickname: '', avatar: '' }, fam: null, version: '0.4.12' }
+    return { profile: { nickname: '', avatar: '' }, fam: null, version: '0.4.13' }
   },
   onShow() {
     syncTab(this, 3)

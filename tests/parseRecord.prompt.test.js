@@ -104,5 +104,18 @@ run('多事件: kind=multi 规则在 SYSTEM + 一条 multi few-shot（两条不�
   }
 })
 
+// ADR-035：药品类型 med_type
+run('药品类型: med_type 字段说明在 SYSTEM + med_stock few-shot 含 med_type', () => {
+  assert(SYSTEM.includes('med_type'), 'SYSTEM 应有 med_type 字段说明')
+  assert(SYSTEM.includes('药品类型：用药 | 疫苗 | 驱虫 | 养护 | 其它'), 'med_type 应列出 5 类枚举')
+  const m = buildMessages('x', [], [], '2026-01-01')
+  const stockEx = m.find((msg) => msg.role === 'assistant' && /"kind"\s*:\s*"med_stock"/.test(msg.content))
+  assert(!!stockEx, '应有一条 kind=med_stock 的 few-shot')
+  if (stockEx) {
+    const o = JSON.parse(stockEx.content)
+    assert(o.med_type === '驱虫', 'med_stock few-shot（囤驱虫药）med_type 应为驱虫')
+  }
+})
+
 console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
 process.exit(fail ? 1 : 0)

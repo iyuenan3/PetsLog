@@ -74,6 +74,11 @@
           <view class="sheet__fields">
             <view class="field-row"><text class="field-row__label">药品</text><input class="field-row__input" v-model="parsed.med_name" placeholder="药品名" placeholder-class="ph" /></view>
             <view class="field-row"><text class="field-row__label">功效</text><input class="field-row__input" v-model="parsed.med_effect" placeholder="选填" placeholder-class="ph" /></view>
+            <view class="field-row"><text class="field-row__label">类型</text>
+              <picker class="field-row__pick" mode="selector" :range="medTypes" :value="medTypeIdx" @change="onPickMedType($event)">
+                <view class="pickbox"><text class="pickbox__v">{{ parsed.med_type || '用药' }}</text><text class="pickbox__c">▾</text></view>
+              </picker>
+            </view>
             <view class="field-row"><text class="field-row__label">数量</text><input class="field-row__input" type="number" v-model="parsed.med_quantity" placeholder="1" placeholder-class="ph" /></view>
             <view class="field-row"><text class="field-row__label">过期</text>
               <picker class="field-row__pick" mode="date" :value="parsed.med_expire || today()" @change="onPickDate('med_expire', $event)">
@@ -292,6 +297,12 @@ export default {
       const cur = this.parsed && this.parsed.rem_type
       return cur && !base.includes(cur) ? [...base, cur] : base
     },
+    // 药品类型候选（ADR-035）：固定 5 值（药品库存不绑宠物 / 物种，非物种感知）；并入当前值防错配。
+    medTypes() {
+      const base = ['用药', '疫苗', '驱虫', '养护', '其它']
+      const cur = this.parsed && this.parsed.med_type
+      return cur && !base.includes(cur) ? [...base, cur] : base
+    },
     // 养护参数输入字段（ADR-024）：仅 event_type=养护 且该物种有结构化参数（爬宠 / 鱼）时非空。
     // 批量态隐藏（ADR-029）：批量不落 params（物种特定、可能跨物种），不显输入行免用户填了被静默丢。
     husbandryFields() {
@@ -314,6 +325,10 @@ export default {
     remTypeIdx() {
       const i = this.remTypes.indexOf(this.parsed && this.parsed.rem_type)
       return i < 0 ? this.remTypes.length - 1 : i
+    },
+    medTypeIdx() {
+      const i = this.medTypes.indexOf(this.parsed && this.parsed.med_type)
+      return i < 0 ? 0 : i // 默认落「用药」（枚举首位），非提醒的末位「其它」
     },
     repeatLabels() {
       return this.REPEAT_OPTS.map((o) => o.label)
@@ -541,7 +556,7 @@ export default {
         time: this.nowDateTime(), event_type: '其它', weight: null, med: '', hospital: '', cost: null, tag: '', desc: '', raw: '',
         params: {}, // 养护参数（ADR-024），event_type=养护 时按物种填
         rem_type: '其它', rem_title: '', rem_date: '', rem_repeat_days: 0,
-        med_name: '', med_effect: '', med_quantity: 1, med_expire: '',
+        med_name: '', med_effect: '', med_type: '用药', med_quantity: 1, med_expire: '',
       }
     },
     async openManual() {
@@ -596,6 +611,10 @@ export default {
       const v = this.remTypes[Number(e.detail.value)]
       if (v && this.parsed) this.parsed.rem_type = v
     },
+    onPickMedType(e) {
+      const v = this.medTypes[Number(e.detail.value)]
+      if (v && this.parsed) this.parsed.med_type = v
+    },
     onPickRepeat(e) {
       const o = this.REPEAT_OPTS[Number(e.detail.value)]
       if (o && this.parsed) this.parsed.rem_repeat_days = o.days
@@ -614,7 +633,7 @@ export default {
         pet_unknown: !!p.pet_unknown, species: p.species || 'other', raw: p.raw || '', // 物种透传（ADR-023，saveRecord normSpecies 白名单校验）
       }
       if (p.kind === 'med_stock') {
-        return { ...base, med_name: (p.med_name || '').trim(), med_effect: (p.med_effect || '').trim(), med_quantity: this.numOrNull(p.med_quantity) || 1, med_expire: p.med_expire || '' }
+        return { ...base, med_name: (p.med_name || '').trim(), med_effect: (p.med_effect || '').trim(), med_type: p.med_type || '用药', med_quantity: this.numOrNull(p.med_quantity) || 1, med_expire: p.med_expire || '' }
       }
       if (p.kind === 'reminder') {
         return { ...base, rem_type: p.rem_type || '其它', rem_title: (p.rem_title || '').trim(), rem_date: p.rem_date || '', rem_repeat_days: this.numOrNull(p.rem_repeat_days) || 0 }

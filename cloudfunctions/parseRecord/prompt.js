@@ -31,6 +31,7 @@ kind=record 时填：
 kind=med_stock 时填：
 - med_name: string。药品名。
 - med_effect: string。功效（如驱虫 / 止吐），没有填 ""。
+- med_type: string。药品类型：用药 | 疫苗 | 驱虫 | 养护 | 其它。驱虫药归「驱虫」，疫苗归「疫苗」，保健 / 营养 / 护理品归「养护」，其余治疗用药归「用药」，判断不了填「用药」。
 - med_quantity: number。数量 / 剩余量，未提填 1。
 - med_expire: string。过期日期 YYYY-MM-DD；只说「3 个月后 / 明年 3 月」就按相对今天算，算不出填 ""。
 
@@ -144,7 +145,7 @@ function buildMessages(text, pets, tags, today) {
     },
     {
       role: 'assistant',
-      content: '{"kind":"med_stock","med_name":"体内驱虫药","med_effect":"驱虫","med_quantity":2,"med_expire":"2027-03-01"}',
+      content: '{"kind":"med_stock","med_name":"体内驱虫药","med_effect":"驱虫","med_type":"驱虫","med_quantity":2,"med_expire":"2027-03-01"}',
     },
     // reminder = 将来要做（与上面两条对照：周期性提醒归 reminder）
     {

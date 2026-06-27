@@ -115,13 +115,18 @@
 
     <!-- ===== 药品 ===== -->
     <block v-else>
+      <!-- 类型筛选（ADR-035）：仅在库出现 ≥2 种类型时显示（单一类型筛选无意义）；动态随在库类型增减，镜像主粮只显在场物种 -->
+      <view v-if="medTypeChips.length > 2" class="med-filter">
+        <text v-for="t in medTypeChips" :key="t" class="med-filter__chip" :class="{ 'med-filter__chip--on': medFilter === t }" hover-class="med-filter__chip--press" hover-stay-time="60" @click="medFilter = t">{{ t }}</text>
+      </view>
       <view v-if="meds.length" class="med-list">
-        <view v-for="(m, i) in meds" :key="m._id" class="med-card rise-in" :style="{ 'animation-delay': Math.min(i, 10) * 36 + 'ms' }">
+        <view v-for="(m, i) in filteredMeds" :key="m._id" class="med-card rise-in" :style="{ 'animation-delay': Math.min(i, 10) * 36 + 'ms' }">
           <view class="med-card__main">
             <view class="med-card__icon"><image class="med-card__icon-img" src="/static/icon/pill.png" mode="aspectFit" /></view>
             <view class="med-card__body">
               <view class="med-card__top">
                 <text class="med-card__name">{{ m.name }}</text>
+                <text class="chip-tag" :class="'chip-tag--' + tagClass(medTypeOf(m))">{{ medTypeOf(m) }}</text>
                 <text v-if="isExpiringSoon(m.expire_date)" class="med-card__badge">临期</text>
               </view>
               <text class="med-card__qty">剩余 {{ m.quantity }}</text>
@@ -155,6 +160,11 @@
           </view>
           <view class="f-row"><text class="f-row__label">药品名</text><input class="f-input" v-model="medSheet.name" placeholder="如 海乐妙" placeholder-class="f-ph" /></view>
           <view class="f-row"><text class="f-row__label">功效</text><input class="f-input" v-model="medSheet.effect" placeholder="如 驱虫，选填" placeholder-class="f-ph" /></view>
+          <view class="f-row"><text class="f-row__label">类型</text>
+            <picker class="f-picker" mode="selector" :range="medEditTypes" :value="medEditTypeIdx" @change="onMedType">
+              <view class="f-input f-pick">{{ medSheet.type || '用药' }}</view>
+            </picker>
+          </view>
           <view class="f-row"><text class="f-row__label">剩余数量</text><input class="f-input" type="number" v-model="medSheet.quantity" placeholder="0" placeholder-class="f-ph" /></view>
           <view class="f-row">
             <text class="f-row__label">过期日</text>
@@ -188,6 +198,7 @@ export default {
       remLoaded: false,
       meds: [],
       medLoaded: false,
+      medFilter: '全部', // 药品类型筛选（ADR-035）：全部 + 在库出现的类型
       medSheet: null, // 编辑中的药品（null = 弹层关闭）
       medSaving: false,
       foods: [],
@@ -201,6 +212,28 @@ export default {
     }
   },
   computed: {
+    // 药品类型筛选 chip（ADR-035）：全部 + 在库出现的类型（按枚举固定序，空类型不显，镜像主粮在场物种）。
+    medTypeChips() {
+      const order = ['用药', '疫苗', '驱虫', '养护', '其它']
+      const present = new Set(this.meds.map((m) => this.medTypeOf(m)))
+      return ['全部', ...order.filter((t) => present.has(t))]
+    },
+    // 按当前筛选过滤药品；medFilter 失效（该类型已被删空 / 陈旧）时回退全部，避免空列表 + 无空状态。
+    filteredMeds() {
+      if (this.medFilter === '全部' || !this.medTypeChips.includes(this.medFilter)) return this.meds
+      return this.meds.filter((m) => this.medTypeOf(m) === this.medFilter)
+    },
+    // 编辑弹层类型 picker 候选：固定 5 值 + 并入当前值（防旧值落 index 0 错配）。
+    medEditTypes() {
+      const base = ['用药', '疫苗', '驱虫', '养护', '其它']
+      const cur = this.medSheet && this.medSheet.type
+      return cur && !base.includes(cur) ? [...base, cur] : base
+    },
+    medEditTypeIdx() {
+      if (!this.medSheet) return 0
+      const i = this.medEditTypes.indexOf(this.medSheet.type)
+      return i < 0 ? 0 : i // 默认「用药」（枚举首位）
+    },
     // 台账按物种分组：只列「家庭已有宠物的物种 ∪ foods 出现的物种」，按 SPECIES 固定序。
     foodGroups() {
       const present = new Set()
@@ -370,6 +403,10 @@ export default {
     },
 
     /* ===== 药品 ===== */
+    // 展示用药品类型（ADR-035）：旧条无 type 默认「用药」（backfill_type 会补稳，前端再兜一层）
+    medTypeOf(m) {
+      return (m && m.type) || '用药'
+    },
     // 临期判定对齐提醒分段的服务端基准日 this.today（loadRem 取回），避免页内双时间源（设备时区/时钟偏差）
     isExpiringSoon(d) {
       if (!d || !this.today) return false
@@ -387,6 +424,8 @@ export default {
           // 按过期日期升序；未填过期的排最后，避免把近效期药品挤下去
           list.sort((a, b) => (a.expire_date || '9999-99-99').localeCompare(b.expire_date || '9999-99-99'))
           this.meds = list
+          // 筛选若指向已不存在的类型（删空 / 数据变化）→ 回退全部，避免空列表无空状态（ADR-035）
+          if (!this.medTypeChips.includes(this.medFilter)) this.medFilter = '全部'
           this.medLoaded = true
         }
       } catch (e) {
@@ -399,6 +438,7 @@ export default {
         _id: m._id,
         name: m.name || '',
         effect: m.effect || '',
+        type: m.type || '用药', // 药品类型（ADR-035）
         quantity: m.quantity === 0 || m.quantity ? String(m.quantity) : '',
         expire_date: m.expire_date || '',
         raw: m.raw || '',
@@ -406,6 +446,9 @@ export default {
     },
     closeMed() {
       this.medSheet = null
+    },
+    onMedType(e) {
+      this.medSheet.type = this.medEditTypes[Number(e.detail.value)]
     },
     onMedExpire(e) {
       this.medSheet.expire_date = e.detail.value
@@ -425,6 +468,7 @@ export default {
         const med = {
           name: m.name.trim(),
           effect: String(m.effect || '').trim(),
+          type: m.type || '用药', // 药品类型（ADR-035）
           expire_date: m.expire_date || '',
         }
         // 数量留空 = 「没动这项」→ 不传，后端 undefined 即保持原值（对齐 meds update 契约）；
@@ -787,6 +831,33 @@ export default {
 .op--secondary { background: var(--c-bg-sink); color: var(--c-text-2); }
 .op--danger { background: var(--c-danger-tint); color: var(--c-danger); }
 .op--press { opacity: 0.6; }
+
+/* ===== 药品类型筛选（ADR-035） ===== */
+.med-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  padding: 16rpx var(--pad-page) 0;
+}
+.med-filter__chip {
+  height: 56rpx;
+  padding: 0 26rpx;
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-pill);
+  background: var(--c-bg-sink);
+  color: var(--c-text-2);
+  font-size: var(--fs-cap);
+  font-weight: 500;
+}
+.med-filter__chip--on {
+  background: var(--c-primary-tint);
+  color: var(--c-primary-deep);
+  font-weight: 600;
+}
+.med-filter__chip--press {
+  opacity: 0.7;
+}
 
 /* ===== 药品列表 ===== */
 .med-list {

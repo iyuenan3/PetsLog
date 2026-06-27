@@ -255,6 +255,10 @@ function fuzzyMatchPet(name, names) {
 const SPECIES_KEYS = ['cat', 'dog', 'rabbit', 'rodent', 'bird', 'reptile', 'fish', 'other']
 const normSpecies = (s) => (SPECIES_KEYS.includes(s) ? s : 'other')
 
+// 药品类型枚举（ADR-035）：与 reminders TYPES / meds / saveRecord 同值；缺 / 非法默认「用药」。
+const MED_TYPES = ['用药', '疫苗', '驱虫', '养护', '其它']
+const normMedType = (t) => (MED_TYPES.includes(t) ? t : '用药')
+
 // 单条 record 的字段归一（ADR-030：单条 record 与 multi 子记录共用，防字段形状漂移）。
 function normalizeRecordFields(o, today) {
   return {
@@ -294,6 +298,7 @@ function normalize(o, raw, today) {
     new_pet: o.new_pet === true, // 显式新增宠物意图（ADR-015），缺省 false
     med_name: o.med_name || '',
     med_effect: o.med_effect || '',
+    med_type: normMedType(o.med_type), // 药品类型（ADR-035）；白名单须显式加，否则字段被丢传不到前端
     med_quantity: typeof o.med_quantity === 'number' ? o.med_quantity : Number(o.med_quantity) || 1,
     med_expire: normalizeDate(o.med_expire, ''),
     // 提醒字段
@@ -347,3 +352,9 @@ function todayStr() {
   const z = (n) => String(n).padStart(2, '0')
   return `${d.getUTCFullYear()}-${z(d.getUTCMonth() + 1)}-${z(d.getUTCDate())}`
 }
+
+// 导出内部纯函数供单测（ADR-035：normalize 白名单 med_type 透传是 ADR-020 已知失效面，须有回归网兜住）。
+// 云端只调 exports.main，多出的命名导出对运行时无副作用。
+exports.normalize = normalize
+exports.normMedType = normMedType
+exports.normalizeRecordFields = normalizeRecordFields

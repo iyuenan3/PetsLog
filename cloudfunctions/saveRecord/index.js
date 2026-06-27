@@ -3,6 +3,11 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
+// 药品类型枚举（ADR-035）：与 reminders TYPES / meds 同值（云函数目录隔离，三处同步改）。
+// 缺 / 非法默认「用药」（药品库存默认就是药）。
+const MED_TYPES = ['用药', '疫苗', '驱虫', '养护', '其它']
+const normMedType = (t) => (MED_TYPES.includes(t) ? t : '用药')
+
 // 体重趋势冗余点上限（ADR-025 方案 b）：pets.weight_spark 存近 N 个体重，供首页轮播卡 sparkline（轮播只读 pets/list、无记录历史）。
 const WSPARK_MAX = 12
 // 重算某宠近期体重序列写进 pets.weight_spark（旧→新，≤WSPARK_MAX）。派生数据，失败不阻断主流程。
@@ -322,6 +327,7 @@ exports.main = async (event) => {
         family_id: familyId,
         name,
         effect: r.med_effect || '',
+        type: normMedType(r.med_type), // 药品类型（ADR-035），缺 / 非法默认「用药」
         quantity: typeof r.med_quantity === 'number' ? r.med_quantity : Number(r.med_quantity) || 1,
         expire_date: normalizeDate(r.med_expire, ''),
         raw: r.raw || '', // 当时原话 provenance（用户决策：任何原话都落库，不止时间线 records）

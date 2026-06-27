@@ -184,6 +184,85 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(r.data[0].name === 'B' && r.data[1].name === 'A', '按 expire 升序')
   })
 
+  // ===== ADR-035 药品类型 =====
+  // 14. add：落 type（显式给）
+  await run('type: add 落库带 type', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', 'uA')
+    const r = await fn.main({ family_id: 'F1', action: 'add', med: { name: '海乐妙', effect: '驱虫', type: '驱虫' } })
+    assert(r.ok === true, 'add 成功')
+    assert(medsOf('F1')[0].type === '驱虫', 'type 落库')
+  })
+
+  // 15. add：缺 type 默认「用药」（药品库存默认就是药，非提醒兜底「其它」）
+  await run('type: add 缺 type 默认用药', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', 'uA')
+    const r = await fn.main({ family_id: 'F1', action: 'add', med: { name: '消炎药' } })
+    assert(r.ok === true && medsOf('F1')[0].type === '用药', '缺 type 默认用药')
+  })
+
+  // 16. add：非法 type 钳到「用药」
+  await run('type: add 非法 type 钳用药', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', 'uA')
+    const r = await fn.main({ family_id: 'F1', action: 'add', med: { name: 'x', type: '乱填' } })
+    assert(r.ok === true && medsOf('F1')[0].type === '用药', '非法 type 归用药')
+  })
+
+  // 17. update：改 type（钳枚举），其余不动
+  await run('type: update 改 type', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', 'uA')
+    const id = seedMed('F1', { name: '海乐妙', type: '用药', effect: '驱虫' })
+    const r = await fn.main({ family_id: 'F1', action: 'update', id, med: { type: '驱虫' } })
+    assert(r.ok === true && medsOf('F1')[0].type === '驱虫', 'type 改成驱虫')
+    assert(medsOf('F1')[0].name === '海乐妙', '未传字段不动')
+  })
+
+  // 18. update：非法 type 钳用药
+  await run('type: update 非法 type 钳用药', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', 'uA')
+    const id = seedMed('F1', { type: '驱虫' })
+    const r = await fn.main({ family_id: 'F1', action: 'update', id, med: { type: 'xxx' } })
+    assert(r.ok === true && medsOf('F1')[0].type === '用药', '非法 type 归用药')
+  })
+
+  // 19. backfill_type：按 effect 关键词推断、仅补无 type 的行、家庭隔离
+  // 注：seedMed 默认不写 type，故这些行天然无 type（除显式传 type 的「已分类」）
+  await run('type: backfill_type 按 effect 推断 + 仅补缺 + 隔离', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', 'uA'); seedFamily('F2', 'uB')
+    const idDeworm = seedMed('F1', { name: '海乐妙', effect: '体外驱虫' })
+    const idVac = seedMed('F1', { name: '疫苗A', effect: '猫三联疫苗' })
+    const idCare = seedMed('F1', { name: '益生菌', effect: '肠道保健' })
+    const idOther = seedMed('F1', { name: '消炎药', effect: '消炎' })
+    const idHasType = seedMed('F1', { name: '已分类', effect: '驱虫', type: '其它' }) // 已有合法 type → 不动
+    const idF2 = seedMed('F2', { name: '他家', effect: '驱虫' })
+    const r = await fn.main({ family_id: 'F1', action: 'backfill_type' })
+    assert(r.ok === true && r.changed === 4, '只补本家 4 条无 type（已分类的不动）')
+    const byId = (id) => DB_INST.data.meds.find((m) => m._id === id)
+    assert(byId(idDeworm).type === '驱虫', '驱虫关键词→驱虫')
+    assert(byId(idVac).type === '疫苗', '疫苗关键词→疫苗')
+    assert(byId(idCare).type === '养护', '保健关键词→养护')
+    assert(byId(idOther).type === '用药', '无关键词→用药')
+    assert(byId(idHasType).type === '其它', '已有合法 type 不被覆盖（幂等）')
+    assert(byId(idF2).type === undefined, '他家未被回填（隔离）')
+  })
+
+  // 20. backfill_type：幂等（再跑一次零改动）
+  await run('type: backfill_type 幂等', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', 'uA')
+    seedMed('F1', { effect: '驱虫' })
+    await fn.main({ family_id: 'F1', action: 'backfill_type' })
+    const r2 = await fn.main({ family_id: 'F1', action: 'backfill_type' })
+    assert(r2.ok === true && r2.changed === 0, '二次回填零改动（已有 type）')
+  })
+
+  // 21. backfill_type：非 admin 拒（维护动作收敛管理员，对齐 backfill_foods）
+  await run('type: backfill_type 非 admin 拒 NOT_ADMIN', async () => {
+    CUR_OPENID = 'uM'; seedFamily('F1', 'uM', 'member')
+    const id = seedMed('F1', { effect: '驱虫' })
+    const r = await fn.main({ family_id: 'F1', action: 'backfill_type' })
+    assert(r.ok === false && r.msg === 'NOT_ADMIN', '非 admin 应拒')
+    assert(DB_INST.data.meds.find((m) => m._id === id).type === undefined, '拒后零改动（未回填）')
+  })
+
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
 })()
