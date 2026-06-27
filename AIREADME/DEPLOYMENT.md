@@ -9,6 +9,11 @@
 - 微信读各函数 package.json 在云端装 `wx-server-sdk`。构建产物**不带 node_modules**（vite 插件 cpSync filter 掉，否则数百 MB / 数万文件拖垮 DevTools 监视致不停刷新，详见 MEMORY）。
 - **集合自动创建**：parseRecord 幂等 `db.createCollection`（pets / records / meds / parse_log / reminders），无需手建。
 - **LLM 机密**：`cloudfunctions/parseRecord/config.local.js`（gitignore 排除，随云函数上传到私有云端），唯一机密 = `ARK_API_KEY`（火山方舟），不入库。云函数控制台环境变量同名项优先。
+- **⚠️ 云存储自定义安全规则（控制台配置、不进版本库，迁环境必重设，ADR-034）**：默认「仅创建者可读写」会让家庭成员**读不到对方上传的头像**（跨用户读失败显默认）。须升付费版后（¥19.9/月，免费版改不了权限）在 **控制台 → 存储 → 权限设置 → 自定义安全规则** 贴入按路径分级规则，`avatars/`（宠物 + 成员头像）全员可读、其余（`att/` 病历附件医疗隐私）仅创建者：
+  ```json
+  { "read": "/^avatars\\//.test(resource.path) || resource.openid == auth.openid", "write": "resource.openid == auth.openid" }
+  ```
+  读规则对已有文件即时生效；云函数 admin 删旧头像 / 附件不受 write 限制。**迁新环境务必重贴此规则**，否则头像跨用户回归。
 
 ## 计划形态
 - **后端 = 微信云开发环境**（Serverless）：无独立主机、无服务器、无域名、无 ICP 备案、无 SSL。云函数 + 云数据库 + 云存储托管在微信生态内，按量计费（自用 + 小圈子量级预计在免费额度内）。

@@ -3,7 +3,17 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
-## 体验版 0.4.11 · 头像「跨用户没同步」真因＝没保存 + 编辑态未保存离开拦截 · 2026-06-27（ADR-032，**已 commit 6d44794 · versionCode 15 · 体验版待 GUI 上传 · 待真机验**）
+## 体验版 0.4.12 · 家庭数据同步加固：共享档案乐观并发 + 家庭管理并发去重 + 头像 ACL 分级 + profile 离开拦截 · 2026-06-27（ADR-033/034，**feat eb906ef · 已部署 pets/foods/family · versionCode 16 · 待 GUI 上传 · 待真机验**）
+- Context: 真机反馈「同家庭 A 改宠物头像 B 看不到」→ live DB 验尺定根因 = 云存储「仅创建者可读写」ACL（跨用户读不到他人上传文件）；用户进一步提「家庭成员都可编辑、一人改后要同步、是否要编辑锁」→ 起家庭管理 + 数据同步全面 review（34-agent，**0 must-fix 隔离红线扎实**）。
+- Fixed（头像跨用户，ADR-034）: 升 ¥19.9/月付费版后用云存储**自定义安全规则按路径分级**：`avatars/`（宠物 + 成员头像）全员可读、`att/`（病历附件）仅创建者（医疗隐私不放开）。读规则对已有文件即时生效、零代码 / 零重传。规则记入 `AIREADME/DEPLOYMENT`。
+- Changed（共享档案乐观并发，ADR-033）: 否编辑锁，pets/foods 编辑加「只发改动字段 + `base_updated_at` 版本校验（CONFLICT 提示刷新重编）+ onShow 同步」。foods 另加 `current` 排他**翻转守卫**（`effCurrent` 驱动，防改作用域不动开关时 diff 省 current 致双 current）+ setCurrent 防抖。
+- Changed（家庭管理并发，ADR-034）: `joinByCode` add 后去重（防双击 / 弱网写两条成员行 → 孤儿家庭）+ `leave` 改 distinct openid 计数 + `listMine` 去重。
+- Added（profile 离开拦截，ADR-034）: 个人头像 / 昵称 port ADR-032 离开拦截（选了没保存就退会拦 + 清孤儿头像），修「成员显默认家人」活跃根因。
+- 数据治理（ADR-034）: 删 3 条缺 `_openid` 历史脏 users 档（dryRun + 备份 + 守卫，无现役成员唯一档）。
+- 验证: foods 57→65 / pets 27→35 / isolation.e2e 64→67（均含**变异验证**：剥 CONFLICT/effCurrent/distinct 转红）+ 全 12 套 606 断言绿 + build 零错。两轮评审（家庭全面 review 34-agent 0 must-fix + verify-the-fix 10-agent：family/profile **solid**、foods 抓 1 回归已修）。版本 0.4.11→**0.4.12** / versionCode 15→16。
+- 待: 真机验（A 改头像 B 看到 / 附件仍隔离 / 并发编辑 CONFLICT 提示 / 邀请并发去重 / profile 离开拦截）+ 体验版 0.4.12 GUI 上传。
+
+## 体验版 0.4.11 · 头像「跨用户没同步」真因＝没保存 + 编辑态未保存离开拦截 · 2026-06-27（ADR-032，**已 commit 6d44794 · 体验版已上传 · 真机暴露独立的 ACL 跨用户读问题 → 见 0.4.12**）
 - Context: 内测反馈「同一家庭 B 改了宠物头像、A 那边看不到」，疑似跨用户同步 bug。
 - Root cause（live DB 验尺）: 直连查 `pets.avatar`，全库当天零 `pets.update` 写入 → B 的修改从没落库，B 看到的是本地乐观态（`applyAvatar` 即时显示 `avatarLocal`/`form.avatar`），A 直读 DB 是旧值。**非同步 bug，是 B 没成功保存**（`save()` 的「已保存」toast 只在 update 返 ok 弹、update 必写 `updated_at`，DB 零写入即可反推 B 从没看到过真保存，无需追问用户记不记得点）。与 0.4.10（ADR-031）同根，B 已在 0.4.10 固定保存栏仍复发 → 即时预览伪装成已存，须从离开侧收口。
 - Changed: `pet.vue` 加「编辑态有未保存改动 → 离开前确认」（`wx.enableAlertBeforeUnload`，拦顶部返回 / 左滑手势 / 安卓实体键 / 编程式 navigateBack；mp-weixin 的 `onBackPress` 不拦原生返回故走官方 API）。dirty ＝ form 偏离进入时 JSON 快照 **或** 头像上传中（`uploadingAvatar` 并入，堵照片换照片的上传窗口 form 滞后漏拦）；save / 取消 / 删除 / 卸载全撤拦截；建档取消清 `form.avatar` 防 onUnload 二次删孤儿。
