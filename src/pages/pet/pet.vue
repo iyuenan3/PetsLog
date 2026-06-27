@@ -204,6 +204,7 @@ export default {
       form: {},
       avatarLocal: '', // 刚选裁剪的本地图路径，仅供编辑态即时预览（本地路径必渲染，绕开 cloud:// 即传即显窗口的 CDN 未就绪空白）；保存用 form.avatar(fileID)
       uploadingAvatar: false, // 头像上传 in-flight 标志：上传期间挡住保存（avatarLocal 已显新图但 form.avatar 尚未就位，防存旧/空头像）
+      editBaseline: '', // 进编辑态时 form 的快照（JSON）；与当前 form 不等即「有未保存改动」→ 开离开拦截（防改了不保存就退出丢数据，如改头像不点保存）
 
       // 给兽医的小结
       exporting: false,
@@ -242,6 +243,7 @@ export default {
         avatar_emoji: '',
       }
       this.editing = true
+      this.snapshotForm()
       uni.setNavigationBarTitle({ title: '添加宠物' })
       return
     }
@@ -253,6 +255,9 @@ export default {
       clearTimeout(this._priceTimer)
       this._priceTimer = null
     }
+    // 用户在「离开前确认」里选了离开 → 页面卸载：撤拦截，并清掉编辑中途上传未落库的头像（避免云存储孤儿）
+    this.toggleLeaveGuard(false)
+    if (this.editing) this.discardTempAvatar()
   },
   computed: {
     // 当前身价 = 初始身价 + 累计花费（派生，不落库，见 ADR-014）
@@ -281,11 +286,21 @@ export default {
     overlayOpen() {
       return !!this.cardImg || !!this.vetImg
     },
+    // 编辑态且（头像上传中 或 form ≠ 进入时快照）= 有未保存改动 → 触发离开前拦截（覆盖头像及任意字段）。
+    // uploadingAvatar 并入：照片换照片的 in-flight 窗口里 form.avatar 仍是旧 fileID（要等上传 resolve 才更新），
+    // 此时 avatarLocal 已显新图却 form===baseline，不并入会漏拦（恰是「改了头像没存就退」本场景）。上传成功后 form 已 differ 保持武装、失败回滚 baseline 自动撤。
+    leaveGuardOn() {
+      return this.editing && this.editBaseline !== '' && (this.uploadingAvatar || JSON.stringify(this.form) !== this.editBaseline)
+    },
   },
   watch: {
     // 浮层关闭后体重曲线 canvas 重新挂载（v-if 销毁过节点），需重绘否则空白
     overlayOpen(open) {
       if (!open) this.$nextTick(() => this.layoutAndDraw())
+    },
+    // 有未保存改动 ↔ 无 的切换：开 / 关微信「离开前确认」（改完头像不点保存就返回会丢，A 看不到 B 的新头像即此根因）
+    leaveGuardOn(on) {
+      this.toggleLeaveGuard(on)
     },
   },
   methods: {
@@ -646,6 +661,22 @@ export default {
       // 带日防同月多点标签重复："2025-08-05" → "25/08/05"
       return d ? String(d).slice(2, 10).replace(/-/g, '/') : ''
     },
+    // 进编辑态时给 form 拍快照，作为「有无未保存改动」的基准（leaveGuardOn 据此判断）
+    snapshotForm() {
+      this.editBaseline = JSON.stringify(this.form)
+    },
+    // 开 / 关微信「离开当前页面前确认」：编辑态有未保存改动时开，保存 / 取消 / 卸载时关。
+    // mp-weixin 的 onBackPress 不拦原生返回，故用官方 enableAlertBeforeUnload（拦顶部返回 + 左滑手势 + 安卓实体键）。
+    toggleLeaveGuard(on) {
+      // #ifdef MP-WEIXIN
+      if (typeof wx === 'undefined') return
+      if (on) {
+        if (typeof wx.enableAlertBeforeUnload === 'function') wx.enableAlertBeforeUnload({ message: '有未保存的修改，确定离开吗？' })
+      } else if (typeof wx.disableAlertBeforeUnload === 'function') {
+        wx.disableAlertBeforeUnload()
+      }
+      // #endif
+    },
     startEdit() {
       const p = this.pet
       this.form = {
@@ -666,6 +697,7 @@ export default {
       }
       this.avatarLocal = '' // 进编辑态清掉上次会话的本地预览残留
       this.editing = true
+      this.snapshotForm()
     },
     // 丢弃本编辑会话新传未落库的头像文件（头像是即选即传，ADR-011「取消不留孤儿」要求显式清理）。
     // 只删「≠ 库内已存 avatar」的，绝不动已落库文件。
@@ -679,10 +711,13 @@ export default {
       // #endif
     },
     cancelEdit() {
+      this.toggleLeaveGuard(false) // 主动取消 = 用户已决定丢弃，先撤拦截避免随后 navigateBack 再弹一次
+      this.editBaseline = ''
       this.discardTempAvatar()
       this.avatarLocal = ''
       // 创建模式取消 = 放弃建档返回上一页
       if (this.creating) {
+        this.form.avatar = '' // 临时头像上面已 discardTempAvatar 删除：清空引用，避免 onUnload（creating 提前 return、editing 残留 true）对同一 fileID 再删一次
         uni.navigateBack({ delta: 1 })
         return
       }
@@ -799,6 +834,7 @@ export default {
             uni.setNavigationBarTitle({ title: pet.name })
           }
           this.editing = false
+          this.editBaseline = '' // 已落库，撤离开拦截（leaveGuardOn 转 false）
           this.avatarLocal = '' // 已落库，回退到 fileID 渲染（header / 详情走 pet.avatar）
           this.load()
         } else {
@@ -820,6 +856,8 @@ export default {
           try {
             const res = await callFn('pets', { action: 'delete', id: this.id })
             if (res.result && res.result.ok) {
+              this.toggleLeaveGuard(false) // 删除即离开：撤拦截，避免随后 navigateBack 二次弹「未保存改动」（对刚删掉的宠物再问放弃改动自相矛盾，留下还会卡僵尸详情页）
+              this.editBaseline = ''
               uni.showToast({ title: '已删除', icon: 'success' })
               setTimeout(() => uni.navigateBack(), 600)
             } else {
