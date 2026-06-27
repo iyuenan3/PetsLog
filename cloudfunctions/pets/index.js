@@ -91,6 +91,15 @@ exports.main = async (event) => {
     const cur = await db.collection('pets').doc(id).get().catch(() => null)
     if (!cur || !cur.data || cur.data.family_id !== familyId) return { ok: false, msg: 'not found' }
 
+    // 乐观并发（ADR-033）：编辑时前端带进编辑那刻的 updated_at，落库前比对；期间被家人改过即拒，前端刷新重编。
+    // 向后兼容：不带 base_updated_at 的调用（saveRecord 体重回写 / importNotion / 旧端）跳过校验，行为不变。
+    // 【不变量】updated_at 只有本 update action 会 bump；saveRecord 的体重回写（latest_weight / weight_spark）直写 pets、
+    // 不设 updated_at（已核 saveRecord/index.js:20,168），所以 updated_at 实为「档案编辑版本号」、后台系统写不会让用户编辑误撞 CONFLICT。
+    // 若以后给体重回写等系统写加上 updated_at，会破坏此前提（用户编辑期间被记体重就误冲突），改动时务必一并评估。
+    if (event.base_updated_at != null && cur.data.updated_at != null && cur.data.updated_at !== event.base_updated_at) {
+      return { ok: false, code: 'CONFLICT', msg: '这只档案刚被家人修改过' }
+    }
+
     const patch = {}
     for (const k of EDITABLE) {
       if (!(k in p)) continue

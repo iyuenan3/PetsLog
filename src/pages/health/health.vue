@@ -194,6 +194,9 @@ export default {
       foodLoaded: false,
       foodSheet: null, // 编辑中的主粮（null = 弹层关闭）
       foodSaving: false,
+      foodBase: '', // openFoodEdit 那刻的 8 字段快照（JSON）；编辑保存只发改动字段（ADR-033 推广到 foods）
+      foodBaseVersion: 0, // 那刻的 updated_at；保存回传做乐观并发校验（期间被家人改过则拒）
+      settingCurrent: false, // setCurrent 在途防抖（防双击并发设在喂）
       pets: [], // 家庭宠物（供主粮分组 + 弹层「喂给谁」候选）
     }
   },
@@ -513,6 +516,18 @@ export default {
         current: !!f.current,
         note: f.note || '',
       }
+      // 乐观并发 ADR-033：记进编辑那刻的版本 + 8 字段快照（与 saveFood 的 full 同构），保存时 diff 只发改动字段
+      this.foodBaseVersion = f.updated_at || 0
+      this.foodBase = JSON.stringify({
+        species: f.species || 'cat',
+        pet: f.pet || '',
+        brand: String(f.brand || '').trim(),
+        model: String(f.model || '').trim(),
+        start_date: f.start_date || '',
+        end_date: f.end_date || '',
+        current: !!f.current,
+        note: f.note || '',
+      })
     },
     closeFood() {
       this.foodSheet = null
@@ -552,7 +567,7 @@ export default {
       }
       this.foodSaving = true
       try {
-        const food = {
+        const full = {
           species: f.species,
           pet: f.pet || '',
           brand: f.brand.trim(),
@@ -562,13 +577,30 @@ export default {
           current: f.current,
           note: f.note,
         }
-        const res = f._id
-          ? await callFn('foods', { action: 'update', id: f._id, food })
-          : await callFn('foods', { action: 'add', food })
+        let res
+        if (!f._id) {
+          res = await callFn('foods', { action: 'add', food: full }) // 建档发全量
+        } else {
+          // 编辑（ADR-033 推广）：只发改动字段（current 没改就不触发后端排他重放；不同字段并发各写各的）+ base_updated_at 版本校验
+          const base = this.foodBase ? JSON.parse(this.foodBase) : {}
+          const food = {}
+          for (const k in full) if (JSON.stringify(full[k]) !== JSON.stringify(base[k])) food[k] = full[k]
+          if (!Object.keys(food).length) {
+            uni.showToast({ title: '未改动', icon: 'none' })
+            this.foodSheet = null
+            return
+          }
+          res = await callFn('foods', { action: 'update', id: f._id, food, base_updated_at: this.foodBaseVersion })
+        }
         if (res.result && res.result.ok) {
           uni.showToast({ title: '已保存', icon: 'success' })
           this.foodSheet = null
           this.loadFood()
+        } else if (res.result && res.result.code === 'CONFLICT') {
+          // 乐观并发冲突：编辑期间家人改过这条主粮 → 刷新最新、关弹层、提示重编（本次改动未落库）
+          this.foodSheet = null
+          this.loadFood()
+          uni.showModal({ title: '主粮已被家人更新', content: '这条主粮刚被家人改过，已为你刷新到最新版本，请重新编辑后保存。', showCancel: false })
         } else {
           uni.showToast({ title: (res.result && res.result.msg) || '保存失败', icon: 'none' })
         }
@@ -579,14 +611,21 @@ export default {
       }
     },
     async setCurrent(f) {
+      if (this.settingCurrent) return // 防双击并发设在喂（评审：setCurrent 原无防抖守卫）
+      this.settingCurrent = true
       try {
+        // 快捷设在喂：不带 base_updated_at（系统写、跳版本校验）；只发 current:true，后端排他清理
         const res = await callFn('foods', { action: 'update', id: f._id, food: { current: true } })
         if (res.result && res.result.ok) {
           uni.showToast({ title: '已设为在喂', icon: 'success' })
           this.loadFood()
+        } else {
+          uni.showToast({ title: (res.result && res.result.msg) || '操作失败', icon: 'none' })
         }
       } catch (e) {
         uni.showToast({ title: '操作失败', icon: 'none' })
+      } finally {
+        this.settingCurrent = false
       }
     },
     removeFood(f) {

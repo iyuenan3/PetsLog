@@ -286,6 +286,36 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(l.ok === true && l.data.length === 1 && l.data[0].brand === '本家粮', '只返回本家庭 foods')
   })
 
+  // 乐观并发（ADR-033 推广到 foods）：匹配 base 过 / stale base 拒不落库 / 无 base（setCurrent/旧端）兼容
+  await run('乐观并发: 匹配 base 过 / stale 拒不落库 / 无 base 兼容', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', 'uA')
+    const a = await fn.main({ family_id: 'F1', action: 'add', food: { species: 'cat', brand: '皇家' } })
+    const get = () => foodsOf('F1').find((f) => f._id === a.id)
+    const v1 = get().updated_at
+    const ok = await fn.main({ family_id: 'F1', action: 'update', id: a.id, food: { note: 'x' }, base_updated_at: v1 })
+    assert(ok.ok === true && get().note === 'x', '匹配 base 落库')
+    const conf = await fn.main({ family_id: 'F1', action: 'update', id: a.id, food: { note: 'y' }, base_updated_at: get().updated_at - 99999 })
+    assert(conf.ok === false && conf.code === 'CONFLICT', 'stale base 返 CONFLICT')
+    assert(get().note === 'x', 'CONFLICT 不落库（note 仍 x）')
+    const compat = await fn.main({ family_id: 'F1', action: 'update', id: a.id, food: { note: 'z' } })
+    assert(compat.ok === true && get().note === 'z', '不带 base 向后兼容（setCurrent 走此路）')
+  })
+
+  // 翻转守卫：current 仍 true 但作用域(pet)变了 → 必须在新作用域重放排他清理（清掉新作用域原在喂）
+  await run('翻转守卫: 改作用域仍在喂 → 新作用域重放排他', async () => {
+    CUR_OPENID = 'uA'; seedFamily('F1', 'uA')
+    const x = await fn.main({ family_id: 'F1', action: 'add', food: { species: 'cat', pet: '', brand: '默认猫粮', current: true } })
+    const w = await fn.main({ family_id: 'F1', action: 'add', food: { species: 'cat', pet: '示例猫', brand: '处方粮', current: true } })
+    assert(foodsOf('F1').filter((f) => f.current).length === 2, '默认/单宠不同作用域两条都在喂')
+    const get = (id) => foodsOf('F1').find((f) => f._id === id)
+    // 真实前端 diff：只改「喂给谁」、不动在喂开关 → current 未变被省略，payload 仅 {pet}（不含 current）。
+    // 排他必须由 effCurrent 驱动才会触发（若回退成只看 'current' in f → 此 payload 跳过排他 → W 不被清 → 转红，证非假绿）。
+    const r = await fn.main({ family_id: 'F1', action: 'update', id: x.id, food: { pet: '示例猫' }, base_updated_at: get(x.id).updated_at })
+    assert(r.ok === true, '改作用域成功')
+    assert(get(x.id).current === true && get(x.id).pet === '示例猫', 'X 进新作用域仍在喂（current 未动）')
+    assert(get(w.id).current === false, 'W（同新作用域）被排他清掉（effCurrent 驱动，不依赖 payload 带 current）')
+  })
+
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
 })()

@@ -205,6 +205,7 @@ export default {
       avatarLocal: '', // 刚选裁剪的本地图路径，仅供编辑态即时预览（本地路径必渲染，绕开 cloud:// 即传即显窗口的 CDN 未就绪空白）；保存用 form.avatar(fileID)
       uploadingAvatar: false, // 头像上传 in-flight 标志：上传期间挡住保存（avatarLocal 已显新图但 form.avatar 尚未就位，防存旧/空头像）
       editBaseline: '', // 进编辑态时 form 的快照（JSON）；与当前 form 不等即「有未保存改动」→ 开离开拦截（防改了不保存就退出丢数据，如改头像不点保存）
+      editBaseVersion: 0, // 进编辑态那刻的 pet.updated_at；保存时回传服务端做乐观并发校验（ADR-033，期间被家人改过则拒）
 
       // 给兽医的小结
       exporting: false,
@@ -248,6 +249,12 @@ export default {
       return
     }
     this.load()
+  },
+  onShow() {
+    // 家庭共享：进页 / 切回时重拉，让家人刚改的档案同步过来（mp 无推送，ADR-033）。
+    // 仅在已加载过且非编辑 / 建档态刷新：首次 onShow 时 this.pet 尚未就位（load 异步）天然跳过、避免与 onLoad 双拉；
+    // 编辑 / 建档态跳过，避免重拉冲掉正在填的表单。
+    if (this.pet && !this.editing && !this.creating) this.load()
   },
   onUnload() {
     // 清 count-up 定时器，避免页面卸载后继续 setData 告警
@@ -696,6 +703,7 @@ export default {
         avatar_emoji: p.avatar_emoji || '',
       }
       this.avatarLocal = '' // 进编辑态清掉上次会话的本地预览残留
+      this.editBaseVersion = (this.pet && this.pet.updated_at) || 0 // 乐观并发基准版本（ADR-033）
       this.editing = true
       this.snapshotForm()
     },
@@ -819,24 +827,53 @@ export default {
       }
       this.saving = true
       try {
-        const pet = { ...this.form, name: this.form.name.trim() }
-        // 创建模式（ADR-015 手动建宠）：pets add 落库后切换为该宠详情
-        const res = this.creating
-          ? await callFn('pets', { action: 'add', pet })
-          : await callFn('pets', { action: 'update', id: this.id, pet })
+        const fullPet = { ...this.form, name: this.form.name.trim() }
+        let res
+        if (this.creating) {
+          // 创建模式（ADR-015 手动建宠）：pets add 落库后切换为该宠详情，发全量
+          res = await callFn('pets', { action: 'add', pet: fullPet })
+        } else {
+          // 编辑模式（ADR-033 乐观并发）：只发改过的字段（服务端只写传入键、级联按 patch 触发），
+          // 不同字段并发各写各的不互相覆盖；附 base_updated_at 给服务端做版本校验（家人期间改过则拒）。
+          // editBaseline 进编辑态必由 snapshotForm 设；空兜底 {} 会把全字段算改动 → 退化为发全量（安全：等同旧的整张覆盖、不丢数据，仅失去局部 diff 优化）
+          const base = this.editBaseline ? JSON.parse(this.editBaseline) : {}
+          const patch = {}
+          for (const k in this.form) {
+            const v = k === 'name' ? fullPet.name : this.form[k]
+            if (JSON.stringify(v) !== JSON.stringify(base[k])) patch[k] = v
+          }
+          if (!Object.keys(patch).length) {
+            // 零改动：不调后端、不 bump updated_at（免得无谓制造版本冲突），直接退出编辑
+            this.toggleLeaveGuard(false)
+            this.editBaseline = ''
+            this.editing = false
+            this.avatarLocal = ''
+            uni.showToast({ title: '未改动', icon: 'none' })
+            return
+          }
+          res = await callFn('pets', { action: 'update', id: this.id, pet: patch, base_updated_at: this.editBaseVersion })
+        }
         if (res.result && res.result.ok) {
           uni.showToast({ title: this.creating ? '已建档' : '已保存', icon: 'success' })
           if (this.creating) {
             this.creating = false
             this.id = res.result.id
             // 先用表单值立即渲染头部（load 是异步的，否则短暂显示空名占位；load 失败也有合理兜底）
-            this.pet = { ...this.pet, ...pet, price_base: pet.price_base !== '' && pet.price_base != null ? Number(pet.price_base) : null }
-            uni.setNavigationBarTitle({ title: pet.name })
+            this.pet = { ...this.pet, ...fullPet, price_base: fullPet.price_base !== '' && fullPet.price_base != null ? Number(fullPet.price_base) : null }
+            uni.setNavigationBarTitle({ title: fullPet.name })
           }
           this.editing = false
           this.editBaseline = '' // 已落库，撤离开拦截（leaveGuardOn 转 false）
           this.avatarLocal = '' // 已落库，回退到 fileID 渲染（header / 详情走 pet.avatar）
           this.load()
+        } else if (res.result && res.result.code === 'CONFLICT') {
+          // 乐观并发冲突（ADR-033）：进编辑后家人改过该档案 → 刷新最新、退出编辑、提示重编（本次改动未落库）
+          this.toggleLeaveGuard(false)
+          this.editBaseline = ''
+          this.editing = false
+          this.avatarLocal = ''
+          this.load()
+          uni.showModal({ title: '档案已被家人更新', content: '这只档案刚被家人修改过，已为你刷新到最新版本，请重新编辑后保存。', showCancel: false })
         } else {
           uni.showToast({ title: (res.result && res.result.msg) || '保存失败', icon: 'none' })
         }

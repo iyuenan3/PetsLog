@@ -25,16 +25,59 @@ import { getProfile, updateProfile, uploadAvatar } from '@/cloud'
 
 export default {
   data() {
-    return { nickname: '', avatar: '', saving: false, nickFocus: false }
+    return { nickname: '', avatar: '', saving: false, nickFocus: false, editBaseline: '' }
   },
   async onLoad() {
     // #ifdef MP-WEIXIN
     const p = await getProfile(true)
     this.nickname = p.nickname || ''
     this.avatar = p.avatar || ''
+    this._savedAvatar = this.avatar // 已落库头像，用于离开时判「本次上传未保存」的孤儿
+    this.snapshotForm()
     // #endif
   },
+  onUnload() {
+    // 用户在「未保存离开」确认里选了离开 → 撤拦截 + 清掉本次上传未落库的头像（避免云存储孤儿，对齐 pet.vue ADR-032）
+    this.toggleLeaveGuard(false)
+    this.discardTempAvatar()
+  },
+  computed: {
+    // 昵称 / 头像偏离进页快照 = 有未保存改动 → 开离开前确认（ADR-032 推广到 profile：成员选了头像没保存就退 → 无 users 文档 → 成员列表显默认「家人」）。
+    // profile 全程编辑态，无需 pet.vue 那个 editing 门。
+    leaveGuardOn() {
+      return this.editBaseline !== '' && JSON.stringify({ nickname: this.nickname, avatar: this.avatar }) !== this.editBaseline
+    },
+  },
+  watch: {
+    leaveGuardOn(on) {
+      this.toggleLeaveGuard(on)
+    },
+  },
   methods: {
+    snapshotForm() {
+      this.editBaseline = JSON.stringify({ nickname: this.nickname, avatar: this.avatar })
+    },
+    // mp-weixin 的 onBackPress 不拦原生返回，故用官方 enableAlertBeforeUnload（拦顶部返回 + 左滑手势 + 安卓实体键）。
+    toggleLeaveGuard(on) {
+      // #ifdef MP-WEIXIN
+      if (typeof wx === 'undefined') return
+      if (on) {
+        if (typeof wx.enableAlertBeforeUnload === 'function') wx.enableAlertBeforeUnload({ message: '头像 / 昵称尚未保存，确定离开吗？' })
+      } else if (typeof wx.disableAlertBeforeUnload === 'function') {
+        wx.disableAlertBeforeUnload()
+      }
+      // #endif
+    },
+    // 删本次上传但未落库的头像（this.avatar ≠ 库内已存 → 是新传的孤儿），对齐 pet.vue discardTempAvatar。
+    discardTempAvatar() {
+      const saved = this._savedAvatar || ''
+      const tmp = this.avatar
+      // #ifdef MP-WEIXIN
+      if (tmp && tmp !== saved && typeof wx !== 'undefined' && wx.cloud) {
+        wx.cloud.deleteFile({ fileList: [tmp] }).catch(() => {})
+      }
+      // #endif
+    },
     onNick(e) {
       // type="nickname" 的微信昵称自动填充走 blur，v-model 只听 input 会漏，显式兜住
       this.nickname = (e.detail && e.detail.value) || ''
@@ -46,9 +89,11 @@ export default {
     async onChooseAvatar(e) {
       const url = e.detail && e.detail.avatarUrl
       if (!url) return
-      uni.showLoading({ title: '上传中…' })
+      uni.showLoading({ title: '上传中…', mask: true }) // mask 挡住上传期间点保存（this.avatar 未就位会存旧/空头像），对齐 pet.vue
       try {
-        this.avatar = await uploadAvatar(url)
+        const next = await uploadAvatar(url)
+        this.discardTempAvatar() // 反复换图：新图传成后删上一张未落库的（先删后传若上传失败会指向已删文件）
+        this.avatar = next
       } catch (err) {
         uni.showToast({ title: '头像上传失败', icon: 'none' })
       }
@@ -63,6 +108,9 @@ export default {
       try {
         const res = await updateProfile({ nickname: String(this.nickname || '').trim(), avatar: this.avatar })
         if (res.result && res.result.ok) {
+          this._savedAvatar = this.avatar // 已落库，更新「已存头像」基准，避免 onUnload 误删
+          this.editBaseline = '' // 撤离开拦截（leaveGuardOn 转 false）
+          this.toggleLeaveGuard(false) // navigateBack 前显式撤，防编程式返回再弹一次
           uni.showToast({ title: '已保存', icon: 'success' })
           setTimeout(() => uni.navigateBack(), 500)
         } else {

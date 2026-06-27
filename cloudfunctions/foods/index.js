@@ -116,6 +116,11 @@ exports.main = async (event) => {
     const cur = await db.collection('foods').doc(id).get().catch(() => null)
     if (!cur || !cur.data || cur.data.family_id !== familyId) return { ok: false, msg: 'not found' }
     const doc = cur.data
+    // 乐观并发（ADR-033 推广到 foods）：编辑弹层带进编辑那刻的 updated_at；期间被家人改过（含别人设在喂连带把本条清掉）即拒，前端刷新重编。
+    // 向后兼容：不带 base_updated_at 的调用（setCurrent 快捷设在喂 / 旧端）跳过校验。foods 的系统写本就改了「在喂」语义，撞 CONFLICT 是预期、与 pets 体重回写不同。
+    if (event.base_updated_at != null && doc.updated_at != null && doc.updated_at !== event.base_updated_at) {
+      return { ok: false, code: 'CONFLICT', msg: '这条主粮刚被家人修改过' }
+    }
     const patch = { updated_at: Date.now() }
     if ('species' in f) {
       const sp = String(f.species || '').trim()
@@ -131,22 +136,26 @@ exports.main = async (event) => {
     if ('start_date' in f) patch.start_date = normalizeDate(f.start_date)
     if ('end_date' in f) patch.end_date = normalizeDate(f.end_date)
     if ('note' in f) patch.note = String(f.note || '').trim()
-    if ('current' in f) {
-      patch.current = !!f.current
-      // 作用域取「改后值」：改 species/pet 同时设在喂时，按新作用域排他
-      const scopeSpecies = 'species' in patch ? patch.species : doc.species
-      const scopePet = 'pet' in patch ? patch.pet : doc.pet || ''
-      if (patch.current) {
-        // legacy 条（迁移前只有 name、无 species）设在喂会让作用域缺失 → 拒绝并提示先迁移，而非静默跨物种误清在喂（评审 should-fix）
+    // 排他清理 / 换粮日由【生效后 current】驱动，不能只看 'current' in f：前端局部 diff 在 current 未变时会省略 current，
+    // 「编辑在喂条只改喂给谁/物种、不动开关」会发 {pet:...}（无 current）→ 旧门跳过排他 → 该条带 current 漂进新作用域造双 current（verify-the-fix should-fix 回归）。
+    if ('current' in f) patch.current = !!f.current
+    const effCurrent = 'current' in f ? !!f.current : !!doc.current // 落库后是否在喂（沿用库内或本次显式值）
+    const scopeSpecies = 'species' in patch ? patch.species : doc.species
+    const scopePet = 'pet' in patch ? patch.pet : doc.pet || ''
+    const scopeChanged = scopeSpecies !== doc.species || scopePet !== (doc.pet || '')
+    if (effCurrent) {
+      // 在喂态：本条由非在喂→在喂 或 作用域(物种/喂给谁)变了 → 在新作用域重放排他清理；
+      // 本就在喂且作用域没变 = 重复设在喂 / 普通编辑 → 不重放（避免无谓清掉家人并发刚设的在喂条，评审 should-fix）。
+      if (!doc.current || scopeChanged) {
+        // legacy 条（无 species）作用域缺失 → 拒绝设 / 移在喂，提示先迁移，而非静默跨物种误清（评审 should-fix）
         if (!isSpecies(scopeSpecies)) return { ok: false, code: 'NO_SPECIES', msg: '该主粮缺物种，请先完成迁移再设为在喂' }
         await clearOtherCurrent(familyId, scopeSpecies, scopePet, id)
-        patch.end_date = '' // 设为在喂清结束日，否则取消在喂后旧 end_date 突然重现
-      } else {
-        // 补换粮日仅在「本次由在喂→停喂」时（doc.current===true）执行。否则前端每次 save 都回发 current:false，
-        // 会把普通编辑（仅改品牌）误判为停喂、给空结束日的历史条盖上今天，污染病程（评审 should-fix）。
-        const willEnd = 'end_date' in patch ? patch.end_date : doc.end_date || ''
-        if (doc.current && !willEnd) patch.end_date = todayCN()
       }
+      if ('current' in f && patch.current) patch.end_date = '' // 显式设为在喂时清结束日（只改作用域不动开关则不动 end_date）
+    } else if ('current' in f) {
+      // 本次显式取消在喂：仅「由在喂→停喂」补换粮日，否则普通编辑误盖空结束日历史条（评审 should-fix，test 4e）
+      const willEnd = 'end_date' in patch ? patch.end_date : doc.end_date || ''
+      if (doc.current && !willEnd) patch.end_date = todayCN()
     }
     await db.collection('foods').doc(id).update({ data: patch })
     return { ok: true }

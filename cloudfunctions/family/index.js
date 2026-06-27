@@ -12,6 +12,16 @@ async function getMembership(openid, familyId) {
   const r = await db.collection('family_members').where({ family_id: familyId, openid }).limit(1).get()
   return r.data[0] || null
 }
+
+// 去重收口（评审 should-fix）：joinByCode 的 check-then-add 非原子，双击 / 弱网重试可写出多条 (family,openid) 行。
+// add 后立即收口：保留 joined_at 最小（平手按 _id 字典序，确保并发各实例收敛到同一条）、删其余。
+// 不收口的后果：listMine 该家庭重复列出 + leave 计 count() 虚高致「最后一人退出」误判成多人而漏解散（孤儿家庭 + 残留数据，违反退出即删）。
+async function dedupMembership(fid, openid) {
+  const rows = (await db.collection('family_members').where({ family_id: fid, openid }).limit(100).get().catch(() => ({ data: [] }))).data
+  if (rows.length <= 1) return
+  rows.sort((a, b) => (a.joined_at || 0) - (b.joined_at || 0) || String(a._id).localeCompare(String(b._id)))
+  for (const r of rows.slice(1)) await db.collection('family_members').doc(r._id).remove().catch(() => {})
+}
 async function assertMember(openid, familyId) {
   const m = await getMembership(openid, familyId)
   if (!m) throw { code: 'NOT_MEMBER', msg: '你不是该家庭成员' }
@@ -90,8 +100,14 @@ async function listMineRaw(openid) {
   const fs = await db.collection('families').where({ _id: _.in(ids) }).get()
   const byId = {}
   fs.data.forEach((f) => (byId[f._id] = f))
+  const seen = new Set()
   return ms.data
-    .filter((m) => byId[m.family_id]) // 丢弃指向已删家庭的孤儿成员关系
+    .filter((m) => {
+      // 丢弃指向已删家庭的孤儿成员关系 + 去重复成员行（joinByCode 并发可留多条同家庭，否则切换器重复列同一家）
+      if (!byId[m.family_id] || seen.has(m.family_id)) return false
+      seen.add(m.family_id)
+      return true
+    })
     .map((m) => ({
       family_id: m.family_id,
       name: byId[m.family_id].name,
@@ -207,6 +223,7 @@ async function joinByCode(openid, event) {
   await db.collection('family_members').add({
     data: { family_id: inv.family_id, openid, role: 'member', nickname: (event && event.nickname) || '', joined_at: Date.now() },
   })
+  await dedupMembership(inv.family_id, openid) // 并发双击 / 弱网重试可写多条 → 收口保留一条（评审 should-fix：防孤儿家庭）
   return { ok: true, family_id: inv.family_id }
 }
 
@@ -287,11 +304,13 @@ async function cascadeDeleteFamily(fid) {
 async function leave(openid, event) {
   const fid = event && event.family_id
   const me = await assertMember(openid, fid)
-  const cnt = await db.collection('family_members').where({ family_id: fid }).count()
-  if (me.role === 'admin' && cnt.total > 1) {
+  // 按 distinct openid 计成员数（非物理行数）：重复成员行（joinByCode 并发残留）不该把「最后一人」误判成多人而漏解散（评审 should-fix）。
+  const all = (await db.collection('family_members').where({ family_id: fid }).limit(100).get().catch(() => ({ data: [] }))).data
+  const distinct = new Set(all.map((m) => m.openid)).size
+  if (me.role === 'admin' && distinct > 1) {
     return { ok: false, code: 'MUST_TRANSFER', msg: '你是管理员，请先转让管理员再退出' }
   }
-  if (cnt.total <= 1) {
+  if (distinct <= 1) {
     // 最后一人退出 = 解散并彻底清理（退出即删，对齐 deleteFamily / PIPL）
     await cascadeDeleteFamily(fid)
     return { ok: true, dissolved: true }

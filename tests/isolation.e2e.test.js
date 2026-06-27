@@ -294,6 +294,20 @@ function recs() { return DB_INST.data.records || [] }
   assert(recs().filter((r) => r.family_id === 'FB').length === fbRecsBefore, 'I1 解散只清自己家，家B records 毫发无损')
   assert((DB_INST.data.families || []).some((f) => f._id === 'FB') && (DB_INST.data.families || []).some((f) => f._id === 'FA'), 'I1 家A/家B 仍在')
 
+  // ───────── J 组：joinByCode 并发去重 + leave 按 distinct openid 计数（评审 should-fix：防孤儿家庭）─────────
+  // 模拟 joinByCode 并发残留的重复成员行：唯一成员（含重复行）退出时按 distinct openid 应判 1 → 解散，
+  // 而非按物理行数 count()=2 误判成「还有人」漏解散（留孤儿家庭 + 数据，违反退出即删）。
+  as('uJ')
+  DB_INST.data.families = DB_INST.data.families || []
+  DB_INST.data.family_members = DB_INST.data.family_members || []
+  DB_INST.data.families.push({ _id: 'FJ', name: 'uJ家', owner: 'uJ', storage_bytes: 0 })
+  DB_INST.data.family_members.push({ _id: 'mJ1', family_id: 'FJ', openid: 'uJ', role: 'admin', nickname: '', joined_at: 1 })
+  DB_INST.data.family_members.push({ _id: 'mJ2', family_id: 'FJ', openid: 'uJ', role: 'admin', nickname: '', joined_at: 2 }) // 重复行（并发 join 残留）
+  const j1 = await family.main({ action: 'leave', family_id: 'FJ' })
+  assert(j1.ok === true && j1.dissolved === true, 'J1 唯一成员(含重复行)退出 → distinct=1 → 解散(不被物理行数误判 MUST_TRANSFER/漏解散)')
+  assert(!(DB_INST.data.families || []).some((f) => f._id === 'FJ'), 'J1 FJ 家庭文档已删')
+  assert(!(DB_INST.data.family_members || []).some((m) => m.family_id === 'FJ'), 'J1 FJ 成员行全清(含重复行)')
+
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
 })()

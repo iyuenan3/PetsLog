@@ -165,6 +165,36 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(r.ok === false && pets().length === 0, '非成员应拒')
   })
 
+  // 10. 乐观并发（ADR-033）：base_updated_at 版本校验。匹配过 / stale 拒不落库 / 无 base 向后兼容
+  await run('乐观并发: 匹配 base 过 / stale base 拒不落库 / 无 base 兼容', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u')
+    const a = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例猫', species: 'cat' } })
+    const get = () => pets().find((p) => p._id === a.id)
+    await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { note: 'v1' } }) // 确立 updated_at
+    assert(typeof get().updated_at === 'number', 'update 后有 updated_at')
+    // 匹配 base（= 当前 updated_at）→ 过
+    const ok = await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { note: 'v2' }, base_updated_at: get().updated_at })
+    assert(ok.ok === true && get().note === 'v2', '匹配 base 落库成功')
+    // stale base（故意比当前小，免 Date.now() 同毫秒 flaky）→ CONFLICT 且不落库
+    const conf = await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { note: 'v3' }, base_updated_at: get().updated_at - 99999 })
+    assert(conf.ok === false && conf.code === 'CONFLICT', 'stale base 返 CONFLICT')
+    assert(get().note === 'v2', 'CONFLICT 时不落库（note 仍 v2）')
+    // 不带 base → 向后兼容（saveRecord 体重回写 / importNotion / 旧端）
+    const compat = await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { note: 'v4' } })
+    assert(compat.ok === true && get().note === 'v4', '不带 base 向后兼容照常落库')
+  })
+
+  // 11. 局部 patch（前端只发改过字段，ADR-033）：未传字段不被清空（依赖服务端 `if (!(k in p)) continue`）
+  await run('局部 patch: 未传字段不被清空', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u')
+    const a = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例猫', species: 'cat', breed: '英短', intro: '高冷' } })
+    await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { intro: '其实黏人' } })
+    const p = pets().find((x) => x._id === a.id)
+    assert(p.intro === '其实黏人', 'intro 更新')
+    assert(p.breed === '英短', 'breed 未传不被清空')
+    assert(p.name === '示例猫', 'name 未传不变')
+  })
+
   console.log(`\n结果：${pass} 通过 / ${fail} 失败`)
   process.exit(fail ? 1 : 0)
 })()
