@@ -3,6 +3,13 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## 体验版 0.4.11 · 头像「跨用户没同步」真因＝没保存 + 编辑态未保存离开拦截 · 2026-06-27（ADR-032，**已 commit 6d44794 · versionCode 15 · 体验版待 GUI 上传 · 待真机验**）
+- Context: 内测反馈「同一家庭 B 改了宠物头像、A 那边看不到」，疑似跨用户同步 bug。
+- Root cause（live DB 验尺）: 直连查 `pets.avatar`，全库当天零 `pets.update` 写入 → B 的修改从没落库，B 看到的是本地乐观态（`applyAvatar` 即时显示 `avatarLocal`/`form.avatar`），A 直读 DB 是旧值。**非同步 bug，是 B 没成功保存**（`save()` 的「已保存」toast 只在 update 返 ok 弹、update 必写 `updated_at`，DB 零写入即可反推 B 从没看到过真保存，无需追问用户记不记得点）。与 0.4.10（ADR-031）同根，B 已在 0.4.10 固定保存栏仍复发 → 即时预览伪装成已存，须从离开侧收口。
+- Changed: `pet.vue` 加「编辑态有未保存改动 → 离开前确认」（`wx.enableAlertBeforeUnload`，拦顶部返回 / 左滑手势 / 安卓实体键 / 编程式 navigateBack；mp-weixin 的 `onBackPress` 不拦原生返回故走官方 API）。dirty ＝ form 偏离进入时 JSON 快照 **或** 头像上传中（`uploadingAvatar` 并入，堵照片换照片的上传窗口 form 滞后漏拦）；save / 取消 / 删除 / 卸载全撤拦截；建档取消清 `form.avatar` 防 onUnload 二次删孤儿。
+- 验证: build 零错 + 产物核实含全部逻辑（`enableAlertBeforeUnload`/`leaveGuardOn`/`editBaseline`）+ 12 套测试不变全绿（纯前端）。两轮对抗评审：Round1（3 视角 + 验真）0 must-fix，收 1 should-fix（删宠二次弹）+ 1 nit（建档取消二次删孤儿）；Round2 verify-the-fix 两处补丁均 solid + 完整性批判新挖 in-flight 漏拦 1 should-fix。均已修。
+- 待: 真机验（改头像不保存按返回 → 弹拦截 / 保存后 A 重进首页看到新头像 / 编辑态删宠不二次弹 / 弱网换照片上传中返回也弹）+ 体验版 0.4.11 GUI 上传发布（DevTools 导 dist/build/mp-weixin → 上传，Claude 代不了）。
+
 ## 体验版 0.4.10 · 药品可编辑 + 删除 + 任何原话全路径落库 + 头像 1:1 裁剪 + 编辑页固定保存栏 · 2026-06-26（ADR-031，**saveRecord + meds 已部署 · 真机验过 · 体验版 0.4.10 已上传 2026-06-26**）
 - Context: 真机内测反馈三处。① 药品入库后「过期 未填」改不了、名 / 数量录错也无法修正、用完 / 过期药一直堆着（药品卡是纯展示无编辑 / 删除入口）。② 用户原则:「任何原话都应记录，不只时间线」，`med_stock`/`reminder` 落库丢了 `raw`。③ 改宠物头像无法裁剪（要求强制 1:1）+ 上传后头像没变化。
 - Changed（药品可编辑，ADR-031）: meds 云函数 `list/add` → 加 `update`（仅改 name/effect/quantity/expire_date，**raw 只读不动**）+ `delete`，均先 `doc(id).get()` 校 `family_id` 再写（foods 同款隔离守卫，防越权改 / 删他家药品）；name 不可清空、quantity 可 0（用完）、过期日可补可清。健康页药品卡加底部「编辑 / 删除」op 按钮（与主粮卡一致）+ 编辑弹层（复用主粮 sheet，顶部只读展示当时原话、下面字段全可改可补）。

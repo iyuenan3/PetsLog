@@ -1,6 +1,13 @@
 # MEMORY — PetsLog
 <!-- 踩坑/失败/事故，append-only。别重复踩坑。决策→DECISIONS。 -->
 
+## 头像「跨用户没同步」真因＝没点保存（本地乐观态骗人）+ mp 编辑态离开拦截只能用 enableAlertBeforeUnload · 2026-06-27（ADR-032）
+内测报「同一家庭 B 改了宠物头像、A 看不到」，像跨用户同步 bug。绕弯前先验尺：**直查 live DB `pets.avatar` 真值**，全库当天零 `pets.update` 写入 → 一锤定音是 B 那侧写入压根没发生，B 看到的是 `applyAvatar` 即时把 `avatarLocal`/`form.avatar` 显示的本地乐观态，A 直读 DB 自然旧值。呼应 6-26「头像没变化＝没保存」同根复发，也再证「UI / 真机 bug 别急着归因，先拉 live DB 看字段真值」（症状『跨用户没同步』能对应多个根因，直查字段真值一步排除一半）。
+- **DB 零写入＝可反推「用户从没成功保存过」**：`save()` 的「已保存」toast 只在 `pets.update` 返 ok 弹，而 update 必写 `updated_at` → 全库当天零写入即证 B 从没看到过真保存，**不用追问用户记不记得点没点**（用户自己也答「无法确认」）。
+- **mp-weixin 的 `onBackPress` 不拦原生返回**（仅 App/H5 支持）→ 编辑态「未保存离开拦截」只能用微信官方 `wx.enableAlertBeforeUnload`（拦顶部返回 + 左滑手势 + 安卓实体键 + 编程式 navigateBack，2.12.0+；`disableAlertBeforeUnload` 撤）。**会编程式 navigateBack 的出口（取消 / 删除）必须在 navigateBack 前先 disable**，否则编程式 navigateBack 也被拦 → 二次弹（`confirmDelete` 初版就漏，评审 Round1 抓出：编辑态删宠后弹「未保存改动」，点「留下」还卡僵尸详情页）；save 无 navigateBack（留在页内）、靠 `editing=false` 经 watcher 自动撤，onUnload 显式撤。
+- **dirty 判定要并入异步 in-flight 标志**：照片换照片时 `form.avatar` 要等 `uploadFile` resolve 才更新，上传那几秒 `form===baseline`、而 `avatarLocal` 已显新图 → `leaveGuardOn` 漏拦（恰是「改了没存就退」本场景；emoji↔照片切因 `avatar_emoji` 非空变空能被捕获，唯独『照片+无 emoji→照片』漏网）。把 `uploadingAvatar` 并入 computed（reactive，watch 自动开关）收口。**即时预览（`avatarLocal` 不进 `form`）会让「视觉已变」与「dirty 判定」背离**，做乐观预览时记得预览态也要计入脏。
+- **评审两轮收敛**：verify-the-fix 专审「补丁本身」（修 A 引 B / 守卫锁死 / 吞真错误），**完整性批判挖出 in-flight 漏拦**（单 finder 没抓到），印证审「离开 / 部分态」逻辑要顺反直觉路径查。0.4.10 固定保存栏（ADR-031）是同根第一次收口、B 在该版本仍复发证其不够，这次离开拦截是更稳的通用安全网。
+
 ## 派生数据回写 throw 不能让主写算失败，否则「写成功却报失败 → 重试重复」· 2026-06-24（ADR-030 review critic#1）
 多事件落库 `saveMulti` 逐条 `writeRecordOne`：先 `records.add(doc)` 落库**成功**，紧接着 `updateExistingPetWeight` 回写 `pets.latest_weight`（**派生数据**，可由 records 重算）。原来这步 `pets.doc().update()` **没包 try/catch**，若网络抖动 / 配额 / 并发瞬时失败 throw，会冒泡到 `saveMulti` 的 per-item catch → 该条标 `WRITE_FAIL`，**但 record 文档其实已经持久化**。前端见 `saved>0` 把这条算「失败卡」留下让用户重试 → 重试再 `add` 一条同内容 record → **库里两份**，体重曲线 / 兽医小结被污染。
 - **根因**：把「主写（不可重算、必须成功）」与「派生回写（可重算、失败无害）」放进同一个会让整条失败的 try 作用域。multi 的「部分成功 + 失败卡重试」语义把这个隐患放大成真实重复数据。
