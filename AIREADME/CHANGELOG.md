@@ -1,15 +1,21 @@
-# CHANGELOG — PetsLog
+# CHANGELOG · PetsLog
 <!-- 版本史，倒序，append-only。为何→DECISIONS；未来→ROADMAP；commit 流水→git；踩坑→MEMORY。 -->
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
-## 体验版 0.4.13 · 药品按类型区分 + 药品 tab 类型筛选（meds 加 type 字段） · 2026-06-28（ADR-035，**已部署 meds/saveRecord/parseRecord + 回填海乐妙→驱虫 · versionCode 17 · 待 GUI 上传 · 待真机验**）
+## 待发布 · 语音录入弃微信服务市场 ASR 改键盘自带听写（零后端） · 2026-06-28（ADR-036，**feat 4cfe129 · 待 GUI 上传 · 待真机验**）
+- Context: 三入口卡的「语音」次级入口此前是占位（点出 toast「敬请期待」）。ASR 接入调研三路全堵（微信同传插件个人主体加不了 / 微信服务市场接口能力 client invokeService 返 opaque 空不可调试 / 腾讯云直连 ASR 搭通但产品要付费），转正受阻 → 暂缓自建 ASR。
+- Changed（ADR-036）: 语音录入改走**键盘自带听写**：自然语言录入 textarea 直接复用微信 / 系统输入法的语音转文字（用户长按键盘话筒即可），零后端、零额外接口能力、零付费。无新增云函数 / 集合 / 字段。
+- 验证: 纯前端改动，build 零错。
+- 待: 真机验（键盘话筒听写文字落自然语言 textarea → 走原解析链路）+ GUI 上传。
+
+## 体验版 0.4.13 · 药品按类型区分 + 药品 tab 类型筛选（meds 加 type 字段） · 2026-06-28（ADR-035，**已部署 meds/saveRecord/parseRecord + 回填海乐妙→驱虫 · versionCode 17 · 已 GUI 上传发布**）
 - Context: 内测反馈「添加的药要区分下类型，做个类型过滤」。药品 tab 是扁平列表、只有自由文本 `effect`，多种药（驱虫 / 疫苗 / 用药）混在一起不能按类型看 / 筛。反馈原话「仨 tab 下都有」经 **live DB 验尺证伪**（海乐妙只落 meds 一处、该测试家庭 reminders/foods 皆空、三 tab 查三独立集合本就无跨 tab 重复，截图那张带「剩余 / 过期」的是药品卡非主粮卡）→ 真问题落在药品 tab 缺类型结构这一处。
 - Added（药品类型，ADR-035）: meds 加 `type` 字段（枚举 用药 / 疫苗 / 驱虫 / 养护 / 其它，复用 reminders TYPES 同值；缺 / 非法默认「用药」，刻意区别提醒兜底「其它」）。落库三入口同源 `normMedType`：parseRecord prompt 出 `med_type` + `normalize()` 白名单透传、saveRecord med_stock 落 type、meds add/update 存 type。录入 med_stock 确认卡 + 药品编辑弹层各加类型 picker。
 - Added（类型筛选）: 药品 tab 顶加筛选 chip 行（全部 + 在库出现的类型，动态、≥2 种才显，镜像主粮在场物种）+ 每张药卡带类型 chip（复用 `chip-tag` 配色）；`filteredMeds` 派生 + 失效筛选回退全部。
 - 数据回填: meds 加 `backfill_type` 维护 action（按 effect 关键词推断、幂等、family 隔离 + admin 守卫 + `.limit(1000)`）；存量海乐妙（在测试家庭、跑脚本者非该家管理员、云函数 admin 守卫挡住）走 `tools/wxdump/backfill_med_type.mjs` 服务端直更 → type=驱虫（dryRun + 备份，孤儿益生菌无 family_id 未触碰）。
 - 验证: 13 套测试全绿（新增 `parseRecord.normalize` 16 断言守 `med_type` 白名单透传 + meds 加 type / backfill / 非 admin 用例，meds 40→42）+ build 零错 + dist 产物核实 + **变异验证**（删白名单行 / 剥 admin 守卫均转红）。pre-commit 2-agent 对抗自审：前端 0 confirmed 全 refuted；后端 2 should-fix + 1 nit 全修（normalize 透传补测堵假绿盲区 + backfill 加 admin 守卫 / limit）。版本 0.4.12→**0.4.13** / versionCode 16→17。
-- 待: 真机验（录入药品选类型 / 药品 tab 类型 chip + 筛选 / 编辑改类型 / 海乐妙显驱虫）+ 体验版 0.4.13 GUI 上传。
+- 待: 真机验（录入药品选类型 / 药品 tab 类型 chip + 筛选 / 编辑改类型 / 海乐妙显驱虫）。体验版 0.4.13 已 GUI 上传发布。
 
 ## 体验版 0.4.12 · 家庭数据同步加固：共享档案乐观并发 + 家庭管理并发去重 + 头像 ACL 分级 + profile 离开拦截 · 2026-06-27（ADR-033/034，**feat eb906ef · 已部署 pets/foods/family · versionCode 16 · 待 GUI 上传 · 待真机验**）
 - Context: 真机反馈「同家庭 A 改宠物头像 B 看不到」→ live DB 验尺定根因 = 云存储「仅创建者可读写」ACL（跨用户读不到他人上传文件）；用户进一步提「家庭成员都可编辑、一人改后要同步、是否要编辑锁」→ 起家庭管理 + 数据同步全面 review（34-agent，**0 must-fix 隔离红线扎实**）。
@@ -155,8 +161,8 @@
 
 ## v0.4.5 · 2026-06-12 · 录入重做：结构化直填 + 确认卡片可编辑 + 点＋弹「记录」入口卡 + 时间精确到分（ADR-017/018）
 - Added: **结构化直填（不调 LLM，ADR-017）**：录入新增「结构化逐项填」一路，不过 parseRecord、不写 parse_log、不耗解析配额，前端拼同形 record 直接调 saveRecord（**saveRecord 本就是落库校验边界**，normalizeDate / numOrNull / event_type 枚举 / fuzzyMatchPet + PET_UNKNOWN 服务端原样兜底，故零新增云函数 / 集合 / 字段）。明确知道哪只宠 / 哪天 / 什么类型时可精确录入，离线或上游故障时也能录。
-- Added: **确认卡片改全字段可编辑（ADR-017）**：AI 解析结果卡片从只读变可编辑，三种 kind（record / reminder / med_stock）全字段 picker / selector / input 内联改 —— AI 错一个字段（如体重识别错）直接改卡片即可，不再「返回改原文重调一次 LLM」。一份 UI 两用：手动直填 + AI 结果内联修。宠物字段三态守 ADR-015（is_new 建档意图保留唯一建宠通道，其余 picker 选已有，record 落库前必须有 pet）；数字字段出站强制本地 numOrNull（input 给字符串，否则 saveRecord 的 `typeof==='number'` 兜底把 "4.2" 判空丢值）。
-- Changed: **点＋弹「记录」入口卡（as-built，多版线框图评审选定「A 三入口卡」；入口卡 / 录入键文案由原拟名「记一笔」统一改为「记录」，涉导航标题 / 入口卡 / 确认卡 / 首页空状态按钮 4 处）**：中央＋仍 navigateTo /pages/record，入口态呈暗背景遮罩 + 居中卡，自然语言 textarea 居中为主入口，下方「或换种方式」分隔线 + 结构化 / 语音两个次级入口（语音禁用占位 toast「敬请期待」，留下一轮）。**入口卡走普通文档流（非 `position:fixed` 浮层）**，原生 textarea 不踩同层渲染穿透坑；表单整页内联，废弃原底部弹层（`sheet-mask`）—— 同因规避原生 input/picker 进 fixed 浮层的层级穿透 / 上滑跳位真机风险。点暗处 / ✕ → navigateBack 关闭。
+- Added: **确认卡片改全字段可编辑（ADR-017）**：AI 解析结果卡片从只读变可编辑，三种 kind（record / reminder / med_stock）全字段 picker / selector / input 内联改（AI 错一个字段，如体重识别错，直接改卡片即可），不再「返回改原文重调一次 LLM」。一份 UI 两用：手动直填 + AI 结果内联修。宠物字段三态守 ADR-015（is_new 建档意图保留唯一建宠通道，其余 picker 选已有，record 落库前必须有 pet）；数字字段出站强制本地 numOrNull（input 给字符串，否则 saveRecord 的 `typeof==='number'` 兜底把 "4.2" 判空丢值）。
+- Changed: **点＋弹「记录」入口卡（as-built，多版线框图评审选定「A 三入口卡」；入口卡 / 录入键文案由原拟名「记一笔」统一改为「记录」，涉导航标题 / 入口卡 / 确认卡 / 首页空状态按钮 4 处）**：中央＋仍 navigateTo /pages/record，入口态呈暗背景遮罩 + 居中卡，自然语言 textarea 居中为主入口，下方「或换种方式」分隔线 + 结构化 / 语音两个次级入口（语音禁用占位 toast「敬请期待」，留下一轮）。**入口卡走普通文档流（非 `position:fixed` 浮层）**，原生 textarea 不踩同层渲染穿透坑；表单整页内联，废弃原底部弹层（`sheet-mask`）：同因规避原生 input/picker 进 fixed 浮层的层级穿透 / 上滑跳位真机风险。点暗处 / ✕ → navigateBack 关闭。
 - Changed: **records.time 精确到分 + created_at 由事件时间派生（ADR-018）**：time 升为 `'YYYY-MM-DD HH:mm'`（缺时刻保留纯日期），`normalizeDateTime`（saveRecord + parseRecord 两处同步）日期段定长零填充保字典序；created_at 由事件时间派生（`createdAtFromTime`）：有分用准点（东八区），仅日期用当日 **12:00**（延续历史导入约定，避免补录旧记录排到时间线顶）。结构化表单时间 = 日期 picker + 时刻 picker（mode=time，到分）；AI 进卡片时 `ensureEventClock` 补当前时刻。prompt 教 LLM 说了时刻才输出 HH:mm + 1 条 few-shot。库内 217 条历史（纯日期 + 中午派生）不受影响，展示零改（timeline `slice(5)` 天然带出到分、体重图轴标 `slice(2,10)` 天然停在日期）。
 - Tested: saveRecord 集成测试加 2 组（时间 / created_at 到分 + latest_weight_date 仍纯日期；仅日期 → created_at 落中午 12:00），saveRecord 套 27 → 32 断言；五套共 114 断言（npm test 全绿）。
 - Deployed: saveRecord / parseRecord 已 `wxcloud function:upload` 重新部署；前端产物 `dist/build/mp-weixin`（≈0.65MB）走体验版内测。AIREADME 同步：DECISIONS 加 ADR-017/018、SPEC 改 records.time / created_at 字段说明、DEPLOYMENT 加内测发布（体验版）+ 用户隐私保护指引清单。

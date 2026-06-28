@@ -1,8 +1,8 @@
-# SPEC — PetsLog
+# SPEC · PetsLog
 <!-- 数据契约 / 数据字典：collection 字段定义是内部真相源。对外 API 见文末（当前 N/A）。实现→ARCHITECTURE，为何→DECISIONS。 -->
 
 > 数据库 = 微信云开发文档型。隔离键：业务数据按 `family_id`（见 ADR-008），`users` 按 `_openid`。
-> 标记：**[占位]** = 模型已定、建设排后（foods）。本字段表为字段真相源；各 ADR 的落地 / 部署 / 真机验状态以 ROADMAP / CHANGELOG 为单一真相源（此处不复述易腐的「待 commit / 待触发」）。字段相关批次：轮1 字段（v0.3.1）、轮2 附件 attachments / att_count / storage_bytes / att_log（v0.3.2）、ADR-014 price_base / intro / foods、ADR-015 avatar_emoji / new_pet / pet_unknown、ADR-018 time 到分、ADR-019 tag 收敛、ADR-020 raw 服务端落库、ADR-023 species 8 枚举、ADR-024 records.params 养护（event_type 第 8 桶）、ADR-025 pets.gender / pets.weight_spark 均已落地（见下方字段表）。ADR-020 解析评测（合成集）仍为 ROADMAP 待办。
+> 标记：**[占位]** = 模型已定、建设排后（foods）。本字段表为字段真相源；各 ADR 的落地 / 部署 / 真机验状态以 ROADMAP / CHANGELOG 为单一真相源（此处不复述易腐的「待 commit / 待触发」）。字段相关批次：轮1 字段（v0.3.1）、轮2 附件 attachments / att_count / storage_bytes / att_log（v0.3.2）、ADR-014 price_base / intro / foods、ADR-015 avatar_emoji / new_pet / pet_unknown、ADR-018 time 到分、ADR-019 tag 收敛、ADR-020 raw 服务端落库、ADR-023 species 8 枚举、ADR-024 records.params 养护（event_type 第 8 桶）、ADR-025 pets.gender / pets.weight_spark、ADR-029/030 多宠批量（records.pets[] 同事件 fan-out + kind=multi / records[] 一句话拆多条）、ADR-031 raw 落 med_stock / reminder 全写入路径、ADR-035 meds.type 药品类型枚举 均已落地（见下方字段表）。ADR-020 解析评测（合成集）仍为 ROADMAP 待办。
 > 字段值约定：日期一律 `'YYYY-MM-DD'` 字符串（唯 records.time 可带时刻 `'YYYY-MM-DD HH:mm'`，ADR-018；meds / reminders / foods 等日期字段仍纯日期）；金额 / 体重为 number；时间戳 `created_at/updated_at` 为毫秒 number。
 
 ## pets（宠物档案 · family 隔离）
@@ -52,17 +52,22 @@
 | created_at | number | ms。**由事件时间 time 派生**（`createdAtFromTime`）：有分用准点（东八区），仅日期用当日 12:00（延续导入约定，避免补录旧记录排到时间线顶）。主时间线 / 体重图按此排序。见 ADR-018 |
 
 > 双轴：event_type 管「事件类型」（配色 / 分类），tag 管「病程线」。病程**完整视图**按 (宠, tag) 取记录（天然不跨宠混合），含概览聚合（起止 / 跨度 / 记录数 / 已记花费 / 体重趋势），见 ADR-019；简版 = 时间线按 tag 筛。
-> 批量录入：给全家做同一件事（驱虫 / 疫苗）= 录入时多选宠物 → 生成 N 条 records，仍 per-pet。
+> 批量录入（ADR-029 同事件 fan-out）：给全家做同一件事（驱虫 / 疫苗）= 录入时多选宠物 → `record.pets=[…]` 由 saveRecord fan-out 复制 N 条 records，仍 per-pet（体重各自回写）；任一宠不在库整批拒 `PET_UNKNOWN` 零写入（沿 ADR-015），批量不建档 / 不收错别字 / 不落养护 params。
+> 一句话拆多条不同记录（ADR-030）：「示例猫吐了，示例狗拉稀」由 parseRecord 拆 `kind:'multi'` + `records:[…]`（每条独立内容、都是已有宠、multi 不建档），saveRecord 走 `saveMulti` 逐条独立写、**部分成功**（返 `{saved,count,results}`，results 与入参严格同序同长、每条守零写入）。与 ADR-029 `pets[]`（同事件复制）语义划清。
 
-## meds（家庭药品库存 · family 隔离 · 本轮不动）
+## meds（家庭药品库存 · family 隔离）
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | family_id | string | 隔离键 |
 | name | string | 药名 |
+| type | enum | 药品类型：用药 / 疫苗 / 驱虫 / 养护 / 其它（复用 reminders TYPES，缺 / 非法默认「用药」）。三入口同源 normMedType（parseRecord 出 med_type 透传 + saveRecord med_stock + meds add/update）；药品 tab 按 type 筛选 + 每卡 type chip，见 ADR-035 |
 | effect | string | 功效 |
 | quantity | number | 数量（默认 1） |
 | expire_date | string | 过期日 'YYYY-MM-DD' |
-| created_at | number | |
+| raw | string | 用户输入的字面原文（med_stock 入口落库，ADR-031「任何原话全路径落库」；旧条无 raw 优雅降级） |
+| created_at / updated_at | number | updated_at 仅 update 时写入 |
+
+> meds 云函数：list / add / **update / delete**（家庭隔离守卫 + assertMember，ADR-031）+ `backfill_type`(admin，幂等回填存量 type)。前端健康页药品卡可编辑 / 删除（编辑弹层含 type picker）。
 
 ## reminders（用药 / 疫苗 / 驱虫 / 养护提醒 · family 隔离）
 | 字段 | 类型 | 说明 |
@@ -101,7 +106,7 @@
 | code | string | 6 位码（排除易混字符） |
 | family_id | string | |
 | created_by | string(openid) | |
-| created_at / expires_at | number | 默认 7 天有效 |
+| created_at / expires_at | number | 默认 30 分钟有效（v0.4.8 由 7 天收窄，防长效码积压） |
 | max_uses | number | 0 = 不限次 |
 | used_count | number | 原子占名额 |
 
@@ -153,7 +158,7 @@
 ---
 
 ## 对外 API
-— N/A。PetsLog 是终端产品（微信小程序），不对外暴露 API、不被其它系统集成，是 LLM 网关的**消费方**而非被集成方。
+N/A。PetsLog 是终端产品（微信小程序），不对外暴露 API、不被其它系统集成，是 LLM 网关的**消费方**而非被集成方。
 - 消费的上游契约（自建 LLM 网关端点 / 鉴权 / 模型）→ OpenAI 兼容；私有部署坐标见私有配置，架构见 ARCHITECTURE 数据流。
 - AI 自然语言 → 结构化 JSON（云函数与 LLM 之间的内部形状）→ 见 PRD「AI 解析字段」+ ARCHITECTURE。
 > 若未来开放第三方接入（对接宠物医院 / 导出 API），在此填端点 + 鉴权 + 版本兼容。

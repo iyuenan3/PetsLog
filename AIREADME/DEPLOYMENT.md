@@ -1,7 +1,7 @@
-# DEPLOYMENT — PetsLog
+# DEPLOYMENT · PetsLog
 <!-- 跑哪/怎么跑/共享什么。key→哪都不写。共享底座属本项目就写这；消费别人的只在 RELATIONS 指属主。 -->
 
-内测部署中（2026-06-11）。后端已上微信云开发环境 `cloud1-…`（envId 非机密，存 `src/config.js`）；11 个云函数（parseRecord / saveRecord / pets / timeline / meds / reminders / family / user / attachment / foods / importNotion）+ 11 个集合（pets / records / meds / reminders / parse_log / att_log / families / family_members / invites / users / foods）+ 云存储（附件 / 头像），录入主链路 + 提醒 + 家庭多租户 + 个人中心 + 附件 + 主粮真机跑通。前端走体验版，未正式上架。
+体验版 0.4.13 已发布（2026-06-28）。后端已上微信云开发环境 `cloud1-d5g69cxtta6c18918`（envId 非机密，存 `src/config.js`）；11 个云函数（parseRecord / saveRecord / pets / timeline / meds / reminders / family / user / attachment / foods / importNotion）+ 11 个集合（pets / records / meds / reminders / parse_log / att_log / families / family_members / invites / users / foods）+ 云存储（附件 / 头像），录入主链路 + 提醒 + 家庭多租户 + 个人中心 + 附件 + 主粮 + 养护（多物种 8 枚举 + event_type 第 8 桶）+ 多宠批量记录 + 药品类型字段真机跑通。前端走体验版，未正式上架。
 
 ## 当前部署
 - **环境**：微信云开发免费环境（内测期免费；正式上线后第 15 天到期需买 ¥19.9/月 基础套餐）。
@@ -17,7 +17,7 @@
 
 ## 计划形态
 - **后端 = 微信云开发环境**（Serverless）：无独立主机、无服务器、无域名、无 ICP 备案、无 SSL。云函数 + 云数据库 + 云存储托管在微信生态内，按量计费（自用 + 小圈子量级预计在免费额度内）。
-- **前端 = 微信小程序**：开发者工具上传 → 微信审核 → 发布。初期免费内测；收会员费需企业主体 + 个体工商户营业执照 + 微信支付（远期）。
+- **前端 = 微信小程序**：开发者工具上传 → 微信审核 → 发布。当前走体验版（0.4.13 已发布，免提审、受体验成员名单约束）；收会员费需企业主体 + 个体工商户营业执照 + 微信支付（远期）。
 
 ## 内测发布（体验版）
 内测走「体验版」：免 ICP 备案、免提审，受体验成员名单约束。正式公开（线上版）才需 ICP 备案 + 提审 + 类目资质。
@@ -38,7 +38,7 @@
 | 微信头像 / 昵称 | 个人中心填头像（chooseAvatar）/ 昵称 | `open-type=chooseAvatar`（profile.vue）/ `input type=nickname` |
 | 微信 openid | 账号体系 + 家庭多租户隔离键 | 云开发登录态自动获取（非主动授权接口，但建议在指引中说明） |
 
-- **待补（语音轮）**：录音 / 麦克风（`scope.record`，同声传译插件），做语音录入时同步加进本指引。
+- **语音录入（ADR-036）**：已改用键盘自带听写（系统输入法语音转文字），零后端、不申请录音 / 麦克风权限、不接同声传译插件，原「待补语音轮（`scope.record`）」项作废。
 - 类目避开「医疗 / 健康（诊断）」受限类目，选「工具」类，守「不碰医疗诊断 / 处方」红线。
 
 ## 域名 / 入口
@@ -49,7 +49,7 @@
 - LLM 直连火山方舟 Coding Plan（OpenAI 兼容 `https://ark.cn-beijing.volces.com/api/coding/v3`，模型 `doubao-seed-2.0-pro`，ADR-016）。端点 / 模型公开，唯一机密是 API Key。
 
 ## 备份 / 升级 / 回滚
-⚑ 待定。云数据库依赖微信云开发自带能力 + 定期导出（MVP 后定方案）。
+⚑ 待定。云数据库依赖微信云开发自带能力 + 定期导出（MVP 后定方案）。`tools/wxdump` 已有 live DB 全量导出 + 备份实践（服务端 HTTP API 直连只读，删改前完整备份可恢复，详见下文「直连读 live DB / 数据维护」）。
 
 ## 运维约束
 - 部署前在火山方舟控制台拿 API Key 填入 config.local.js（或云函数环境变量 ARK_API_KEY）。

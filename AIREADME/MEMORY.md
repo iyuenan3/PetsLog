@@ -1,4 +1,4 @@
-# MEMORY — PetsLog
+# MEMORY · PetsLog
 <!-- 踩坑/失败/事故，append-only。别重复踩坑。决策→DECISIONS。 -->
 
 ## 头像「跨用户没同步」真因＝没点保存（本地乐观态骗人）+ mp 编辑态离开拦截只能用 enableAlertBeforeUnload · 2026-06-27（ADR-032）
@@ -36,7 +36,7 @@
 - 结论：本仓库 `git config http.proxy http://127.0.0.1:7897` 固化走 Clash；GitHub 是公网域名不在 no_proxy 内，须显式走能用的代理。
 
 > 预埋提醒（已验证）：
-> - 云函数调自签网关用 https `ca` 选项（PEM 文本）即可信任，无需 `rejectUnauthorized:false`（本会话实测 auto-llm 调通）。
+> - 云函数调自签网关用 https `ca` 选项（PEM 文本）即可信任，无需 `rejectUnauthorized:false`（本会话实测 auto-llm 调通）。（ADR-016 已弃自签网关改火山方舟直连，本条属早期网关阶段语境、已废止。）
 > - 上游 `auto-llm`(doubao) 不支持 `response_format=json_object`（返回 400）→ 见 DECISIONS ADR-005。
 > - v1 uniCloud 因空间没续费下线 → 关注微信云开发额度：内测期免费环境，正式上线后第 15 天到期需买 ¥19.9/月 套餐。
 

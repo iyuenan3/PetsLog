@@ -1,26 +1,26 @@
-# DECISIONS — PetsLog
+# DECISIONS · PetsLog
 <!-- ADR，append-only，只追加不改历史。运行时事故→MEMORY。 -->
 
 ## ADR-001 · v3 范式 = 保留小程序、砍掉填表式录入（非砍掉 UI / 非微信机器人+Notion）· 2026-06-07
 - Problem: v3 的「自然语言录入」反思曾被简历叙事演绎成「根本不需要小程序，砍掉小程序，对接微信机器人 + Notion API」，与 4/4 落地文档（仍做小程序）冲突。开工前必须定一个。
 - Constraint: 要既吸收「自然语言录入」这个 v3 灵魂，又不牺牲就医溯源展示（时间线/体重曲线/截图给兽医）与商业化（给朋友用/会员）。
 - Decision: 走微信小程序 + 自然语言输入框。砍掉的是「选宠物-选日期-填表」交互，不是前端本身。
-- Alternatives（否决）: 微信机器人 + Notion —— 个人微信挂机器人违反协议易封号、需常驻挂机；Notion API 海外不稳 + 无法多租户做会员；就医溯源展示弱。
+- Alternatives（否决）: 微信机器人 + Notion：个人微信挂机器人违反协议易封号、需常驻挂机；Notion API 海外不稳 + 无法多租户做会员；就医溯源展示弱。
 - Tradeoff: 比纯机器人方案开发量大（要写完整前端 + 云函数 + 过审），但换来可展示、可商业化、合规可控。简历叙事待产品定型后微调（「砍填表」而非「砍小程序」）。
 
 ## ADR-002 · 后端用微信云开发（Serverless），不自建云服务器 · 2026-06-07
 - Problem: 小程序后端形态二选一：微信云开发（免运维）vs 自建云服务器（可控）。
 - Constraint: 微信小程序强制后端走 HTTPS + ICP 备案域名；开发者当前无可用备案域名（备案需 1-3 周）；希望今天就能开工。
 - Decision: 用微信云开发（云函数 + 云数据库 + 云存储）。无需域名 / 备案 / SSL；自带 openid 登录态；按量计费，自用量级近免费。
-- Alternatives（否决）: 自建云服务器（阿里云 sh/bj 已有机）—— 卡在备案，且要自做登录态 + 数据库运维。用户对自建无硬诉求（「微信云也可以」）。
+- Alternatives（否决）: 自建云服务器（阿里云 sh/bj 已有机）：卡在备案，且要自做登录态 + 数据库运维。用户对自建无硬诉求（「微信云也可以」）。
 - Tradeoff: 绑微信生态，未来扩独立 APP/Web 时云函数需改写成普通 HTTP API；但那是 6 个月后的事，不应让「可能的未来」拖累「今天开工」。
 
 ## ADR-003 · LLM 走自建 OpenAI 兼容网关，不直连厂商 API · 2026-06-07
 - Problem: AI 自然语言 → JSON 结构化的 LLM 从哪调。
 - Constraint: 想换模型不改小程序代码、想统一用量统计、符合既有基础设施分层；该自建网关当前对外入口为 IP 直连 + 自签证书（私有坐标不入库）。
 - Decision: 云函数调自建 OpenAI 兼容网关。云函数 Node 不受小程序合法域名白名单限制，可达任意公网 IP:端口；信任网关自签 root CA（`ca` 选项 / `NODE_EXTRA_CA_CERTS`）。开工前在网关建 PetsLog 专属 token。
-- Alternatives（否决）: 直连厂商 API —— 换模型要改码、用量与其它项目混、不走分层。
-- Tradeoff: ① 网关成单点，挂则录入不可用（自用可接受，远期再评估 fallback 直连厂商 API）；② 多挂一个依赖约束——网关 root CA 在属主侧不可轮换/重置，变更则 PetsLog 同步中断，调整须联动本项目（见 CORE/RELATIONS）。
+- Alternatives（否决）: 直连厂商 API：换模型要改码、用量与其它项目混、不走分层。
+- Tradeoff: ① 网关成单点，挂则录入不可用（自用可接受，远期再评估 fallback 直连厂商 API）；② 多挂一个依赖约束：网关 root CA 在属主侧不可轮换/重置，变更则 PetsLog 同步中断，调整须联动本项目（见 CORE/RELATIONS）。（已被 ADR-016 反转作废：弃自建网关 + 自签 root CA，改火山方舟 Coding Plan 直连，该 CA pinned 约束作废。）
 
 ## ADR-004 · 开源协议选 MIT，不选非商业 / 保留所有权许可 · 2026-06-07
 - Problem: 仓库开源（GitHub public），公开的是架构 / 产品 / prompt 文档而非完整商业代码，需定许可证；同时计划远期商业化（会员订阅），须想清楚开源是否削弱壁垒。
@@ -34,7 +34,7 @@
 - Constraint: 网关默认入口 `auto-llm`（映射 doubao）实测不支持 OpenAI 的 `response_format={type:"json_object"}`，返回 400 InvalidParameter。
 - Decision: 不发 response_format；用 system prompt 强约束「只输出一个 JSON 对象」+ temperature 0 + 云函数 `extractJson`（剥 markdown 围栏、截首尾大括号）容错解析。默认模型 `auto-llm`。
 - Alternatives（否决）: 依赖 response_format（上游不支持）；function calling / tools（doubao 支持度不稳，MVP 不引入额外复杂度）。
-- Tradeoff: 少一层协议级强约束，靠提示词 + 容错；实测 doubao 输出稳定（症状 / 疫苗 / 体重 / 药品入库 / 相对日期均正确）。未来换支持 response_format 的模型可再加一层兜底。
+- Tradeoff: 少一层协议级强约束，靠提示词 + 容错；实测 doubao 输出稳定（症状 / 疫苗 / 体重 / 药品入库 / 相对日期均正确）。未来换支持 response_format 的模型可再加一层兜底。（网关前提已被 ADR-016 反转，改火山方舟直连；response_format 决策仍有效。）
 
 ## ADR-006 · 用药/疫苗/驱虫提醒先做站内，微信订阅消息真推送延后 · 2026-06-08
 - Problem: 提醒功能要不要一步到位做「到期微信主动推送」。
@@ -156,10 +156,10 @@
 
 ## ADR-017 · 结构化直填：确认卡片改可编辑 + 手动录入入口（不调 LLM）· 2026-06-11
 - Problem: ① 录入只有「自然语言 → LLM 解析」一条路，用户想精确填一条记录（明确知道哪只宠、哪天、什么类型）也得过 LLM，慢、耗配额、离线 / 上游故障时无法录入；② 确认卡片只读，AI 解析错一个字段（如体重识别错）只能「返回修改」改原文再调一次 LLM，多一次调用 + 等待。
-- Constraint: 不新增云函数 / 集合 / 字段 —— **saveRecord 已是落库校验边界**（normalizeDate / numOrNull / event_type 枚举 / weight 类型 / fuzzyMatchPet + PET_UNKNOWN 全部在落库前重新归一校验），前端拼出同形 record 直接调即可，服务端原样兜底；守 ADR-015「建档凭意图不凭名字」：录入侧不开自由建宠侧门，建新宠仍走 pet.vue `mode=new`。
+- Constraint: 不新增云函数 / 集合 / 字段：**saveRecord 已是落库校验边界**（normalizeDate / numOrNull / event_type 枚举 / weight 类型 / fuzzyMatchPet + PET_UNKNOWN 全部在落库前重新归一校验），前端拼出同形 record 直接调即可，服务端原样兜底；守 ADR-015「建档凭意图不凭名字」：录入侧不开自由建宠侧门，建新宠仍走 pet.vue `mode=new`。
 - Decision（锁定，用户已确认两处分叉：① 确认卡片改可编辑〔而非单独表单页 / 最小版〕；② 语音输入留下一轮）:
   - **确认卡片全字段可编辑**（三种 kind：record / reminder / med_stock）：宠物 = picker（已有宠物名单，record 必选 / reminder 可选 / med_stock 无）、时间 / 到期 / 过期 = date picker、类型 = selector（event_type 7 桶 / rem_type 4 桶）、重复 = selector（不重复 / 每天 / 每周 / 每两周 / 每月 / 每季 / 每半年 / 每年）、体重 / 费用 / 数量 = 数字 input、用药 / 医院 / 病程 / 描述 / 药名 / 功效 / 事项 = 文本 input。**一份 UI 两用**：手动直填 + AI 结果内联改（改错字段不重调 LLM）。
-  - **点＋弹出「记录」入口卡**（原拟名「记一笔」，本批统一改为「记录」；as-built，经多版线框图评审选定「A 三入口卡」）：中央＋仍 `navigateTo /pages/record`，该页入口态呈【暗背景遮罩 + 居中卡】——自然语言 textarea **居中为主入口**（记录 → parseRecord 解析），下方「或换种方式」分隔线 + 结构化 / 语音**两个次级入口**：结构化点开即建空白可编辑表单（顶部 [记录|提醒|入库] 分段切 kind，不经 parseRecord、不写 parse_log，不耗配额，直接 saveRecord，手动拉 `callFn('pets',{action:'list'})` 供 picker）；语音禁用占位（toast「敬请期待」，留下一轮）。点暗背景空白处 / ✕ → navigateBack 关闭。**关键：入口卡走普通文档流（非 `position:fixed` 浮层）**，原生 textarea 不踩同层渲染穿透坑——这也是不选「每个 tab 内置 fixed 全局浮层」的原因（微信原生 custom-tab-bar 无干净通道触发 Vue 浮层 + 原生 input 进 fixed 浮层必穿透，等于重挖刚填的坑）；「弹卡」由目标页入口态视觉实现，代价是 iOS navigateTo 为右滑入而非底部弹起（可接受）。
+  - **点＋弹出「记录」入口卡**（原拟名「记一笔」，本批统一改为「记录」；as-built，经多版线框图评审选定「A 三入口卡」）：中央＋仍 `navigateTo /pages/record`，该页入口态呈【暗背景遮罩 + 居中卡】，自然语言 textarea **居中为主入口**（记录 → parseRecord 解析），下方「或换种方式」分隔线 + 结构化 / 语音**两个次级入口**：结构化点开即建空白可编辑表单（顶部 [记录|提醒|入库] 分段切 kind，不经 parseRecord、不写 parse_log，不耗配额，直接 saveRecord，手动拉 `callFn('pets',{action:'list'})` 供 picker）；语音禁用占位（toast「敬请期待」，留下一轮）。点暗背景空白处 / ✕ → navigateBack 关闭。**关键：入口卡走普通文档流（非 `position:fixed` 浮层）**，原生 textarea 不踩同层渲染穿透坑，这也是不选「每个 tab 内置 fixed 全局浮层」的原因（微信原生 custom-tab-bar 无干净通道触发 Vue 浮层 + 原生 input 进 fixed 浮层必穿透，等于重挖刚填的坑）；「弹卡」由目标页入口态视觉实现，代价是 iOS navigateTo 为右滑入而非底部弹起（可接受）。
   - **表单整页内联，废弃底部弹层**（as-built）：结构化直填与 AI 结果确认共用同一张**整页内联表单**（替代原 `sheet-mask` 弹层）；原生 input/picker 不再放进 `position:fixed` 弹层，规避其层级穿透 / 上滑动画跳位的真机风险（文件原注释「确认弹层弹出时隐藏背景 textarea 规避层级穿透」即此问题，内联后根除）。
   - **宠物字段三态**：① is_new（AI 建档意图，名字不在库）→ 名字 input + 🆕 将建档 + 种类 chips（保留 ADR-015 唯一建档通道，可改名）；② 其余 → picker 选已有宠物（0 宠时空状态引导去宠物页建档，record 不放行）；③ 落库前 record 必须有 pet（非 is_new），reminder pet 可空（保持「提醒不一定绑宠」）。
   - **数字字段出站强制 numOrNull**：可编辑后 input 给的是字符串，confirmSave 用本地 numOrNull 把 weight / cost / med_quantity 转 number\|null 再发（否则 saveRecord 的 `typeof==='number'` 兜底会把 "4.2" 判空丢值）。
@@ -181,13 +181,13 @@
 - Problem: ADR-012 的 tag（病程标签）落地后暴露两层问题：① 病程视图只有「时间线按 tag 筛选」的简版，受主时间线 50 条上限截断，早于第 50 条的同病程记录看不到（ADR-012 已留「完整视图后续」）；更隐蔽的是 tag chip 本身从已加载的前 50 条去重算，老病程的 chip 根本不出现，用户在时间线上无入口。② tag 是自由文本（ADR-012 tradeoff ②「后续可补规整」），真实使用 / 导入后语义过载：相当一部分 tag 不是病程线，而是与 event_type 桶重复（驱虫 / 疫苗 / 体重）、可归 event_type 就医的体检、或本有专用字段的里程碑（到家↔home_date / 绝育↔neutered）；把这些当病程线做聚合（起止 / 累计花费 / 体重曲线）会产出跨多宠混合的无意义统计。
 - Constraint: 不改 schema（沿用 records.tag 自由文本 + family 隔离 + 与 event_type 双轴，ADR-012/013）；存量历史记录的原文 raw / 描述 desc / 记录本身绝不改动，治理只动 tag 字段；治理对线上库用幂等维护动作（不 clear 重导，延续 ADR-014 导入收口的幂等纪律）；病程视图守红线（猫狗 only、每入口 assertMember family 隔离、不碰诊断 / 不外露费用）。
 - Decision（锁定，用户确认「先治理 tag 再上完整版」+「做轻量治理」）:
-  - **tag 语义收敛为「病程线」**（细化 ADR-012 的 tag 定义、承接其 tradeoff②「后续可补规整」；不反转、schema 与双轴不变，tag 语义此后以本 ADR 为准）：tag 只表达「把同一慢病 / 疗程的多次记录串起来的主题词」（如示例猫的嗜酸性肉芽肿 / 尿闭 / 软骨病）。event_type 已表达的事件类别（驱虫 / 疫苗 / 体重）、可归「就医」桶的体检、或已有专用字段的里程碑（到家 / 绝育）不再用 tag 表达 —— 类别浏览归 event_type 轴，里程碑归各自字段，双轴真正正交。
+  - **tag 语义收敛为「病程线」**（细化 ADR-012 的 tag 定义、承接其 tradeoff②「后续可补规整」；不反转、schema 与双轴不变，tag 语义此后以本 ADR 为准）：tag 只表达「把同一慢病 / 疗程的多次记录串起来的主题词」（如示例猫的嗜酸性肉芽肿 / 尿闭 / 软骨病）。event_type 已表达的事件类别（驱虫 / 疫苗 / 体重）、可归「就医」桶的体检、或已有专用字段的里程碑（到家 / 绝育）不再用 tag 表达：类别浏览归 event_type 轴，里程碑归各自字段，双轴真正正交。
   - **病程建模为 (宠, tag) 二元组**，不是单 tag：一条病程线 = 某只宠 + 某 tag。病程视图按 (宠,tag) 取记录，天然不跨宠混合（多宠家庭两只各自的同名病程是两条独立线）；同义碎裂在此模型下多为假象（同一宠同一病的多条记录本就同 tag），故不做批量合并，个别想改名归并由用户在视图内手动改（不批量猜医学归类）。
-  - **存量 tag 轻量治理（幂等维护动作，importNotion 加 action）**：清空「非病程」tag —— 与 event_type 重复的（驱虫 / 疫苗 / 记录体重，「记录体重」是库内实际 tag 值）、可归就医的（体检）、已有专用字段的里程碑（到家 / 绝育）、无意义的（未知）；其余病程 tag 原样保留、不合并。只改 tag 字段，raw/desc/记录全留；可逆（data.json 为源，改错重跑）。
+  - **存量 tag 轻量治理（幂等维护动作，importNotion 加 action）**：清空「非病程」tag：与 event_type 重复的（驱虫 / 疫苗 / 记录体重，「记录体重」是库内实际 tag 值）、可归就医的（体检）、已有专用字段的里程碑（到家 / 绝育）、无意义的（未知）；其余病程 tag 原样保留、不合并。只改 tag 字段，raw/desc/记录全留；可逆（data.json 为源，改错重跑）。
   - **防未来污染**：parseRecord prompt 加 tag 反污染规则（event_type 已表达的类别别重复写进 tag，tag 只在多次记录串成疗程时填）+ 输入喂该家庭已用病程 tag 候选（详见 ADR-020）。
   - **病程完整视图（治理后建）**：新建独立页 `/pages/course/course.vue`（**非 tabBar 页**，规避 tabBar 页 navigateTo 自跳的真机不确定性）；timeline 云函数加 `course` action，入参 (tag, family_id, pet)，assertMember 后按 (family_id, tag, pet) 一次取该病程全量（limit 放宽到远超现实病程长度的安全上限）并服务端顺手算聚合（起止日期 / 跨度 / 记录数 / 有 cost 的累计花费 / 有 weight 的体重序列）。UI = 病程概览卡 + 迷你体重趋势（**新写无交互静态 canvas，不复用 pet.vue 带拖动平移的曲线**，避免重引其物理宽白屏坑；新 canvas 仍须套 MEMORY 记的物理宽夹紧 ≤4000，防超长病程白屏）+ 竖向时间轴（沿用 timeline 卡片 + 📎 角标，点单条进 record-detail）。入口：时间线 tag chip 点进 + 宠物档案该宠病程。**chip 全集改由 timeline 云函数新增 `list_tags` action 供给**（入参 family_id，assertMember 后去重列全部 tag，不受主时间线 50 条窗口限制，修复老病程无入口的 bug；这份 distinct tag 同时喂 ADR-020 的 LLM tag 候选，一份两用）。
 - Alternatives（否决）: 只做「看全」不治理 tag（聚合对半数非病程 tag 产出混宠噪声，上线即废）；做 tag 同义归并 / 字典（现状按 (宠,tag) 看无真碎裂，归并是为不存在的问题付成本，且批量猜医学归类有误并风险）；加 is_course 标记 / 独立病程字段（改 schema，(宠,tag) 模型 + 清非病程 tag 已够，YAGNI）；病程视图复用 timeline tabBar 页加参数（同页双语义状态易混 + tabBar 自跳真机不确定）；按 (tag) 不带 pet 聚合（跨宠混合）；复用兽医小结 exportVet 按病程出图（exportVet 是 MAX=10 / 按 time 排的版式，喂数十条病程是重写非复用，canvas 高度可能超限白屏，本轮不做）。
-- Tradeoff: ① tag 治理是一次性幂等动作 + prompt 改，存量清空约半数噪声 tag（只动 tag，全可逆）；② 新增一页 + 一个云函数 action + 聚合计算，迷你曲线需新写静态 canvas（增量集中在拼装，不碰已踩平的拖动 canvas）；③ 累计花费仅加总有 cost 的记录（多数记录 cost 为空，概览偏低且与宠物档案「当前身价 = price_base + 该宠全部 records.cost 累计」口径范围不同 —— 病程口径更窄 = 仅该宠该 tag 下有 cost 的记录，视图内须注明「本病程已记花费」避免与身价数混淆）；④ 病程极端超 limit 仍可能截断（远超现实，若真出现再升级为游标分页，平滑演进不返工）。
+- Tradeoff: ① tag 治理是一次性幂等动作 + prompt 改，存量清空约半数噪声 tag（只动 tag，全可逆）；② 新增一页 + 一个云函数 action + 聚合计算，迷你曲线需新写静态 canvas（增量集中在拼装，不碰已踩平的拖动 canvas）；③ 累计花费仅加总有 cost 的记录（多数记录 cost 为空，概览偏低且与宠物档案「当前身价 = price_base + 该宠全部 records.cost 累计」口径范围不同：病程口径更窄 = 仅该宠该 tag 下有 cost 的记录，视图内须注明「本病程已记花费」避免与身价数混淆）；④ 病程极端超 limit 仍可能截断（远超现实，若真出现再升级为游标分页，平滑演进不返工）。
 
 ## ADR-020 · LLM 解析 I/O 精准化（raw 服务端逐字落库）+ 准确率评测先行 · 2026-06-12
 - Problem: 「记录」的解析准确率要冲 ≥90%，现状有两类问题：① 原文失真风险：prompt 让 LLM「raw 原话原样回填」，抽取模型可能顺手改错别字 / 吞字，raw 不再是用户字面原文（与历史导入那批 raw===desc「被消毒」同类病根）；用户明确要求原文逐字保留。② 失分点无尺可量：parseRecord 无单元 / 评测覆盖（tests 只覆盖 saveRecord 落库层），改 prompt 是绿是红全凭感觉；最难的几条（kind 三分流、tag 病程识别、pet 错别字归一）服务端救不回，只能靠 LLM I/O 调。
@@ -198,11 +198,11 @@
   - **输出收紧（prompt 规则 + few-shot）**：tag 反污染规则（event_type 已表达的类别别重复写进 tag）；补 kind 三分流对照 few-shot（已发生→record / 买囤→med_stock / 将来→reminder，kind 服务端无救急、few-shot 是唯一可调路）；event_type 歧义例（注射疫苗→疫苗 / 打针消炎→用药）；cost 多笔相加填总额（钉口径，与「累计花费 = cost 求和」下游一致）；med 只填药名。
   - **评测先行，混合诚实 + 端到端**（验证 I/O 改动、守 ≥90% 不假绿）:
     - 语料：以导入样本的结构化真值（pet / event_type / tag / cost / weight 等人工核对过）为 ground truth，反向合成口语 input（补宠物名 / 错别字 / 相对日期 / 口语费用），产出离线评测集（含手工补的 kind 边界 + med_stock / reminder 少量样本）。
-    - 判分：分两类 —— 闸门字段（kind / pet / event_type，服务端救不回、错了后果重）单独报命中率；加权字段（time / cost / tag / weight，有 normalize 兜底）按容差判等，tag 报「精确」与「在候选集」两档。**诚实标注**：导入样本的 kind 字段为空、med_stock / reminder 零样本、raw 已消毒，故 kind 维度真值不足、指标待真实样本，不据合成自评宣布 kind 达标。
-    - 跑批两层：确定性层 mock 上游、只测服务端兜底（normalize / numOrNull / normalizeDateTime / fuzzyMatchPet），进 CI 守回归；LLM 层 node 脚本直连方舟跑全集（读 config.local.js 的 key，绕云函数鉴权 / 限流，温度 0 结果稳定可对比）。**eval 必须端到端跑完整后处理链**（callGateway → normalize → fuzzyMatchPet → pet_unknown），不只测 LLM 裸输出 —— pet 归一恰因有 fuzzyMatch + saveRecord 二检可端到端可信测，作首阶段重点。
+    - 判分：分两类，闸门字段（kind / pet / event_type，服务端救不回、错了后果重）单独报命中率；加权字段（time / cost / tag / weight，有 normalize 兜底）按容差判等，tag 报「精确」与「在候选集」两档。**诚实标注**：导入样本的 kind 字段为空、med_stock / reminder 零样本、raw 已消毒，故 kind 维度真值不足、指标待真实样本，不据合成自评宣布 kind 达标。
+    - 跑批两层：确定性层 mock 上游、只测服务端兜底（normalize / numOrNull / normalizeDateTime / fuzzyMatchPet），进 CI 守回归；LLM 层 node 脚本直连方舟跑全集（读 config.local.js 的 key，绕云函数鉴权 / 限流，温度 0 结果稳定可对比）。**eval 必须端到端跑完整后处理链**（callGateway → normalize → fuzzyMatchPet → pet_unknown），不只测 LLM 裸输出：pet 归一恰因有 fuzzyMatch + saveRecord 二检可端到端可信测，作首阶段重点。
   - **暂不做**：二次自纠 / 双调用（latency 4s→8s，留 eval 看缺口再定，阶段2）；线上脱敏 raw 语料（待合成集失真到不够用时另立 ADR + 知情同意）；置信度评分 / pet 拼音排序（阶段3）。温度保持 0（抽取任务确定性优先，非待调项）。
 - Alternatives（否决）: 继续让 LLM 回填 raw（原文失真 + 多一处失败面）；先调 prompt 后补评测（无尺，改完无从判断，违「先有尺再下结论」）；整条 all-or-nothing 判分（太粗无法定位，desc 措辞差异污染）；喂静态历史 tag 全集（含非病程噪声 + 跨家庭污染）；eval 只测 LLM 裸输出（pet 最终正确性由后处理链决定，裸输出不代表用户所见）；硬约束 tag 改可选 chips（破自然语言录入体验）。
-- Tradeoff: ① raw 服务端覆盖后，LLM 输出的 raw 字段废弃（保留兼容，落库以服务端为准）；② 输入加 tag 候选 + 物种使 prompt 略长（精选不堆量，token / 延迟轻增）；③ 评测集为合成口语，与真实用户措辞有 gap（缓解：内测真实失败例脱敏后逐步并入同一格式 —— 但须先过本 ADR Constraint 的「脱敏 raw 入语料 = ADR + 知情同意」闸门，通过后方可并入，本轮不并；并入时须冻结当时 today 以免相对日期评分逐日漂移）；④ LLM 层评测需本地方舟 key（读 gitignore 的 config.local.js，绝不硬编码、不进无密钥 CI）；⑤ 两份 normalize / normalizeDate / normalizeDateTime / fuzzyMatch 改动仍须 parseRecord / saveRecord 同步（ADR-015/018 既有）。
+- Tradeoff: ① raw 服务端覆盖后，LLM 输出的 raw 字段废弃（保留兼容，落库以服务端为准）；② 输入加 tag 候选 + 物种使 prompt 略长（精选不堆量，token / 延迟轻增）；③ 评测集为合成口语，与真实用户措辞有 gap（缓解：内测真实失败例脱敏后逐步并入同一格式，但须先过本 ADR Constraint 的「脱敏 raw 入语料 = ADR + 知情同意」闸门，通过后方可并入，本轮不并；并入时须冻结当时 today 以免相对日期评分逐日漂移）；④ LLM 层评测需本地方舟 key（读 gitignore 的 config.local.js，绝不硬编码、不进无密钥 CI）；⑤ 两份 normalize / normalizeDate / normalizeDateTime / fuzzyMatch 改动仍须 parseRecord / saveRecord 同步（ADR-015/018 既有）。
 
 ## ADR-021 · 宠物档案卡（可分享图片，海报风）· 2026-06-14
 - Problem: 宠物详情页 pet.vue 已是完整功能档案（信息行 + 体重曲线 + 编辑），且已有「生成给兽医的小结」走离屏 canvas 出图存相册。但这两者都对内 / 对医生：详情页是滚动长页不便分享，兽医小结是临床数据朴素无情感。缺一张主人愿意对外晒的「毛孩子档案卡」，情感与社交向（发朋友圈 / 小红书，呼应 ROADMAP 推广），把一只宠物的身份浓缩成一张好看的图。
@@ -225,11 +225,11 @@
   - **首页轮播（index.vue 重做主视图，替换 2 列网格）**：保留问候 + 到期提醒横幅，其下用 `<swiper>` previous/next-margin 露邻卡（轮播图观感）+ 当前卡 active 放大、邻卡缩小变暗；每张 `<swiper-item>` 显示 `<image>`（该宠档案卡的 canvasToTempFilePath 产物）；末张 = 「＋ 添加宠物」卡（普通 view，非 canvas）；下方一排指示点。点卡 → 该宠详情页（openPet 不变）。空状态（无宠）沿用原 empty。
   - **轮播卡渲染 = 一块离屏 canvas 顺序出图 + 签名缓存**：页内单个离屏 `#petCardCanvas`（left:-9999px），onShow 取 pets 后对每只宠按签名（avatar|name|species|breed|birthday|weight|home_date|intro 拼串）判脏，仅脏 / 缺图的宠重渲：顺序 await（loadPetAvatar → paintPetCard → canvasToTempFilePath）逐张填进 `cardImgs[petId]`，未出图先占位骨架。temp 路径会话内有效，缓存进页面 data，再次进 tab 命中缓存零重渲（只新增 / 改动过的宠重画）。
 - Alternatives（否决）: 首页用 live DOM view 重画一版卡（违 WYSIWYG，与 canvas 分享版双维护必漂移，用户明确「直接用那个」）；每次 onShow 全量重渲所有卡（多宠卡顿，签名缓存几乎零成本就免了）；轮播放 N 个 canvas 各自渲（原生 canvas 多实例重 + 穿透风险，改用「1 canvas 顺序出图 → N 个 image」）；档案卡仍只留详情页、首页另做卡（用户要的就是把档案卡搬上首页当门面）；改版另开 ADR-021-bis（A 版是 ADR-021 版式的视觉细化、口径 / 红线 / 管线全不变，并入本 ADR 的「改版」子项即可）。
-- Tradeoff: ① 抽 petCard.js 是一次性重构，pet.vue 迁出 4 个方法、改 renderCard 两行调用（vet 小结路径不动）；② 首页首次进入要顺序渲 N 张卡（含照片头像的 wx.cloud.downloadFile），有 ~秒级铺图过程，用骨架占位缓冲，缓存后续命中即时；③ 轮播卡是 image 快照非实时 DOM，宠物字段改动后靠签名失配触发重渲（已覆盖 8 个关键字段，漏签名字段会显示旧卡到下次匹配 —— 现有字段够用，新增展示字段记得补进签名）；④ swiper 固定高按屏宽 × 440/320 派生，超窄 / 超宽屏靠比例自适应；⑤ 档案卡版式此后以本 ADR 的 A 版为准（ADR-021 的「角落爪印 / 灰文字物种行 / 无图标胶囊」描述被本 ADR 改版取代，红线与内容口径不变）。
+- Tradeoff: ① 抽 petCard.js 是一次性重构，pet.vue 迁出 4 个方法、改 renderCard 两行调用（vet 小结路径不动）；② 首页首次进入要顺序渲 N 张卡（含照片头像的 wx.cloud.downloadFile），有 ~秒级铺图过程，用骨架占位缓冲，缓存后续命中即时；③ 轮播卡是 image 快照非实时 DOM，宠物字段改动后靠签名失配触发重渲（已覆盖 8 个关键字段，漏签名字段会显示旧卡到下次匹配：现有字段够用，新增展示字段记得补进签名）；④ swiper 固定高按屏宽 × 440/320 派生，超窄 / 超宽屏靠比例自适应；⑤ 档案卡版式此后以本 ADR 的 A 版为准（ADR-021 的「角落爪印 / 灰文字物种行 / 无图标胶囊」描述被本 ADR 改版取代，红线与内容口径不变）。
 
 ## ADR-023 · 物种扩展 A 档：固定枚举 + 其他兜底 + 静态默认头像（解除「仅猫狗」红线）· 2026-06-16
-- Problem: 「仅猫狗」是写进 CLAUDE.md / AIREADME-CORE「绝不」/ PRD 的产品红线，但产品名是 PetsLog（pets 本就泛指），用户决定放开多物种。落库真相源是 `cloudfunctions/pets/index.js` 的二元钳制 `species === 'dog' ? 'dog' : 'cat'`（建宠 + 编辑各一处）—— 任何非狗值被强写成猫；外围跟随：parseRecord prompt「只处理猫和狗」+ species 默认 cat、pet.vue 物种 chip 只两个 + 默认 emoji 🐶🐱 + is-cat/is-dog 样式、petCard.js / index.vue 同款、文档红线三处。难点不在代码（机械活，铺 ~8 文件 + prompt + 文档），在「放开到什么深度」。
-- Constraint: 不破坏库内 9 宠（全猫狗）现有数据 —— species 值 cat/dog 不变，只放宽枚举（pets.species 本就是 string，无 schema 迁移）；不新增集合 / 云函数；隔离与落库红线（assertMember family 隔离、saveRecord PET_UNKNOWN 零写入、LLM key 不进前端）均不依赖 species，放宽不得削弱它们；静态默认头像须随包发布、零云请求、全家庭共享、控体积；canvas（petCard.js）画默认头像须套既有物理宽夹紧 ≤4096；脱敏纪律不变（向前改红线，不 rewrite git 历史）。
+- Problem: 「仅猫狗」是写进 CLAUDE.md / AIREADME-CORE「绝不」/ PRD 的产品红线，但产品名是 PetsLog（pets 本就泛指），用户决定放开多物种。落库真相源是 `cloudfunctions/pets/index.js` 的二元钳制 `species === 'dog' ? 'dog' : 'cat'`（建宠 + 编辑各一处）：任何非狗值被强写成猫；外围跟随：parseRecord prompt「只处理猫和狗」+ species 默认 cat、pet.vue 物种 chip 只两个 + 默认 emoji 🐶🐱 + is-cat/is-dog 样式、petCard.js / index.vue 同款、文档红线三处。难点不在代码（机械活，铺 ~8 文件 + prompt + 文档），在「放开到什么深度」。
+- Constraint: 不破坏库内 9 宠（全猫狗）现有数据：species 值 cat/dog 不变，只放宽枚举（pets.species 本就是 string，无 schema 迁移）；不新增集合 / 云函数；隔离与落库红线（assertMember family 隔离、saveRecord PET_UNKNOWN 零写入、LLM key 不进前端）均不依赖 species，放宽不得削弱它们；静态默认头像须随包发布、零云请求、全家庭共享、控体积；canvas（petCard.js）画默认头像须套既有物理宽夹紧 ≤4096；脱敏纪律不变（向前改红线，不 rewrite git 历史）。
 - Decision（锁定，用户确认「A 档 + 固定清单 + 其他兜底，B 档进 ROADMAP」）:
   - **A 档 = 一套统一记录模型，不为物种分叉医疗语义**：event_type 7 桶 / 提醒类型 / 病程 (宠,tag) 模型对所有物种共用，纯数据驱动（非猫狗物种用得到的字段照填、用不到的不填，疫苗 / 驱虫不为它们隐藏也不强推模板）。猫狗已调好的语义继续用，新物种骑同轨。**每物种定制医疗语义（疫苗 / 驱虫周期、专属事件类型、爬宠养护温湿度等）= B 档，写入 ROADMAP 以后做**，本轮不碰（知识成本高、MVP 性价比低）。
   - **物种枚举固定 8 类 + 其他兜底**：`cat 猫 / dog 狗 / rabbit 兔 / rodent 小宠(仓鼠·豚鼠·龙猫归一) / bird 鸟 / reptile 爬宠(龟·蜥蜴·蛇归一) / fish 鱼 / other 其他`。归一为控清单不碎（细分由 breed 自由文本字段表达，如 rodent + breed「荷兰猪」）。
@@ -243,7 +243,7 @@
 
 ## ADR-024 · 物种扩展 B 档（B2 全量）：每物种 profile + 养护数据维度（records.params）· 2026-06-16
 - Problem: ADR-023 落地 A 档（多物种共用一套猫狗医疗语义）后，用户决定继续做 B 档「每物种定制」，且选 B2（含养护数据）+ 周期「纯用户自定义」（不内置疫苗 / 驱虫建议值）。A 档对非猫狗物种的不精准点：① event_type 7 桶按猫狗调（爬宠 / 鱼几乎用不到疫苗 / 驱虫，却缺「养护」这类它们的核心记录）；② 爬宠温湿度、鱼水质（pH / 氨 / 亚硝酸盐 / 水温）这类结构化养护参数无处落，只能塞进自由 desc，不可量化 / 不可成趋势。
-- Constraint: 守红线 —— Q2 锁定「纯用户自定义周期」=不内置任何物种的疫苗 / 驱虫周期建议值（疫苗周期 = 参考医疗信息，内置即擦「不诊断 / 不开方」红线；规避之，提醒周期全由用户填），故 B2 的「定制」只做**结构化分类 + 养护参数**，不做医疗知识库；不破坏库内存量（records 全无 params 字段，缺省即不显示 / 不参与）；不新增集合（养护记录复用 records 管线：family 隔离 / 时间线 / 病程 / 附件全继承）；species 仍只作展示 + 选 profile，不参与隔离 / 落库校验红线；前端 src/species.js（ADR-023）继续是物种枚举真相源，B 档新增 src/speciesProfile.js 挂其上。
+- Constraint: 守红线：Q2 锁定「纯用户自定义周期」=不内置任何物种的疫苗 / 驱虫周期建议值（疫苗周期 = 参考医疗信息，内置即擦「不诊断 / 不开方」红线；规避之，提醒周期全由用户填），故 B2 的「定制」只做**结构化分类 + 养护参数**，不做医疗知识库；不破坏库内存量（records 全无 params 字段，缺省即不显示 / 不参与）；不新增集合（养护记录复用 records 管线：family 隔离 / 时间线 / 病程 / 附件全继承）；species 仍只作展示 + 选 profile，不参与隔离 / 落库校验红线；前端 src/species.js（ADR-023）继续是物种枚举真相源，B 档新增 src/speciesProfile.js 挂其上。
 - Decision（锁定，用户确认「B2 全量含养护数据 + 纯用户自定义周期」）:
   - **新增 `src/speciesProfile.js`**（挂 ADR-023 的 species.js）：每物种 profile 配置表，导出 `eventTypesFor(species)`（结构化录入 event_type picker 的物种相关候选）/ `husbandryFor(species)`（养护参数字段 schema [{key,label,unit}]）/ `reminderTypesFor(species)`（提醒分类预设，仅分类名、无周期值）。猫狗 = 原 7 桶全集、无养护参数；爬宠 / 鱼 = 加「养护」桶 + 结构化参数（reptile: 温度℃ / 湿度% ；fish: pH / 氨 ppm / 亚硝酸盐 ppm / 水温℃）；兔 / 小宠 / 鸟 / 其他 = 有「养护」桶但 v1 不给结构化参数（free desc 即可，参数表后续按需加，纯配置增量）。
   - **养护 = event_type 第 8 桶**：saveRecord EVENT_TYPES、parseRecord prompt、record.vue 录入枚举、timeline / record-detail 配色与 chip 同步加「养护」。
