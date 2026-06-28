@@ -16,9 +16,10 @@
         placeholder="例如「示例猫今天吐了，体重 4.2kg」"
         placeholder-class="rec__ph"
         :disabled="parsing"
+        :focus="forceFocus"
         auto-height
         @focus="focused = true"
-        @blur="focused = false"
+        @blur="onBlur"
       />
       <view class="rec__examples">
         <text
@@ -39,7 +40,7 @@
         @click="onSend"
       >{{ parsing ? '解析中…' : '记 录' }}</button>
 
-      <!-- 或换种方式：结构化（点开整页表单，不调 LLM）/ 语音（敬请期待） -->
+      <!-- 或换种方式：结构化（点开整页表单，不调 LLM）/ 语音（聚焦输入框 + 系统键盘麦克风听写，零后端） -->
       <view class="card__alt-divider">
         <view class="card__alt-line"></view>
         <text class="card__alt-text">或换种方式</text>
@@ -50,10 +51,9 @@
           <image class="alt-entry__ico" src="/static/icon/keyboard.png" mode="aspectFit" />
           <text class="alt-entry__name">结构化逐项</text>
         </view>
-        <view class="alt-entry alt-entry--soon" hover-class="alt-entry--press" hover-stay-time="60" @click="voiceSoon">
+        <view class="alt-entry" hover-class="alt-entry--press" hover-stay-time="60" @click="voiceInput">
           <image class="alt-entry__ico" src="/static/icon/mic.png" mode="aspectFit" />
           <text class="alt-entry__name">语音</text>
-          <text class="alt-entry__soon">敬请期待</text>
         </view>
       </view>
     </view>
@@ -254,6 +254,7 @@ export default {
     return {
       draft: '',
       focused: false,
+      forceFocus: false, // 「语音」入口 = 聚焦 NL 输入框弹键盘，用系统键盘🎤听写（零后端）
       parsing: false,
       saving: false,
       parsed: null, // 结构化结果（AI 解析 or 手动直填），待用户确认 / 编辑
@@ -508,8 +509,14 @@ export default {
     close() {
       uni.navigateBack({ delta: 1 })
     },
-    voiceSoon() {
-      uni.showToast({ title: '语音录入开发中，敬请期待', icon: 'none' })
+    onBlur() {
+      this.focused = false
+      this.forceFocus = false // 失焦即复位，下次点「语音」能再次 false→true 触发聚焦
+    },
+    voiceInput() {
+      // 键盘自带语音：聚焦 NL 输入框弹出系统键盘，用键盘上的 🎤 听写，文字回填后走现有 parseRecord（零后端）
+      this.forceFocus = true
+      uni.showToast({ title: '点键盘上的 🎤 说话，会自动转成文字', icon: 'none', duration: 2500 })
     },
     // ===== 手动直填（不调 LLM，见 ADR-017）=====
     today() {
@@ -952,13 +959,6 @@ export default {
   font-size: var(--fs-sub);
   font-weight: 600;
   color: var(--c-text);
-}
-.alt-entry--soon {
-  opacity: 0.7;
-}
-.alt-entry__soon {
-  font-size: var(--fs-tiny);
-  color: var(--c-text-3);
 }
 
 /* 录入表单（整页内联，替代旧底部弹层；规避原生 input/picker 在 fixed 弹层的层级穿透） */

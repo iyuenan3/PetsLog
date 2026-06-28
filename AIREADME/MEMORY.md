@@ -133,3 +133,11 @@
   - **验尺管线（可复用）**：云存储临时 URL 外网 `curl -I` 验可达 + `afinfo` 验真实采样率 / 声道；`getRecorderManager` 录音真机才准（模拟器不准，同 cropImage）；base64 直传可绕开签名 URL；`DataLen` 是原始字节数非 base64 长度。
   - **密钥红线守住**：腾讯云 SecretId/Key 全程没经我手，只用户贴进 `config.local.js`（gitignore，`**/config.local.*` 已覆盖），代码只 `process.env` / `require` 读、不打印。
 - **重启选项（供未来）**：① 腾讯云直连付费（asr 云函数代码在本会话历史，极便宜、开通即用，含 `SentenceRecognition` `SourceType:1` 直传 base64 + `DataLen`=原始字节）；② 免费 ASR（百度 / 讯飞，要新账号 + 重写对接）；③ 键盘自带语音（零成本兜底，牺牲专属「按住说话」按钮，点输入框用键盘麦）；④ 迁企业主体后重试插件 / 服务市场。
+
+### 续：服务端通道走穿，路②确诊为「坏掉的代理壳」+ 决定走键盘语音（ADR-036）· 2026-06-28
+2026-06-26 留的疑点「`service`/`api` 是我从博客猜的、可能不对」**本轮证伪**：Service ID `wxa8386175898e12c9` + API Name `SentenceASR` 经服务市场官方服务详情页（`fuwu.weixin.qq.com/service/detail/0008222a430fb072202a8e0625bc15` 的「接入文档」tab）逐字核对**完全正确**。本轮把上轮没试的**服务端通道 `wxa/servicemarket`**（探针 `tools/wxdump/asr_*.mjs`，相对客户端 opaque 空的优势＝**返真错误码**）走穿，彻底定性：
+- **信封格式已钉死**：`POST https://api.weixin.qq.com/wxa/servicemarket?access_token=` body=`{service, api, client_msg_id, data:{Action:SentenceRecognitionWX, EngSerViceType:16k_zh, VoiceFormat, UsrAudioKey, SourceType, Url|Data+DataLen}}`。缺 `client_msg_id`→`9301001 invalid parameter`；`data` 传字符串→`9301003 internal exception`；`data` 必须对象。
+- **三通道全死（确诊、非偶发）**：① 服务端同步 10+ 发 100% `9301002 call api service failed`（base64 直传 / URL 原文 / URL 编码 / 数字 key 全试遍；云存储上传→`batchdownloadfile` 取临时 URL→识别全链路通、临时 URL 实测 `200 + audio/x-wav`）；② 客户端 `invokeService` 真机复现 `ok`+`data:""`+requestId（与 0626 一致）；③ 异步 `async:true`→`9301013 api type not match`（SentenceASR **不支持异步**，故客户端那个空 ≠ 异步待取），retrieve 该 requestId→`9301014 invalid request id`。
+- **`9301002` 官方定性**＝网关已收信封、转上游腾讯云 ASR、**上游执行失败**的透传码（社区置顶帖多人复现、官方仅答「重试」、已购额度足也报）。即**坏的是微信这层代理壳、我方参数全对**。4-agent 调研 workflow + 官方文档 + 社区交叉判 `serverSideVerdict=supported`（非 client-only），根因＝上游 / 服务态。
+- **决定（ADR-036）**：弃微信服务市场该服务（三通道死透），**先走键盘自带语音**（`record.vue`「语音」入口转正＝`:focus` 聚焦 NL 输入框弹系统键盘、用键盘 🎤 听写、文字走现有 parseRecord、**零后端**）；腾讯云直连（真身、绕开坏代理、¥0.002/次）留作未来升级。
+- **教训补**：① 「客户端 opaque 空」别停在客户端，**上服务端 `wxa/servicemarket` 拿真错误码**（这次正是它把「我参数错」证伪、把「服务壳坏」坐实）；② `service`/`api` 别从博客猜，**服务详情页「接入文档」有权威 Service ID / API Name**；③ JS 渲染反爬页（开放社区置顶帖）正文抓不到时，**让用户导 PDF / 截图**比硬抓高效；④ 探针 `tools/wxdump/asr_*.mjs` 留仓，重启 / 复现直接跑（AppSecret 运行时读 `config.local.json`、不入脚本）。
