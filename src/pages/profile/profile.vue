@@ -25,7 +25,7 @@ import { getProfile, updateProfile, uploadAvatar } from '@/cloud'
 
 export default {
   data() {
-    return { nickname: '', avatar: '', saving: false, nickFocus: false, editBaseline: '' }
+    return { nickname: '', avatar: '', saving: false, uploadingAvatar: false, nickFocus: false, editBaseline: '' }
   },
   async onLoad() {
     // #ifdef MP-WEIXIN
@@ -89,6 +89,7 @@ export default {
     async onChooseAvatar(e) {
       const url = e.detail && e.detail.avatarUrl
       if (!url) return
+      this.uploadingAvatar = true // 兜底 mask 之外再加标志（mask 若被竞态/某基础库绕过，save 仍拒），对齐 pet.vue 防御纵深
       uni.showLoading({ title: '上传中…', mask: true }) // mask 挡住上传期间点保存（this.avatar 未就位会存旧/空头像），对齐 pet.vue
       try {
         const next = await uploadAvatar(url)
@@ -96,14 +97,22 @@ export default {
         this.avatar = next
       } catch (err) {
         uni.showToast({ title: '头像上传失败', icon: 'none' })
+      } finally {
+        this.uploadingAvatar = false
+        uni.hideLoading()
       }
-      uni.hideLoading()
       // 选完头像、昵称还空 → 自动聚焦昵称输入框（弹出「使用微信昵称」），把头像 + 昵称串成一气呵成、少点一下
       if (this.avatar && !this.nickname) {
         setTimeout(() => { this.nickFocus = true }, 300)
       }
     },
     async save() {
+      if (this.uploadingAvatar) {
+        // 头像还在上传（this.avatar 未就位）：此刻存会落旧/空头像。挡住等传完（mask 之外的兜底，对齐 pet.vue）
+        uni.showToast({ title: '头像上传中，请稍候', icon: 'none' })
+        return
+      }
+      if (this.saving) return // 双击守卫（:loading 在 mp-weixin 不拦点击）：防两次并发 updateProfile
       this.saving = true
       try {
         const res = await updateProfile({ nickname: String(this.nickname || '').trim(), avatar: this.avatar })

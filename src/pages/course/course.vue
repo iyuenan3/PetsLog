@@ -43,8 +43,9 @@
             <text class="tl-item__time">{{ shortDate(r.time) }}</text>
           </view>
           <text v-if="r.raw || r.desc" class="tl-item__quote">{{ r.raw || r.desc }}</text>
-          <view v-if="r.weight || r.med || r.hospital || r.cost != null || r.att_count" class="tl-item__notes">
+          <view v-if="r.weight || r.med || r.hospital || r.cost != null || r.att_count || r.params" class="tl-item__notes">
             <view v-if="r.weight" class="tl-note"><image class="ic ic--sm" src="/static/icon/fn-weight.png" mode="aspectFit" /><text>{{ r.weight }}kg</text></view>
+            <view v-for="pp in fmtParams(r.params)" :key="pp.key" class="tl-note"><image class="ic ic--sm" src="/static/icon/fn-param.png" mode="aspectFit" /><text>{{ pp.label }} {{ pp.value }}{{ pp.unit }}</text></view>
             <view v-if="r.med" class="tl-note"><image class="ic ic--sm" src="/static/icon/fn-med.png" mode="aspectFit" /><text>{{ r.med }}</text></view>
             <view v-if="r.hospital" class="tl-note"><image class="ic ic--sm" src="/static/icon/fn-hospital.png" mode="aspectFit" /><text>{{ r.hospital }}</text></view>
             <view v-if="r.cost != null" class="tl-note"><image class="ic ic--sm" src="/static/icon/fn-cost.png" mode="aspectFit" /><text>¥{{ r.cost }}</text></view>
@@ -63,6 +64,7 @@
 <script>
 import { CLOUD_ENV } from '@/config'
 import { callFn } from '@/cloud'
+import { formatParams } from '@/speciesProfile'
 
 export default {
   data() {
@@ -100,7 +102,14 @@ export default {
       return { 症状: 'ev-symptom', 用药: 'ev-med', 疫苗: 'ev-vaccine', 驱虫: 'ev-deworm', 体重: 'ev-weight', 就医: 'ev-clinic', 养护: 'ev-care' }[t] || 'ev-other'
     },
     shortDate(d) {
-      return d ? String(d).slice(5) : ''
+      if (!d) return ''
+      const s = String(d)
+      // 跨年病程（如去年延续到今年）显示完整 YYYY-MM-DD，否则只看 MM-DD 分不清年份；本年显示 MM-DD HH:mm（对齐 timeline.vue）
+      if (s.slice(0, 4) !== String(new Date().getFullYear())) return s.slice(0, 10)
+      return s.length > 10 ? s.slice(5, 16) : s.slice(5, 10)
+    },
+    fmtParams(params) {
+      return formatParams(params)
     },
     openDetail(r) {
       uni.navigateTo({ url: `/pages/record-detail/record-detail?id=${r._id}` })

@@ -57,6 +57,7 @@ exports.main = async (event) => {
         next_date: r.next_date || todayStr(),
         repeat_days: typeof r.repeat_days === 'number' ? r.repeat_days : Number(r.repeat_days) || 0,
         note: r.note || '',
+        raw: r.raw || '', // 原话全路径落库（ADR-031）：与 saveRecord reminder 路径 + meds add 对齐，旧条无 raw 优雅降级
         done: false,
         created_at: Date.now(),
         updated_at: Date.now(),

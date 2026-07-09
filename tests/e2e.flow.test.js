@@ -6,12 +6,13 @@
 const Module = require('module')
 const path = require('path')
 
-// ---------- 内存 DB（支持 where/_.in/_.neq/_.inc + field/orderBy/skip/limit/doc/get/update/add/remove/count）----------
+// ---------- 内存 DB（支持 where/_.in/_.neq/_.inc/_.gt + field/orderBy/skip/limit/doc/get/update/add/remove/count）----------
 function clone(o) { return JSON.parse(JSON.stringify(o)) }
 function matchRow(row, where) {
   return Object.entries(where || {}).every(([k, v]) => {
     if (v && typeof v === 'object' && v.__cmd === 'in') return v.v.includes(row[k])
     if (v && typeof v === 'object' && v.__cmd === 'neq') return row[k] !== v.v
+    if (v && typeof v === 'object' && v.__cmd === 'gt') return Number(row[k]) > v.v
     return row[k] === v
   })
 }
@@ -21,7 +22,7 @@ function applyUpdate(doc, data) {
     else doc[k] = v
   }
 }
-const _ = { in: (v) => ({ __cmd: 'in', v }), neq: (v) => ({ __cmd: 'neq', v }), inc: (n) => ({ __cmd: 'inc', n }) }
+const _ = { in: (v) => ({ __cmd: 'in', v }), neq: (v) => ({ __cmd: 'neq', v }), inc: (n) => ({ __cmd: 'inc', n }), gt: (v) => ({ __cmd: 'gt', v }) }
 let SEQ = 0
 class Coll {
   constructor(db, name) { this.db = db; this.name = name; this._where = null; this._skip = 0; this._limit = Infinity; this._docId = undefined }

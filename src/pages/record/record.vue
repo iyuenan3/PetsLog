@@ -699,26 +699,28 @@ export default {
           const payload = { kind: 'multi', valid: true, raw: this.parsed.raw || this.draft, records: recs.map((rc) => this.buildMultiRecord(rc)) }
           const res = await callFn('saveRecord', { record: payload })
           const rr = res.result || {}
-          if (rr.saved > 0) {
-            const failedIdx = new Set()
-            ;(rr.results || []).forEach((x, idx) => { if (!x.ok) failedIdx.add(idx) })
-            if (!failedIdx.size) {
-              uni.showToast({ title: `已归档 ${rr.saved} 条`, icon: 'success' })
-              this.draft = ''
-              this.parsed = null
-              this.manual = false
-              this.atts = []
-              this.selectedPets = []
-              setTimeout(() => uni.navigateBack({ delta: 1 }), 600)
-            } else {
-              uni.showToast({ title: `已存 ${rr.saved}/${rr.count} 条，其余请重选`, icon: 'none' })
-              if (rr.pets) this.petOptions = rr.pets // 刷新可选名单（并发删宠后失败卡重选用，review C1）
-              // 把服务端 per-item PET_UNKNOWN 回灌到失败卡：标 pet_unknown 让卡进「请重选」态 + 提交守卫拦住空转重试（review #4/C1）
-              const results = rr.results || []
-              recs.forEach((rc, idx) => { if (results[idx] && !results[idx].ok && results[idx].code === 'PET_UNKNOWN') rc.pet_unknown = true })
-              if (this.parsed) this.parsed.records = recs.filter((_, idx) => failedIdx.has(idx)) // 只留没存上的（快照过滤，防竞态 TypeError）
-            }
+          const results = rr.results || []
+          const failedIdx = new Set()
+          results.forEach((x, idx) => { if (!x || !x.ok) failedIdx.add(idx) })
+          if (results.length && !failedIdx.size) {
+            // 全部成功
+            uni.showToast({ title: `已归档 ${rr.saved} 条`, icon: 'success' })
+            this.draft = ''
+            this.parsed = null
+            this.manual = false
+            this.atts = []
+            this.selectedPets = []
+            setTimeout(() => uni.navigateBack({ delta: 1 }), 600)
+          } else if (failedIdx.size) {
+            // 有失败：部分成功 与 全部失败（saved:0）统一走回灌，否则全失败漏这步 = 失败卡不标 pet_unknown、
+            // 提交守卫（recs.some pet_unknown）拦不住 → 用户反复点确认反复全拒 = 无限重试死循环（sweep P2 修复）
+            uni.showToast({ title: rr.saved > 0 ? `已存 ${rr.saved}/${rr.count} 条，其余请重选` : '未能保存，请重新选择宠物', icon: 'none' })
+            if (rr.pets) this.petOptions = rr.pets // 刷新可选名单（并发删宠后失败卡重选用，review C1）
+            // 把服务端 per-item PET_UNKNOWN 回灌到失败卡：标 pet_unknown 让卡进「请重选」态 + 提交守卫拦住空转重试（review #4/C1）
+            recs.forEach((rc, idx) => { if (results[idx] && !results[idx].ok && results[idx].code === 'PET_UNKNOWN') rc.pet_unknown = true })
+            if (this.parsed) this.parsed.records = recs.filter((_, idx) => failedIdx.has(idx)) // 只留没存上的（快照过滤，防竞态 TypeError）
           } else {
+            // 无 per-item results（整体报错 / 契约异常）：不动卡片，可整体重试
             uni.showToast({ title: rr.msg || '保存失败', icon: 'none' })
           }
         } catch (e) {

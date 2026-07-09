@@ -31,8 +31,14 @@ async function del(tk, q) {
 
 ;(async () => {
   const tk = await token()
-  // live 查全量 meds，derive 缺 family_id 的孤儿
-  const all = await query(tk, 'db.collection("meds").limit(100).get()')
+  // live 查全量 meds，derive 缺 family_id 的孤儿。分页取全量（databasequery .get() 默认仅 ~10 条、单页封顶 100，
+  // 不循环会漏看 >100 条时靠后的孤儿 → 误判「无孤儿」漏删，见 reference_petslog_data_reconcile 分页坑）
+  const all = []
+  for (let skip = 0; ; skip += 100) {
+    const page = await query(tk, `db.collection("meds").skip(${skip}).limit(100).get()`)
+    all.push(...page)
+    if (page.length < 100) break
+  }
   const TARGETS = all.filter((m) => !m.family_id).map((m) => m._id)
   if (!TARGETS.length) { console.log('无缺 family_id 的孤儿 meds，无需删。'); return }
   if (TARGETS.length > 5) throw new Error(`孤儿 meds ${TARGETS.length} 条 > 5，异常多，中止人工核。`)
@@ -52,7 +58,9 @@ async function del(tk, q) {
   }
   // ③ 备份
   const ts = new Date().toISOString().replace(/[:.]/g, '-')
-  const bf = path.join(DIR, 'out', `dirty_meds_backup_${ts}.json`)
+  const outDir = path.join(DIR, 'out')
+  fs.mkdirSync(outDir, { recursive: true }) // out/ 不存在时先建，否则 writeFileSync 报 ENOENT（备份失败但已过守卫，易误以为删了没备份）
+  const bf = path.join(outDir, `dirty_meds_backup_${ts}.json`)
   fs.writeFileSync(bf, JSON.stringify(backup, null, 1))
   console.log(`✓ 已备份 ${backup.length} 条 → out/${path.basename(bf)}（gitignore，可恢复）`)
   // ① 精确删

@@ -650,7 +650,7 @@ function seedF1() {
   }
 
   // ============================================================
-  // E2E-NEW-24：删宠保留病史经 timeline + 删宠不级联 foods + 同名重建拾起陈旧覆盖（删档案≠删病史，红线 + name-keying 既定行为）
+  // E2E-NEW-24：删宠保留病史经 timeline（records 红线）+ 删宠级联清 foods 单宠覆盖（sweep 决定：孤儿台账清掉）+ 同名重建回落物种默认
   // ============================================================
   seedF1()
   {
@@ -667,13 +667,13 @@ function seedF1() {
     assert(list.data.filter((r) => r.pet === '示例猫').length === 2, 'NEW-24 删宠后 timeline.list 仍读回示例猫 2 条历史（病史保留）')
     const course = await timeline.main({ action: 'course', tag: '尿闭', family_id: 'F1' })
     assert(course.ok && course.summary.count === 2, 'NEW-24 删宠后 course 仍聚合示例猫尿闭病程 2 条')
-    // (b) 删宠不级联 foods（ADR-027 删档案≠删病史）→ 单宠覆盖条仍在 current=true
+    // (b) 删宠级联清 foods 单宠覆盖（sweep 决定）→ 示例猫覆盖已删、物种默认（pet=''）保留
     const flist = await foods.main({ action: 'list', family_id: 'F1' })
-    const over = flist.data.find((f) => f.pet === '示例猫')
-    assert(over && over.current === true, 'NEW-24 删宠不级联 foods：示例猫单宠覆盖条仍在 current=true')
-    // (c) 同名重建 → resolveCurrentFood 仍命中陈旧覆盖（name-keying 既定：同名=同宠，钉死现状非默认粮）
+    assert(!flist.data.some((f) => f.pet === '示例猫'), 'NEW-24 删宠级联清 foods：示例猫单宠覆盖已删（不留孤儿台账）')
+    assert(flist.data.some((f) => f.pet === '' && f.brand === '猫默认粮' && f.current === true), 'NEW-24 foods 物种默认（pet=空）保留')
+    // (c) 同名重建 → 覆盖已清，resolveCurrentFood 回落物种默认粮（干净状态，非拾起陈旧覆盖）
     const reb = resolveCurrentFood(flist.data, '示例猫', 'cat')
-    assert(reb && reb.brand === '处方粮', 'NEW-24 同名重建拾起陈旧单宠覆盖（name-keying 既定行为，非回落物种默认）')
+    assert(reb && reb.brand === '猫默认粮', 'NEW-24 同名重建回落物种默认粮（覆盖已级联删，无陈旧残留）')
   }
 
   // ============================================================

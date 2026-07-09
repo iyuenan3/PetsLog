@@ -127,11 +127,12 @@
               <view class="med-card__top">
                 <text class="med-card__name">{{ m.name }}</text>
                 <text class="chip-tag" :class="'chip-tag--' + tagClass(medTypeOf(m))">{{ medTypeOf(m) }}</text>
-                <text v-if="isExpiringSoon(m.expire_date)" class="med-card__badge">临期</text>
+                <text v-if="isExpired(m.expire_date)" class="med-card__badge">已过期</text>
+                <text v-else-if="isExpiringSoon(m.expire_date)" class="med-card__badge">临期</text>
               </view>
               <text class="med-card__qty">剩余 {{ m.quantity }}</text>
               <text v-if="m.effect" class="med-card__effect">{{ m.effect }}</text>
-              <text class="med-card__exp" :class="{ 'med-card__exp--soon': isExpiringSoon(m.expire_date) }">过期 {{ m.expire_date || '未填' }}</text>
+              <text class="med-card__exp" :class="{ 'med-card__exp--soon': isExpiringSoon(m.expire_date) || isExpired(m.expire_date) }">过期 {{ m.expire_date || '未填' }}</text>
             </view>
           </view>
           <view class="med-card__ops">
@@ -208,6 +209,7 @@ export default {
       foodBase: '', // openFoodEdit 那刻的 8 字段快照（JSON）；编辑保存只发改动字段（ADR-033 推广到 foods）
       foodBaseVersion: 0, // 那刻的 updated_at；保存回传做乐观并发校验（期间被家人改过则拒）
       settingCurrent: false, // setCurrent 在途防抖（防双击并发设在喂）
+      remBusy: false, // markDone / snooze 在途防抖（<text> @click 无 :loading，双击会顺延 / 延后翻倍）
       pets: [], // 家庭宠物（供主粮分组 + 弹层「喂给谁」候选）
     }
   },
@@ -361,6 +363,8 @@ export default {
       return `每${x}天`
     },
     async markDone(r) {
+      if (this.remBusy) return // 双击守卫：重复提醒 done 会从已顺延的 next_date 再顺延一轮 = 静默跳一个周期
+      this.remBusy = true
       try {
         const res = await callFn('reminders', { action: 'done', id: r._id })
         if (res.result && res.result.ok) {
@@ -369,9 +373,13 @@ export default {
         }
       } catch (e) {
         uni.showToast({ title: '操作失败', icon: 'none' })
+      } finally {
+        this.remBusy = false
       }
     },
     async snooze(r) {
+      if (this.remBusy) return // 双击守卫：重复 snooze 会在已延后的 next_date 上再加 7 天 = 延后 14 天
+      this.remBusy = true
       try {
         const res = await callFn('reminders', { action: 'snooze', id: r._id, days: 7 })
         if (res.result && res.result.ok) {
@@ -380,6 +388,8 @@ export default {
         }
       } catch (e) {
         uni.showToast({ title: '操作失败', icon: 'none' })
+      } finally {
+        this.remBusy = false
       }
     },
     remove(r) {
@@ -407,13 +417,23 @@ export default {
     medTypeOf(m) {
       return (m && m.type) || '用药'
     },
-    // 临期判定对齐提醒分段的服务端基准日 this.today（loadRem 取回），避免页内双时间源（设备时区/时钟偏差）
-    isExpiringSoon(d) {
-      if (!d || !this.today) return false
+    // 过期天数差（对齐提醒分段的服务端基准日 this.today，避免页内双时间源=设备时区/时钟偏差）：负=已过期，null=无/非法日期
+    expDiffDays(d) {
+      if (!d || !this.today) return null
       const exp = new Date(String(d).replace(/-/g, '/') + ' 00:00:00').getTime()
       const base = new Date(String(this.today).replace(/-/g, '/') + ' 00:00:00').getTime()
-      if (isNaN(exp) || isNaN(base)) return false
-      return exp - base < 30 * 24 * 3600 * 1000
+      if (isNaN(exp) || isNaN(base)) return null
+      return Math.round((exp - base) / (24 * 3600 * 1000))
+    },
+    // 已过期（严格早于今天）：与「临期」分开,否则过期药也显「临期」语义错（sweep 修复）
+    isExpired(d) {
+      const n = this.expDiffDays(d)
+      return n != null && n < 0
+    },
+    // 临期 = 未过期但 30 天内到期（不含已过期,后者走 isExpired）
+    isExpiringSoon(d) {
+      const n = this.expDiffDays(d)
+      return n != null && n >= 0 && n < 30
     },
     async loadMed() {
       if (!this.cloudReady()) return
@@ -463,6 +483,7 @@ export default {
         uni.showToast({ title: '药品名必填', icon: 'none' })
         return
       }
+      if (this.medSaving) return // 双击守卫（:loading 在 mp-weixin 不拦点击）：防两次并发 update
       this.medSaving = true
       try {
         const med = {
@@ -609,6 +630,7 @@ export default {
         uni.showToast({ title: '品牌必填', icon: 'none' })
         return
       }
+      if (this.foodSaving) return // 双击守卫（:loading 在 mp-weixin 不拦点击）：添加路径双击会落两条重复主粮
       this.foodSaving = true
       try {
         const full = {

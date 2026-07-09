@@ -3,6 +3,16 @@
 
 > 仍为内测开发期，未正式 release；下方按里程碑记录主要进展。
 
+## 体验版 0.4.14 · 全仓代码扫描 + 缺陷修复批次（双击守卫 / multi 死循环 / 头像 fileID 越权 / 删宠级联 等）· 2026-07-09（ADR-037，**待部署 pets/user/reminders · versionCode 18 · 待 GUI 上传 · 待真机验**）
+- Context: 用户「扫一遍全部代码」→ 135-agent 只读全扫（15 finder 深读 59 源文件 ~15k 行 → 3 视角对抗验真 → 完整性批判补扫）产出 23 条确认缺陷（无线上级事故、无 PII / 机密泄漏），集中「客户端可触发重复写入 + 若干健壮性 / 安全缺口」。修 21 处。
+- Fixed（双击守卫一族，6 处）: mp-weixin `:loading` 不拦点击 → pet.vue save（建宠双击落两条同名宠、后端查重非原子=数据损坏）/ health saveFood·saveMed·markDone·snooze（后两者共用 `remBusy`）/ profile save，均补 `if(flag) return` 入口守卫（照 record.vue confirmSave 既有写法）。
+- Fixed（multi 全失败重试死循环，record.vue）: 「回灌 pet_unknown + 刷 petOptions + 留失败卡」从 `saved>0` 门提出、三态覆盖全失败（并发删宠致全 PET_UNKNOWN 时原漏这步 → 反复全拒死循环）。
+- Fixed（头像 fileID 越权删文件，pets + user）: `add`/`update` 直收客户端任意 avatar fileID + 换头像服务端 admin `deleteFile` 删旧值（绕 ACL）→ 可借删任意文件（user 更宽=任何登录用户）。加 `sanitizeAvatar` 白名单（只放行 `/avatars/` 上传路径或空串，照 attachment `att/` 闸门），挡住 att/ 病历等非头像文件。
+- Fixed（健壮性 + foods 级联〔用户拍板〕）: 删宠级联清 reminders + foods 单宠覆盖（records + foods 物种默认 pet='' 保留）/ pet.vue renderVet·renderCard 导出重试封顶 10 次（防页面销毁逻辑层空转）/ CONFLICT 分支补 `discardTempAvatar` 防头像孤儿 / course.vue shortDate 跨年保留年份 + 渲染养护 params chip / profile 补 `uploadingAvatar` 守卫。
+- Fixed（nit）: reminders add 补 `raw`（ADR-031 全路径）/ health `isExpiringSoon` 拆 `isExpired`（已过期不再误显「临期」）/ 协议文案「多宠（猫/狗）家庭」→「多宠家庭」（ADR-023 已扩 8 物种）/ `delete_dirty_meds.mjs` 分页取全量 + 备份前 mkdir / `e2e.flow` mock 补 `_.gt`（原缺致 recomputeWeightSpark 静默假绿）。
+- 验证: 671 断言全绿（14 套，新增 `tests/user.cloudfn.test.js` 15 断言堵 user sanitize 假绿盲区）+ **变异测试**（剥 avatar 白名单转红 2+3、去 reminders/foods 级联转红 1+1+2）+ build 零错。**两轮对抗评审**：verify-the-fix 10 修复全 **solid** / 0 new-bug（完整性批判挖 2 兄弟点=user 零测试 + profile 缺守卫，均补）+ verify-nits 4 收尾全 solid。扫描 backlog 存 project 记忆。版本 0.4.13→**0.4.14** / versionCode 17→18。
+- 待: 部署 pets/user/reminders 云函数 + GUI 上传体验版 0.4.14 + 真机验（双击守卫 / multi 恢复流 / 头像校验 / 删宠级联 / 药品「已过期」badge / 病程跨年+参数）。
+
 ## 待发布 · 语音录入弃微信服务市场 ASR 改键盘自带听写（零后端） · 2026-06-28（ADR-036，**feat 4cfe129 · 待 GUI 上传 · 待真机验**）
 - Context: 三入口卡的「语音」次级入口此前是占位（点出 toast「敬请期待」）。ASR 接入调研三路全堵（微信同传插件个人主体加不了 / 微信服务市场接口能力 client invokeService 返 opaque 空不可调试 / 腾讯云直连 ASR 搭通但产品要付费），转正受阻 → 暂缓自建 ASR。
 - Changed（ADR-036）: 语音录入改走**键盘自带听写**：自然语言录入 textarea 直接复用微信 / 系统输入法的语音转文字（用户长按键盘话筒即可），零后端、零额外接口能力、零付费。无新增云函数 / 集合 / 字段。

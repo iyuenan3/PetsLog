@@ -53,6 +53,7 @@ function seed(fid, openid) { DB_INST.data.family_members = [{ family_id: fid, op
 const pets = () => DB_INST.data.pets || []
 const foodsOf = (fid) => (DB_INST.data.foods || []).filter((f) => f.family_id === fid)
 const recsOf = (fid) => (DB_INST.data.records || []).filter((r) => r.family_id === fid)
+const remsOf = (fid) => (DB_INST.data.reminders || []).filter((r) => r.family_id === fid)
 async function run(t, body) { reset(); try { await body(); console.log('✔ ' + t) } catch (e) { fail++; console.log('✘ ' + t + ' — ' + (e && e.message)) } }
 
 ;(async () => {
@@ -145,17 +146,48 @@ async function run(t, body) { reset(); try { await body(); console.log('✔ ' + 
     assert(foodsOf('F1').find((f) => f.brand === '某粮').pet === '示例宠', 'pet 不变')
   })
 
-  // 9. 删宠保留病史（删档案≠删病史）：delete 只删 pet 文档，foods/records 不级联删。靠「没写删」保证的不变量，须钉死。
-  await run('删宠保留: foods/records 不级联删', async () => {
+  // 9. 删宠级联边界（sweep 修复）：delete 级联清 reminders + foods 单宠覆盖（未来待办 / 当前状态、非病史）；
+  // records（病史）有意保留；foods 物种默认（pet=''）+ 别家同名不受波及。
+  await run('删宠级联: reminders+foods单宠覆盖 清 / records+默认档+别家 留 / 隔离', async () => {
     CUR_OPENID = 'u'; seed('F1', 'u')
     const a = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例猫', species: 'cat' } })
-    DB_INST.data.foods = [{ _id: 'fo1', family_id: 'F1', pet: '示例猫', species: 'cat', brand: '处方粮', current: true }]
+    DB_INST.data.foods = [
+      { _id: 'fo1', family_id: 'F1', pet: '示例猫', species: 'cat', brand: '处方粮', current: true }, // 该宠单宠覆盖 → 应删
+      { _id: 'fo2', family_id: 'F1', pet: '', species: 'cat', brand: '默认粮', current: true }, // 物种默认 → 保留
+      { _id: 'fo3', family_id: 'F9', pet: '示例猫', species: 'cat', brand: '别家粮', current: true }, // 别家同名 → 保留
+    ]
     DB_INST.data.records = [{ _id: 're1', family_id: 'F1', pet: '示例猫', event_type: '体检', time: '2025-01-01 12:00' }]
+    DB_INST.data.reminders = [
+      { _id: 'rm1', family_id: 'F1', pet: '示例猫', title: '驱虫', repeat_days: 30 }, // 该宠提醒 → 应删
+      { _id: 'rm2', family_id: 'F1', pet: '示例狗', title: '疫苗' }, // 同家别宠 → 保留
+      { _id: 'rm3', family_id: 'F9', pet: '示例猫', title: '别家同名宠提醒' }, // 别家同名 → 保留（family 隔离）
+    ]
     const r = await fn.main({ family_id: 'F1', action: 'delete', id: a.id })
     assert(r.ok === true, '删宠成功')
     assert(pets().length === 0, 'pet 文档已删')
-    assert(foodsOf('F1').some((f) => f.pet === '示例猫'), '该宠 foods 仍在（不级联删）')
-    assert(recsOf('F1').some((r) => r.pet === '示例猫'), '该宠 records 仍在（删档案≠删病史）')
+    assert(!remsOf('F1').some((x) => x.pet === '示例猫'), '该宠 reminders 已级联删（不再幽灵循环）')
+    assert(remsOf('F1').some((x) => x.pet === '示例狗'), '同家别宠 reminders 保留')
+    assert(remsOf('F9').some((x) => x.pet === '示例猫'), '别家同名宠 reminders 保留（family 隔离）')
+    assert(!foodsOf('F1').some((f) => f.pet === '示例猫'), '该宠 foods 单宠覆盖已级联删（不留孤儿台账）')
+    assert(foodsOf('F1').some((f) => f.pet === '' && f.brand === '默认粮'), 'foods 物种默认（pet=空）保留')
+    assert(foodsOf('F9').some((f) => f.pet === '示例猫'), '别家同名 foods 保留（family 隔离）')
+    assert(recsOf('F1').some((r) => r.pet === '示例猫'), '该宠 records 有意保留（删档案≠删病史）')
+  })
+
+  // 9b. 头像 fileID 白名单（sweep 安全修复）：合法头像必落 /avatars/，注入他人 fileID（att/ 病历等）落空串。
+  // 防换头像时服务端 admin cloud.deleteFile 被利用删任意文件（add + update 两路）。
+  await run('头像白名单: /avatars/ 保留 / 非法 fileID 清空 / 空串放行', async () => {
+    CUR_OPENID = 'u'; seed('F1', 'u')
+    const good = 'cloud://env.abc/avatars/123.png'
+    const evil = 'cloud://env.abc/att/rec1/victim.jpg' // 别家病历附件 fileID
+    const a = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例甲', avatar: good } })
+    assert(pets().find((p) => p._id === a.id).avatar === good, 'add 合法 /avatars/ 头像原样保留')
+    const b = await fn.main({ family_id: 'F1', action: 'add', pet: { name: '示例乙', avatar: evil } })
+    assert(pets().find((p) => p._id === b.id).avatar === '', 'add 注入 att/ fileID 被清空（不落库）')
+    await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { avatar: evil } })
+    assert(pets().find((p) => p._id === a.id).avatar === '', 'update 注入 att/ fileID 被清空')
+    await fn.main({ family_id: 'F1', action: 'update', id: a.id, pet: { avatar: good } })
+    assert(pets().find((p) => p._id === a.id).avatar === good, 'update 合法 /avatars/ 头像保留')
   })
 
   // 6. 隔离: 非成员拒

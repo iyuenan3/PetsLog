@@ -20,6 +20,14 @@ const normSpecies = (s) => (SPECIES_KEYS.includes(s) ? s : 'other')
 // 性别枚举（ADR-025 档案卡富化）：仅 male / female，其余（含未填）落空串。仅展示、不驱动逻辑。
 const normGender = (g) => (g === 'male' || g === 'female' ? g : '')
 
+// 头像 fileID 白名单：合法头像必落在 avatars/ 上传路径（src/cloud.js），否则视为客户端注入清空。
+// 换头像会用 admin 上下文 cloud.deleteFile 删旧值（绕过 ACL）；若不校验，攻击者可把 avatar 设为受害者文件的 fileID
+// 再改一次即借本函数删任意文件（对齐 attachment/index.js 的 att/ 前缀闸门思路）。此处锚定路径挡住 att/ 病历等非头像文件。
+const sanitizeAvatar = (v) => {
+  const s = typeof v === 'string' ? v : ''
+  return !s || s.indexOf('/avatars/') >= 0 ? s : ''
+}
+
 // 数字容错：number 原样；'2000'/'¥2,000' 取数；空 / 无数字 → null
 function numOrNull(v) {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null
@@ -76,7 +84,7 @@ exports.main = async (event) => {
         note: p.note || '', // 备注
         intro: p.intro || '', // 简介（自由文本，见 ADR-014）
         price_base: numOrNull(p.price_base), // 初始身价（当前身价前端派生 = base + cost 累计）
-        avatar: p.avatar || '', // 头像云存储 fileID
+        avatar: sanitizeAvatar(p.avatar), // 头像云存储 fileID（白名单校验防注入他人 fileID，见 sanitizeAvatar）
         avatar_emoji: typeof p.avatar_emoji === 'string' ? p.avatar_emoji.slice(0, 8) : '', // 自选 emoji 头像（照片 > emoji > 物种默认，ADR-015）；类型收紧防对象入库
         created_at: Date.now(),
       },
@@ -110,6 +118,7 @@ exports.main = async (event) => {
         if (typeof p.latest_weight === 'number') patch.latest_weight = p.latest_weight
       } else if (k === 'price_base') patch.price_base = numOrNull(p.price_base) // 三态 null/0/正数
       else if (k === 'name') patch.name = String(p.name || '').trim() // 服务端 trim，与 add 对齐
+      else if (k === 'avatar') patch.avatar = sanitizeAvatar(p.avatar) // 白名单校验，防注入他人 fileID 借换头像删任意文件（见 sanitizeAvatar）
       else if (k === 'avatar_emoji') patch.avatar_emoji = typeof p.avatar_emoji === 'string' ? p.avatar_emoji.slice(0, 8) : ''
       else patch[k] = p[k] || ''
     }
@@ -166,6 +175,11 @@ exports.main = async (event) => {
     await db.collection('pets').doc(id).remove()
     // 头像文件随档案删（历史记录及其附件有意保留在时间线：删档案 ≠ 删病史）
     if (cur.data.avatar) await cloud.deleteFile({ fileList: [cur.data.avatar] }).catch(() => {})
+    // 级联清 reminders + foods 单宠覆盖（对齐改名级联 lines 129-140 + cascadeDeleteFamily）：这两类是未来待办 / 当前状态、非病史，
+    // 宠没了还带幽灵名在健康页循环推进 / 显「仅<已删宠>」孤儿台账无意义。按名字关联（ADR-027）按 pet=name 清。
+    // 注：records（病史）有意保留（删档案≠删病史）；foods 物种默认（pet=''）不受 pet=name 波及、只清该宠单宠覆盖。
+    await db.collection('reminders').where({ family_id: familyId, pet: cur.data.name }).remove().catch(() => {})
+    await db.collection('foods').where({ family_id: familyId, pet: cur.data.name }).remove().catch(() => {})
     return { ok: true }
   }
 

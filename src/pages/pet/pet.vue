@@ -825,6 +825,7 @@ export default {
         uni.showToast({ title: '名字必填', icon: 'none' })
         return
       }
+      if (this.saving) return // 双击守卫（:loading 在 mp-weixin 不拦点击）：建宠模式双击会落两条同名宠、编辑模式并发误撞 CONFLICT
       this.saving = true
       try {
         const fullPet = { ...this.form, name: this.form.name.trim() }
@@ -869,6 +870,7 @@ export default {
         } else if (res.result && res.result.code === 'CONFLICT') {
           // 乐观并发冲突（ADR-033）：进编辑后家人改过该档案 → 刷新最新、退出编辑、提示重编（本次改动未落库）
           this.toggleLeaveGuard(false)
+          this.discardTempAvatar() // 本次改动未落库：本会话若换过头像，删掉这张已传未存的临时图，否则成云存储孤儿（对齐 cancelEdit / onUnload）。须在 load() 重置 this.pet 前调
           this.editBaseline = ''
           this.editing = false
           this.avatarLocal = ''
@@ -939,7 +941,7 @@ export default {
         uni.showToast({ title: '生成失败', icon: 'none' })
       }
     },
-    renderVet() {
+    renderVet(retry) {
       // #ifdef MP-WEIXIN
       uni
         .createSelectorQuery()
@@ -948,7 +950,13 @@ export default {
         .fields({ node: true, size: true })
         .exec((res) => {
           if (!res || !res[0] || !res[0].node) {
-            setTimeout(() => this.renderVet(), 50)
+            // canvas 未就绪稍后重试；封顶 10 次（页面导出中被返回销毁时 query 永远空，无上限会在逻辑层永久空转，对齐 layoutAndDraw）
+            const r = (retry || 0) + 1
+            if (r <= 10) setTimeout(() => this.renderVet(r), 50)
+            else {
+              uni.hideLoading()
+              this.exporting = false
+            }
             return
           }
           const canvas = res[0].node
@@ -1186,7 +1194,7 @@ export default {
         uni.showToast({ title: '生成失败', icon: 'none' })
       }
     },
-    renderCard() {
+    renderCard(retry) {
       // #ifdef MP-WEIXIN
       uni
         .createSelectorQuery()
@@ -1195,7 +1203,13 @@ export default {
         .fields({ node: true, size: true })
         .exec(async (res) => {
           if (!res || !res[0] || !res[0].node) {
-            setTimeout(() => this.renderCard(), 50)
+            // canvas 未就绪稍后重试；封顶 10 次（页面导出中被返回销毁时 query 永远空，无上限逻辑层永久空转，对齐 layoutAndDraw）
+            const r = (retry || 0) + 1
+            if (r <= 10) setTimeout(() => this.renderCard(r), 50)
+            else {
+              uni.hideLoading()
+              this.cardExporting = false
+            }
             return
           }
           const canvas = res[0].node
