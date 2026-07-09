@@ -2,14 +2,14 @@
 <!-- 数据契约 / 数据字典：collection 字段定义是内部真相源。对外 API 见文末（当前 N/A）。实现→ARCHITECTURE，为何→DECISIONS。 -->
 
 > 数据库 = 微信云开发文档型。隔离键：业务数据按 `family_id`（见 ADR-008），`users` 按 `_openid`。
-> 标记：**[占位]** = 模型已定、建设排后（foods）。本字段表为字段真相源；各 ADR 的落地 / 部署 / 真机验状态以 ROADMAP / CHANGELOG 为单一真相源（此处不复述易腐的「待 commit / 待触发」）。字段相关批次：轮1 字段（v0.3.1）、轮2 附件 attachments / att_count / storage_bytes / att_log（v0.3.2）、ADR-014 price_base / intro / foods、ADR-015 avatar_emoji / new_pet / pet_unknown、ADR-018 time 到分、ADR-019 tag 收敛、ADR-020 raw 服务端落库、ADR-023 species 8 枚举、ADR-024 records.params 养护（event_type 第 8 桶）、ADR-025 pets.gender / pets.weight_spark、ADR-029/030 多宠批量（records.pets[] 同事件 fan-out + kind=multi / records[] 一句话拆多条）、ADR-031 raw 落 med_stock / reminder 全写入路径、ADR-035 meds.type 药品类型枚举 均已落地（见下方字段表）。ADR-020 解析评测（合成集）仍为 ROADMAP 待办。
+> 标记：**[占位]** = 模型已定、建设排后（foods）。本字段表为字段真相源；各 ADR 的落地 / 部署 / 真机验状态以 ROADMAP / CHANGELOG 为单一真相源（此处不复述易腐的「待 commit / 待触发」）。字段相关批次：轮1 字段（v0.3.1）、轮2 附件 attachments / att_count / storage_bytes / att_log（v0.3.2）、ADR-014 price_base / intro / foods、ADR-015 avatar_emoji / new_pet / pet_unknown、ADR-018 time 到分、ADR-019 tag 收敛、ADR-020 raw 服务端落库、ADR-023 species 8 枚举、ADR-024 records.params 养护（event_type 第 8 桶）、ADR-025 pets.gender / pets.weight_spark、ADR-029/030 多宠批量（records.pets[] 同事件 fan-out + kind=multi / records[] 一句话拆多条）、ADR-031 raw 落 med_stock / reminder 全写入路径、ADR-035 meds.type 药品类型枚举、ADR-037 reminders.raw 补 CRUD add 路径 + pets/users.avatar sanitize 白名单 + 删宠级联删 reminders/foods 单宠覆盖 均已落地（见下方字段表）。ADR-020 解析评测（合成集）仍为 ROADMAP 待办。
 > 字段值约定：日期一律 `'YYYY-MM-DD'` 字符串（唯 records.time 可带时刻 `'YYYY-MM-DD HH:mm'`，ADR-018；meds / reminders / foods 等日期字段仍纯日期）；金额 / 体重为 number；时间戳 `created_at/updated_at` 为毫秒 number。
 
 ## pets（宠物档案 · family 隔离）
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | family_id | string | 家庭隔离键 |
-| name | string | 名字，family 内唯一；改名级联 records / reminders 的 pet |
+| name | string | 名字，family 内唯一；改名级联 records / reminders / foods 的 pet；删宠级联删 reminders + foods 单宠覆盖（records 保留 = 删档案≠删病史，ADR-037） |
 | species | enum | 8 类固定枚举：cat / dog / rabbit / rodent / bird / reptile / fish / other（非法 / 旧值落 other）。猫狗为主 + 常见宠物（A 档），原「仅猫狗」红线已解除，见 ADR-023。仅作展示 + 选默认头像，不驱动隔离 / 落库校验 |
 | breed | string | 品种 |
 | birthday | string | 生日 'YYYY-MM-DD' |
@@ -24,7 +24,7 @@
 | note | string | 备注（自由文本，如来历故事） |
 | intro | string | 简介（自由文本，用户自填；与 note 区分：note 偏备忘、intro 偏介绍，见 ADR-014） |
 | price_base | number \| null | 初始身价（元，ADR-014 反转 ADR-013「身价不入库」）；当前身价不落库 = price_base + 该宠 records.cost 累计，前端实时派生 |
-| avatar | string(fileID) | 头像照片，云存储 fileID（换头像 / 删宠物会删旧文件防孤儿，v0.3.2） |
+| avatar | string(fileID) | 头像照片，云存储 fileID（换头像 / 删宠物会删旧文件防孤儿，v0.3.2）。服务端 `sanitizeAvatar` 白名单：只接受含 `/avatars/` 上传路径的 fileID 或空串，防注入他人 fileID 借换头像的 admin `deleteFile` 删任意文件（ADR-037，users.avatar 同机制） |
 | avatar_emoji | string | 自选 emoji 头像（ADR-015）。显示优先级：avatar 照片 > avatar_emoji > 物种默认 🐱/🐶；前端选 emoji 时清空 avatar（pets update 顺带删旧照片文件） |
 | created_at / updated_at | number | updated_at 仅 update 时写入，新建文档暂无（reminders 则 add 即写） |
 
@@ -79,8 +79,11 @@
 | next_date | string | 下次到期 'YYYY-MM-DD' |
 | repeat_days | number | 周期天数，0 = 一次性 |
 | note | string | 备注 |
+| raw | string | 用户输入的字面原文（ADR-031「任何原话全路径落库」，saveRecord reminder 入口 + reminders add 均落；旧条无 raw 优雅降级，ADR-037 补齐 CRUD add 路径） |
 | done | boolean | 完成（重复项靠顺延 next_date，不置 done） |
 | created_at / updated_at | number | |
+
+> 删宠级联：pets delete 会删该宠 reminders（未来待办、非病史，幽灵名会循环推进无意义，ADR-037）；改名级联更 reminders.pet。
 
 ## families（家庭 · 多租户骨架）
 | 字段 | 类型 | 说明 |
@@ -115,7 +118,7 @@
 |---|---|---|
 | _openid | string | **必须显式写**（云函数 add 不自动注入，见 MEMORY） |
 | nickname | string | 昵称 |
-| avatar | string(fileID) | 微信头像，云存储（换头像删旧文件防孤儿，v0.3.2，与 pets.avatar 同机制） |
+| avatar | string(fileID) | 微信头像，云存储（换头像删旧文件防孤儿，v0.3.2，与 pets.avatar 同机制）。服务端 `sanitizeAvatar` 白名单同 pets（只接受 `/avatars/` 路径或空串，ADR-037；user 无家庭成员校验、攻击面更广） |
 | created_at / updated_at | number | |
 
 ## parse_log（解析限流流水 · family 隔离）
@@ -142,7 +145,7 @@
 |---|---|---|
 | family_id | string | 家庭级隔离键 |
 | species | string | **[ADR-027]** 这条粮喂给哪物种（ADR-023 的 8 枚举，normSpecies，必填） |
-| pet | string | **[ADR-027]** 宠物名字（**非 pet_id**，全 app 按名关联）。空 = 该物种默认（所有这种宠）；填 = 某只单独覆盖。覆盖解析只认名字、不认 species；入 pets 改名级联、删宠保留（删档案≠删病史） |
+| pet | string | **[ADR-027]** 宠物名字（**非 pet_id**，全 app 按名关联）。空 = 该物种默认（所有这种宠）；填 = 某只单独覆盖。覆盖解析只认名字、不认 species；入 pets 改名级联；删宠级联删该宠单宠覆盖（物种默认 pet='' 保留，ADR-037；单宠覆盖是当前状态非病史，与 records 病史保留区别对待） |
 | brand | string | **[ADR-027]** 品牌（皇家 / 诚实一口），由旧 `name` 拆出 |
 | model | string | **[ADR-027]** 型号 / 配方（I27+F32 / P40 / 无谷鸡肉），由旧 `name` 拆出 |
 | start_date | string | 起始 'YYYY-MM-DD' |

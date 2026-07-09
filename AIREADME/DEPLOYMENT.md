@@ -1,7 +1,7 @@
 # DEPLOYMENT · PetsLog
 <!-- 跑哪/怎么跑/共享什么。key→哪都不写。共享底座属本项目就写这；消费别人的只在 RELATIONS 指属主。 -->
 
-体验版 0.4.13 已发布（2026-06-28）。后端已上微信云开发环境 `cloud1-d5g69cxtta6c18918`（envId 非机密，存 `src/config.js`）；11 个云函数（parseRecord / saveRecord / pets / timeline / meds / reminders / family / user / attachment / foods / importNotion）+ 11 个集合（pets / records / meds / reminders / parse_log / att_log / families / family_members / invites / users / foods）+ 云存储（附件 / 头像），录入主链路 + 提醒 + 家庭多租户 + 个人中心 + 附件 + 主粮 + 养护（多物种 8 枚举 + event_type 第 8 桶）+ 多宠批量记录 + 药品类型字段真机跑通。前端走体验版，未正式上架。
+体验版 0.4.14 待发布（2026-07-09，ADR-037 全仓扫描缺陷修复批次；`pets` / `user` / `reminders` 三云函数已 `wxcloud function:upload` 部署，前端待 GUI 上传 + 真机验）。后端已上微信云开发环境 `cloud1-d5g69cxtta6c18918`（envId 非机密，存 `src/config.js`）；11 个云函数（parseRecord / saveRecord / pets / timeline / meds / reminders / family / user / attachment / foods / importNotion）+ 11 个集合（pets / records / meds / reminders / parse_log / att_log / families / family_members / invites / users / foods）+ 云存储（附件 / 头像），录入主链路 + 提醒 + 家庭多租户 + 个人中心 + 附件 + 主粮 + 养护（多物种 8 枚举 + event_type 第 8 桶）+ 多宠批量记录 + 药品类型字段真机跑通。前端走体验版，未正式上架。
 
 ## 当前部署
 - **环境**：微信云开发免费环境（内测期免费；正式上线后第 15 天到期需买 ¥19.9/月 基础套餐）。
@@ -17,7 +17,7 @@
 
 ## 计划形态
 - **后端 = 微信云开发环境**（Serverless）：无独立主机、无服务器、无域名、无 ICP 备案、无 SSL。云函数 + 云数据库 + 云存储托管在微信生态内，按量计费（自用 + 小圈子量级预计在免费额度内）。
-- **前端 = 微信小程序**：开发者工具上传 → 微信审核 → 发布。当前走体验版（0.4.13 已发布，免提审、受体验成员名单约束）；收会员费需企业主体 + 个体工商户营业执照 + 微信支付（远期）。
+- **前端 = 微信小程序**：开发者工具上传 → 微信审核 → 发布。当前走体验版（0.4.14 待上传，免提审、受体验成员名单约束）；收会员费需企业主体 + 个体工商户营业执照 + 微信支付（远期）。
 
 ## 内测发布（体验版）
 内测走「体验版」：免 ICP 备案、免提审，受体验成员名单约束。正式公开（线上版）才需 ICP 备案 + 提审 + 类目资质。

@@ -23,12 +23,16 @@
 
 **⚠️ assertMember 是各云函数手工复制的多份副本**（family/pets/timeline/saveRecord/parseRecord/reminders/meds/foods/attachment 各一份，family 拆 `getMembership`+`assertAdmin`，importNotion 用更严的 `resolveFamily`），**非共享 lib**。当前全部语义一致，但任意一份被单独改动（去掉 `family_id` 条件、把 `throw` 改成 `return`、漏判 0 命中）都不会被编译期发现，会让该函数整体失守。**红线：改任一份 assertMember 必须 N 份同步 + 跑 `npm test`（含 `tests/isolation.e2e.test.js` 隔离回归）通过才提交。**
 
+**⚠️ fileID 信任边界（红线）**：客户端传入的云存储 fileID **一律不可信**。任何用它驱动 admin 上下文 `cloud.deleteFile` / `getTempFileURL`（绕过 ACL）的路径，落库 / 删除前必先把 fileID 锚定到合法路径：头像走 `sanitizeAvatar` 白名单（只接受含 `/avatars/` 上传路径或空串，pets + user，ADR-037），附件走 `att/<record_id>/` 前缀 + 归属校验（ADR-011）。否则可被注入他人 fileID 借本函数删任意文件。
+
 ## 偏好模式
 - LLM 调用收敛到单个云函数 `parseRecord`，便于换模型、限流、改 prompt。
 - AI 强制 JSON：强提示词 + temperature 0 + 云函数 `extractJson` 容错解析（不用 response_format，见 DECISIONS ADR-005）；非健康 / 非药品内容返回 `valid=false`。
 - 录入分流：解析输出 `kind`（record / med_stock / reminder），`saveRecord` 据此落 records / meds / reminders。
 - 二次确认：解析后弹确认卡片，用户确认才落库；建档凭意图不凭名字（parse 层归一 + 确认卡片选宠 + saveRecord `PET_UNKNOWN` 零写入，ADR-015），物种走 8 类固定枚举（猫 / 狗 / 兔 / 小宠 / 鸟 / 爬宠 / 鱼 / 其他，other 兜底，卡片上可纠正，ADR-023）。
 - 幂等自建集合：`parseRecord` 入口 `db.createCollection`，集合缺失自动补，省去手动在控制台新建。
+- 删宠级联语义（删档案≠删病史，ADR-037）：pets delete 删档案 + 头像文件，**级联删** reminders（未来待办）+ foods 单宠覆盖（当前状态）；**保留** records（病史）+ foods 物种默认（pet=''，不绑单宠）。按名关联故按 `pet=name` 清。
+- 客户端双击守卫：mp-weixin 里 `:loading` 只转圈**不拦点击**，任何「点一次落一次库」的提交按钮必须在函数入口 `if (this.xxx) return`（配 finally 复位），否则快速双击会重复写入 / 并发误撞（ADR-037，如建宠双击落两条同名宠）。`record.vue` confirmSave 是范式。
 
 ## UI / 设计令牌
 - 视觉方向「温暖治愈」（珊瑚 #F2825C + 暖米 #FAF6F0），见 DECISIONS ADR-007。
