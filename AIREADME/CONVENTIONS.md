@@ -1,6 +1,8 @@
 # CONVENTIONS · PetsLog
 <!-- 本项目特有约定。共享/通用基线只链过去，不抄。 -->
 
+Codex 以 `AGENTS.md` 为启动入口，`CLAUDE.md` 只保留旧 Claude 客户端兼容；设计、架构、部署和历史仍以 `AIREADME/` 为真相源。
+
 ## 工程形态
 - 前端 uni-app **CLI 工程**（Vue3 + Vite，JS 非 TS）；目标端先 mp-weixin。
 - 开发循环：`npm run dev:mp-weixin` 编译 + 监听 → 产物 `dist/dev/mp-weixin/` → 微信开发者工具导入该产物目录运行。
